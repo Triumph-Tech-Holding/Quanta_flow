@@ -470,13 +470,21 @@ export async function registerRoutes(
 
       // Test Z-API connection
       const zapiUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/status`;
+      log(`Z-API testing connection: ${zapiUrl}`, "zapi");
+      
       const response = await fetch(zapiUrl);
+      const responseText = await response.text();
+      
+      log(`Z-API response status: ${response.status}`, "zapi");
+      log(`Z-API response body: ${responseText}`, "zapi");
       
       if (!response.ok) {
-        return res.status(401).json({ message: "Credenciais da Z-API inválidas" });
+        return res.status(response.status).json({ 
+          message: `${response.status}: ${responseText}` 
+        });
       }
 
-      const statusData = await response.json();
+      const statusData = JSON.parse(responseText);
       log(`Z-API status check: ${JSON.stringify(statusData)}`, "zapi");
 
       // Delete existing config if any
