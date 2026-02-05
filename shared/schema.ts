@@ -1,11 +1,12 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 import { boolean } from "drizzle-orm/pg-core";
 
 export const tipoAtorEnum = pgEnum("tipo_ator", ["consumidor", "agente_fidelizacao", "lojista", "admin"]);
+export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended"]);
 export const leadStatusEnum = pgEnum("lead_status", ["novo", "contatado", "qualificado", "convertido"]);
 export const instanceStatusEnum = pgEnum("instance_status", ["disconnected", "connecting", "connected"]);
 export const messageDirectionEnum = pgEnum("message_direction", ["incoming", "outgoing"]);
@@ -18,6 +19,9 @@ export const users = pgTable("users", {
   tipoAtor: tipoAtorEnum("tipo_ator").notNull().default("consumidor"),
   nome: varchar("nome", { length: 255 }).notNull(),
   telefone: varchar("telefone", { length: 20 }),
+  status: userStatusEnum("status").notNull().default("active"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  tokenVersion: integer("token_version").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

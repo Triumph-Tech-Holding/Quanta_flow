@@ -20,13 +20,14 @@ const JWT_EXPIRATION = "24h";
 interface JwtPayload {
   userId: string;
   email: string;
+  tokenVersion: number;
 }
 
 interface AuthRequest extends Request {
   user?: JwtPayload;
 }
 
-function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
+async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
 
@@ -36,6 +37,20 @@ function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) 
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    
+    const user = await storage.getUser(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: "Usuário não encontrado" });
+    }
+    
+    if (user.status !== "active") {
+      return res.status(403).json({ message: "Usuário inativo ou suspenso" });
+    }
+    
+    if (user.tokenVersion !== decoded.tokenVersion) {
+      return res.status(401).json({ message: "Sessão invalidada. Faça login novamente." });
+    }
+    
     req.user = decoded;
     next();
   } catch (error) {
@@ -65,7 +80,7 @@ export async function registerRoutes(
       });
 
       const token = jwt.sign(
-        { userId: user.id, email: user.email },
+        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRATION }
       );
@@ -99,8 +114,12 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Email ou senha incorretos" });
       }
 
+      if (user.status !== "active") {
+        return res.status(403).json({ message: "Usuário inativo ou suspenso" });
+      }
+
       const token = jwt.sign(
-        { userId: user.id, email: user.email },
+        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRATION }
       );
@@ -132,6 +151,57 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  app.post("/api/auth/change-password", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ message: "A nova senha deve ter pelo menos 6 caracteres" });
+      }
+      
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      if (currentPassword) {
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+          return res.status(401).json({ message: "Senha atual incorreta" });
+        }
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      const updatedUser = await storage.updateUser(user.id, {
+        password: hashedPassword,
+        mustChangePassword: false,
+        tokenVersion: user.tokenVersion + 1,
+      });
+
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Erro ao atualizar senha" });
+      }
+
+      const token = jwt.sign(
+        { userId: updatedUser.id, email: updatedUser.email, tokenVersion: updatedUser.tokenVersion },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRATION }
+      );
+
+      const { password, ...userWithoutPassword } = updatedUser;
+
+      res.json({
+        token,
+        user: userWithoutPassword,
+        message: "Senha alterada com sucesso",
+      });
+    } catch (error) {
+      console.error("Change password error:", error);
+      res.status(500).json({ message: "Erro ao alterar senha" });
     }
   });
 
