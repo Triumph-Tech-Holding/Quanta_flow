@@ -211,3 +211,53 @@ export type InsertSetting = z.infer<typeof insertSettingSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type UpdateSetting = z.infer<typeof updateSettingSchema>;
 export type SettingsAudit = typeof settingsAudit.$inferSelect;
+
+export const roles = pgTable("roles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  description: varchar("description", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const permissions = pgTable("permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: varchar("description", { length: 255 }),
+  resource: varchar("resource", { length: 50 }).notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const rolePermissions = pgTable("role_permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  roleId: varchar("role_id", { length: 36 }).notNull().references(() => roles.id),
+  permissionId: varchar("permission_id", { length: 36 }).notNull().references(() => permissions.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const userRoles = pgTable("user_roles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  roleId: varchar("role_id", { length: 36 }).notNull().references(() => roles.id),
+  assignedBy: varchar("assigned_by", { length: 36 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  action: varchar("action", { length: 100 }).notNull(),
+  resource: varchar("resource", { length: 50 }).notNull(),
+  resourceId: varchar("resource_id", { length: 36 }),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Role = typeof roles.$inferSelect;
+export type Permission = typeof permissions.$inferSelect;
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type UserRole = typeof userRoles.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
