@@ -670,7 +670,20 @@ export async function registerRoutes(
     }
   });
 
+  // CORS preflight for webhooks
+  app.options("/webhooks/evolution", (req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
+    res.status(200).end();
+  });
+
   app.post("/webhooks/evolution", async (req: Request, res: Response) => {
+    // Set CORS headers for webhook responses
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
+    
     try {
       console.log("Webhook raw body:", JSON.stringify(req.body, null, 2));
       
