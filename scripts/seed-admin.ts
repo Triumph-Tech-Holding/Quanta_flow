@@ -16,13 +16,13 @@ async function seedAdmin() {
     .limit(1);
 
   if (existingAdmin) {
-    console.log("Usuário admin já existe. Atualizando senha...");
+    console.log("Usuário admin já existe. Atualizando senha e role...");
     const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
     await db
       .update(users)
-      .set({ password: hashedPassword, mustChangePassword: true })
+      .set({ password: hashedPassword, mustChangePassword: true, tipoAtor: "admin" })
       .where(eq(users.email, ADMIN_EMAIL));
-    console.log("Senha do admin atualizada!");
+    console.log("Admin atualizado!");
     console.log(`Email: ${ADMIN_EMAIL}`);
     console.log(`Senha: ${ADMIN_PASSWORD}`);
     return;
@@ -37,7 +37,7 @@ async function seedAdmin() {
       nome: "Administrador",
       email: ADMIN_EMAIL,
       password: hashedPassword,
-      tipoUsuario: "admin",
+      tipoAtor: "admin",
       status: "active",
       mustChangePassword: true,
       tokenVersion: 0,
