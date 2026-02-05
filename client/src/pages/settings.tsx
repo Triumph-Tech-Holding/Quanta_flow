@@ -64,6 +64,8 @@ export default function SettingsPage() {
   const [editingSetting, setEditingSetting] = useState<Setting | null>(null);
   const [deletingSetting, setDeletingSetting] = useState<Setting | null>(null);
   const [showValue, setShowValue] = useState<string | null>(null);
+  const [decryptedValues, setDecryptedValues] = useState<Record<string, string>>({});
+  const [loadingValue, setLoadingValue] = useState<string | null>(null);
   const [formData, setFormData] = useState<SettingFormData>({
     key: "",
     value: "",
@@ -226,6 +228,40 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchDecryptedValue = async (key: string) => {
+    if (decryptedValues[key]) {
+      setShowValue(key);
+      return;
+    }
+    
+    setLoadingValue(key);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/admin/settings/${key}/value`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDecryptedValues((prev) => ({ ...prev, [key]: data.value }));
+        setShowValue(key);
+      } else {
+        toast({ title: "Erro ao buscar valor", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Erro ao buscar valor", variant: "destructive" });
+    } finally {
+      setLoadingValue(null);
+    }
+  };
+
+  const toggleShowValue = (key: string) => {
+    if (showValue === key) {
+      setShowValue(null);
+    } else {
+      fetchDecryptedValue(key);
+    }
+  };
+
   const getCategoryLabel = (category: string) => {
     return CATEGORIES.find((c) => c.value === category)?.label || category;
   };
@@ -308,15 +344,20 @@ export default function SettingsPage() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-sm">
-                                {showValue === setting.key ? setting.maskedValue : "••••••••"}
+                                {showValue === setting.key && decryptedValues[setting.key]
+                                  ? decryptedValues[setting.key]
+                                  : "••••••••"}
                               </span>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setShowValue(showValue === setting.key ? null : setting.key)}
+                                onClick={() => toggleShowValue(setting.key)}
+                                disabled={loadingValue === setting.key}
                                 data-testid={`button-toggle-value-${setting.key}`}
                               >
-                                {showValue === setting.key ? (
+                                {loadingValue === setting.key ? (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                ) : showValue === setting.key ? (
                                   <EyeOff className="h-4 w-4" />
                                 ) : (
                                   <Eye className="h-4 w-4" />

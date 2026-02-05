@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
 import { configService } from "./services/configService";
+import { requireAdmin } from "./middleware/configMiddleware";
 import { log } from "./index";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
@@ -453,7 +454,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/settings", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/settings", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const settings = await configService.getAllSettingsForAdmin();
       res.json(settings);
@@ -463,7 +464,21 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/settings/:key/value", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const key = req.params.key as string;
+      const value = await configService.getSetting(key);
+      if (value === null) {
+        return res.status(404).json({ message: "Configuração não encontrada" });
+      }
+      res.json({ key, value });
+    } catch (error) {
+      console.error("Get setting value error:", error);
+      res.status(500).json({ message: "Erro ao buscar valor" });
+    }
+  });
+
+  app.post("/api/admin/settings", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const { key, value, type, category, description, isActive, isEncrypted } = req.body;
       
@@ -493,7 +508,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.put("/api/admin/settings/:key", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
       const { value, type, category, description, isActive } = req.body;
@@ -521,7 +536,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.delete("/api/admin/settings/:key", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
 
@@ -543,7 +558,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings/refresh", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/settings/refresh", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       await configService.refreshCache();
       emitSettingsRefresh();
@@ -554,7 +569,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings/:key/validate", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/settings/:key/validate", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
       const { value } = req.body;

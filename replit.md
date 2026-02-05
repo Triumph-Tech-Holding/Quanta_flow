@@ -67,19 +67,29 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
    - Visualização de conversas em tempo real
    - Envio e recebimento de mensagens
    - Socket.io para atualizações em tempo real
-2. **CRM** - Gestão de relacionamento com clientes (Em breve)
-3. **Automação** - Fluxos automatizados (Em breve)
-4. **Social/Ads** - Marketing e anúncios (Em breve)
-5. **IA Brain** - Inteligência artificial (Em breve)
-6. **Tribos** - Comunidades e grupos (Em breve)
+2. **Settings** - Sistema de gerenciamento de configurações dinâmicas
+   - Criptografia AES-256-CBC para credenciais sensíveis
+   - Cache em memória com TTL de 5 minutos
+   - Audit logging para todas as alterações
+   - Admin CRUD com role-based authorization
+   - Validação de credenciais
+   - Categorias: whatsapp, ai, integrations, general
+   - Tipos: api_key, url, token, id, secret
+3. **CRM** - Gestão de relacionamento com clientes (Em breve)
+4. **Automação** - Fluxos automatizados (Em breve)
+5. **Social/Ads** - Marketing e anúncios (Em breve)
+6. **IA Brain** - Inteligência artificial (Em breve)
+7. **Tribos** - Comunidades e grupos (Em breve)
 
 ## Database Schema
-- **users**: Usuários do sistema (consumidor, agente_fidelizacao, lojista)
+- **users**: Usuários do sistema (consumidor, agente_fidelizacao, lojista, admin)
 - **leads**: Leads/contatos associados a usuários
 - **api_configs**: Configurações de APIs externas (Evolution, OpenAI, Meta)
 - **evolution_configs**: Configuração da Evolution API por usuário
 - **conversations**: Conversas WhatsApp por usuário
 - **messages**: Mensagens das conversas
+- **settings**: Configurações dinâmicas do sistema (criptografadas)
+- **settings_audit**: Histórico de alterações nas configurações
 
 ## API Endpoints
 
@@ -108,12 +118,22 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 ### Webhook
 - `POST /webhooks/evolution` - Webhook para receber mensagens da Evolution API
 
+### Admin Settings (Requer role admin)
+- `GET /api/admin/settings` - Listar todas as configurações
+- `GET /api/admin/settings/:key/value` - Obter valor decriptado
+- `POST /api/admin/settings` - Criar nova configuração
+- `PUT /api/admin/settings/:key` - Atualizar configuração
+- `DELETE /api/admin/settings/:key` - Deletar configuração
+- `POST /api/admin/settings/refresh` - Forçar refresh do cache
+- `POST /api/admin/settings/:key/validate` - Validar credencial
+
 ## Socket.io Events
 - Namespace: `/inbox`
 - Eventos emitidos:
   - `message:received` - Nova mensagem recebida
   - `message:sent` - Mensagem enviada
   - `instance:connected` - WhatsApp conectado
+  - `settings:refresh` - Cache de configurações atualizado
 
 ## Recent Changes
 - Estrutura base do projeto criada
@@ -122,3 +142,5 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Banco de dados PostgreSQL configurado
 - Módulo Inbox implementado com Evolution API v2
 - Socket.io configurado para mensagens em tempo real
+- Módulo Settings implementado com criptografia e audit logging
+- Admin panel para gerenciamento de configurações
