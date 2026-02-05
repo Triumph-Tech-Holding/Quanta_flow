@@ -167,6 +167,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
+      if (!user.mustChangePassword && !currentPassword) {
+        return res.status(400).json({ message: "Senha atual é obrigatória" });
+      }
+
       if (currentPassword) {
         const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
         if (!isPasswordValid) {
