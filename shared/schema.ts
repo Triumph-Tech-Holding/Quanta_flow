@@ -156,6 +156,11 @@ export const connectEvolutionSchema = z.object({
   globalToken: z.string().min(1, "Token obrigatório"),
 });
 
+export const connectZApiSchema = z.object({
+  instanceId: z.string().min(1, "ID da instância obrigatório"),
+  token: z.string().min(1, "Token obrigatório"),
+});
+
 export type InsertEvolutionConfig = z.infer<typeof insertEvolutionConfigSchema>;
 export type EvolutionConfig = typeof evolutionConfigs.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;

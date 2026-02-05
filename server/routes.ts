@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, insertSettingSchema, updateSettingSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -461,6 +461,160 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Z-API Routes ====================
+  
+  app.post("/api/zapi/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const validatedData = connectZApiSchema.parse(req.body);
+      const userId = req.user!.userId;
+
+      // Test Z-API connection
+      const zapiUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/status`;
+      const response = await fetch(zapiUrl);
+      
+      if (!response.ok) {
+        return res.status(401).json({ message: "Credenciais da Z-API inválidas" });
+      }
+
+      const statusData = await response.json();
+      log(`Z-API status check: ${JSON.stringify(statusData)}`, "zapi");
+
+      // Delete existing config if any
+      const existingConfig = await storage.getEvolutionConfig(userId);
+      if (existingConfig) {
+        await storage.deleteEvolutionConfig(userId);
+      }
+
+      // Build webhook URL
+      const webhookUrl = process.env.REPLIT_DEPLOYMENT_URL 
+        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}/webhooks/evolution`
+        : process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`
+          : `${process.env.BASE_URL || 'http://localhost:5000'}/webhooks/evolution`;
+
+      // Configure Z-API webhooks via API
+      const webhookTypes = [
+        { path: "update-webhook-received", name: "Ao receber" },
+        { path: "update-webhook-received-delivery", name: "Receber status" },
+        { path: "update-webhook-connected", name: "Ao conectar" },
+        { path: "update-webhook-disconnected", name: "Ao desconectar" },
+        { path: "update-webhook-send", name: "Ao enviar" },
+      ];
+
+      const webhookResults: { name: string; success: boolean }[] = [];
+      
+      for (const webhook of webhookTypes) {
+        try {
+          const configUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/${webhook.path}`;
+          const webhookResponse = await fetch(configUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: webhookUrl }),
+          });
+          
+          const success = webhookResponse.ok;
+          webhookResults.push({ name: webhook.name, success });
+          
+          if (success) {
+            log(`Z-API webhook ${webhook.name} configured: ${webhookUrl}`, "zapi");
+          } else {
+            log(`Z-API webhook ${webhook.name} failed: ${webhookResponse.status}`, "zapi");
+          }
+        } catch (err) {
+          webhookResults.push({ name: webhook.name, success: false });
+          console.error(`Failed to configure webhook ${webhook.name}:`, err);
+        }
+      }
+      
+      const failedWebhooks = webhookResults.filter(w => !w.success);
+      if (failedWebhooks.length > 0) {
+        log(`Warning: ${failedWebhooks.length} webhooks failed to configure`, "zapi");
+      }
+
+      // Store config using existing evolution_configs table
+      const instanceName = `zapi_${userId.substring(0, 8)}_${Date.now()}`;
+      await storage.createEvolutionConfig({
+        userId,
+        evolutionUrl: `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}`,
+        globalToken: validatedData.token,
+        instanceName,
+      });
+
+      await storage.updateEvolutionConfig(userId, {
+        instanceId: validatedData.instanceId,
+        webhookUrl,
+        status: statusData.connected ? "connected" : "disconnected",
+      });
+
+      log(`Z-API connected for user ${userId}. Webhook URL: ${webhookUrl}`, "zapi");
+
+      res.json({
+        status: statusData.connected ? "connected" : "disconnected",
+        instanceName,
+        webhookUrl,
+      });
+    } catch (error) {
+      console.error("Z-API connect error:", error);
+      res.status(500).json({ message: "Erro ao conectar Z-API" });
+    }
+  });
+
+  app.get("/api/zapi/status", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (!config) {
+        return res.json({ status: "not_configured" });
+      }
+
+      // Check if it's a Z-API config (URL starts with z-api)
+      if (!config.evolutionUrl.includes("z-api.io")) {
+        return res.json({ status: "not_configured" });
+      }
+
+      // Check Z-API status
+      const statusUrl = `${config.evolutionUrl}/status`;
+      const response = await fetch(statusUrl);
+      
+      if (!response.ok) {
+        return res.json({ status: "disconnected", instanceName: config.instanceName });
+      }
+
+      const statusData = await response.json();
+      const status = statusData.connected ? "connected" : "disconnected";
+
+      if (config.status !== status) {
+        await storage.updateEvolutionConfig(userId, { status: status as any });
+      }
+
+      res.json({
+        status,
+        instanceName: config.instanceName,
+        webhookUrl: config.webhookUrl,
+      });
+    } catch (error) {
+      console.error("Z-API status error:", error);
+      res.json({ status: "disconnected" });
+    }
+  });
+
+  app.post("/api/zapi/disconnect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (config && config.evolutionUrl.includes("z-api.io")) {
+        await storage.deleteEvolutionConfig(userId);
+      }
+
+      res.json({ message: "Desconectado com sucesso" });
+    } catch (error) {
+      console.error("Z-API disconnect error:", error);
+      res.status(500).json({ message: "Erro ao desconectar" });
+    }
+  });
+
   app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const conversations = await storage.getConversationsByUser(req.user!.userId);
@@ -504,13 +658,41 @@ export async function registerRoutes(
         return res.status(400).json({ message: "WhatsApp não conectado" });
       }
 
-      const service = createEvolutionService(config.evolutionUrl, config.globalToken);
-      const result = await service.sendMessage(config.instanceName, conversation.remoteJid, content);
+      let messageId = `msg_${Date.now()}`;
+
+      // Check if it's Z-API or Evolution API
+      if (config.evolutionUrl.includes("z-api.io")) {
+        // Z-API send message
+        const phone = conversation.contactPhone?.replace(/\D/g, "") || conversation.remoteJid.replace("@s.whatsapp.net", "");
+        const sendUrl = `${config.evolutionUrl}/send-text`;
+        
+        const response = await fetch(sendUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: phone,
+            message: content,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Erro ao enviar mensagem via Z-API");
+        }
+
+        const result = await response.json();
+        messageId = result.messageId || messageId;
+        log(`Z-API message sent to ${phone}: ${messageId}`, "zapi");
+      } else {
+        // Evolution API send message
+        const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+        const result = await service.sendMessage(config.instanceName, conversation.remoteJid, content);
+        messageId = result.key.id;
+      }
 
       const message = await storage.createMessage({
         conversationId: conversationId,
         userId: userId,
-        messageId: result.key.id,
+        messageId: messageId,
         direction: "outgoing",
         content: content,
         timestamp: new Date(),
