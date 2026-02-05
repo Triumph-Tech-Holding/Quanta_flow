@@ -63,6 +63,37 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Anti-cache middleware for all API routes - prevents 304 Not Modified responses
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    res.removeHeader('ETag');
+    next();
+  });
+
+  // Anti-cache middleware for webhooks
+  app.use("/webhooks", (req: Request, res: Response, next: NextFunction) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    next();
+  });
+
+  // Test endpoint to verify anti-cache is working
+  app.get("/api/test-cache", (req: Request, res: Response) => {
+    res.json({
+      timestamp: new Date().toISOString(),
+      message: 'Se o timestamp muda a cada requisição, cache está desabilitado',
+      cacheControl: res.get('Cache-Control')
+    });
+  });
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);

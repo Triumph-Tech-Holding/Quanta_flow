@@ -6,7 +6,10 @@ function getAuthToken(): string | null {
 
 function getAuthHeaders(): Record<string, string> {
   const token = getAuthToken();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+  };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -27,6 +30,8 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers: Record<string, string> = {
     ...getAuthHeaders(),
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
   };
   
   if (data) {
@@ -38,6 +43,7 @@ export async function apiRequest(
     headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
+    cache: 'no-store',
   });
 
   await throwIfResNotOk(res);
@@ -53,6 +59,7 @@ export const getQueryFn: <T>(options: {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
       headers: getAuthHeaders(),
+      cache: 'no-store',
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
