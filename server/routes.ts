@@ -495,7 +495,7 @@ export async function registerRoutes(
 
   app.put("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { key } = req.params;
+      const key = req.params.key as string;
       const { value, type, category, description, isActive } = req.body;
 
       const existing = await configService.getSettingByKey(key);
@@ -523,7 +523,7 @@ export async function registerRoutes(
 
   app.delete("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { key } = req.params;
+      const key = req.params.key as string;
 
       const existing = await configService.getSettingByKey(key);
       if (!existing) {
@@ -556,7 +556,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/settings/:key/validate", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { key } = req.params;
+      const key = req.params.key as string;
       const { value } = req.body;
 
       const existing = await configService.getSettingByKey(key);

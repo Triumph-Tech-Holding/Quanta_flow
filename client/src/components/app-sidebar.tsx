@@ -41,6 +41,11 @@ const mainMenuItems = [
     url: "/dashboard",
     icon: LayoutDashboard,
   },
+  {
+    title: "Configurações",
+    url: "/settings",
+    icon: Settings,
+  },
 ];
 
 const modulesMenuItems = [

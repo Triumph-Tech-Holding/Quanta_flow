@@ -9,6 +9,7 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Inbox from "@/pages/inbox";
+import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -64,6 +65,9 @@ function Router() {
       </Route>
       <Route path="/inbox">
         <ProtectedRoute component={Inbox} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={SettingsPage} />
       </Route>
       <Route component={NotFound} />
     </Switch>
