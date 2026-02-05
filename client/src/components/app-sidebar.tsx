@@ -10,6 +10,8 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  Shield,
+  ScrollText,
 } from "lucide-react";
 import { QuantaLogo } from "./quanta-logo";
 import { useAuth } from "@/lib/auth";
@@ -45,6 +47,7 @@ const mainMenuItems = [
     title: "Configurações",
     url: "/settings",
     icon: Settings,
+    permission: "view_settings",
   },
 ];
 
@@ -55,6 +58,7 @@ const modulesMenuItems = [
     icon: Inbox,
     module: 1,
     enabled: true,
+    permission: "view_inbox",
   },
   {
     title: "CRM",
@@ -93,6 +97,21 @@ const modulesMenuItems = [
   },
 ];
 
+const adminMenuItems = [
+  {
+    title: "Usuários",
+    url: "/admin/users",
+    icon: Shield,
+    permission: "view_users",
+  },
+  {
+    title: "Audit Logs",
+    url: "/admin/audit-logs",
+    icon: ScrollText,
+    permission: "view_audit_logs",
+  },
+];
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -110,6 +129,8 @@ function getTipoAtorLabel(tipo: string) {
       return "Agente de Fidelização";
     case "lojista":
       return "Lojista";
+    case "admin":
+      return "Administrador";
     default:
       return tipo;
   }
@@ -117,12 +138,16 @@ function getTipoAtorLabel(tipo: string) {
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
 
   const handleLogout = () => {
     logout();
     window.location.href = "/login";
   };
+
+  const visibleAdminItems = adminMenuItems.filter(
+    (item) => hasPermission(item.permission)
+  );
 
   return (
     <Sidebar>
@@ -143,20 +168,23 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {mainMenuItems.map((item) => {
+                if (item.permission && !hasPermission(item.permission)) return null;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      data-testid={`nav-${item.title.toLowerCase()}`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -205,6 +233,33 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {visibleAdminItems.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>Administração</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleAdminItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4">
@@ -229,10 +284,12 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem data-testid="menu-settings">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Configurações</span>
-            </DropdownMenuItem>
+            {hasPermission("view_settings") && (
+              <DropdownMenuItem data-testid="menu-settings">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Configurações</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}

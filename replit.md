@@ -94,6 +94,11 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - **messages**: Mensagens das conversas
 - **settings**: Configurações dinâmicas do sistema (criptografadas)
 - **settings_audit**: Histórico de alterações nas configurações
+- **roles**: Roles do sistema (super_admin, admin, user)
+- **permissions**: Permissões granulares (18 permissões across 7 recursos)
+- **role_permissions**: Associação entre roles e permissões
+- **user_roles**: Associação entre usuários e roles
+- **audit_logs**: Logs de auditoria de todas as ações administrativas
 
 ## API Endpoints
 
@@ -128,7 +133,7 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 ### Webhook
 - `POST /webhooks/evolution` - Webhook para receber mensagens (Z-API e Evolution API)
 
-### Admin Settings (Requer role admin)
+### Admin Settings (Requer permissão view_settings/edit_settings/delete_settings)
 - `GET /api/admin/settings` - Listar todas as configurações
 - `GET /api/admin/settings/:key/value` - Obter valor decriptado
 - `POST /api/admin/settings` - Criar nova configuração
@@ -137,6 +142,16 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - `POST /api/admin/settings/refresh` - Forçar refresh do cache
 - `POST /api/admin/settings/:key/validate` - Validar credencial
 
+### Admin Users (Requer permissão view_users/edit_users)
+- `GET /api/admin/users` - Listar todos os usuários com roles
+- `PATCH /api/admin/users/:id` - Atualizar status, tipo, role do usuário
+
+### Admin Roles (Requer permissão manage_roles)
+- `GET /api/admin/roles` - Listar roles com permissões
+
+### Admin Audit Logs (Requer permissão view_audit_logs)
+- `GET /api/admin/audit-logs` - Listar logs de auditoria (paginado)
+
 ## Socket.io Events
 - Namespace: `/inbox`
 - Eventos emitidos:
@@ -144,6 +159,32 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
   - `message:sent` - Mensagem enviada
   - `instance:connected` - WhatsApp conectado
   - `settings:refresh` - Cache de configurações atualizado
+
+## RBAC (Role-Based Access Control)
+
+### Roles
+- **super_admin**: Acesso total ao sistema (18 permissões)
+- **admin**: Gerente com acesso limitado (9 permissões)
+- **user**: Atendente com acesso básico (5 permissões)
+
+### Permissões (18 totais)
+- settings: view_settings, edit_settings, delete_settings
+- users: view_users, create_users, edit_users, delete_users
+- audit_logs: view_audit_logs, export_audit_logs
+- inbox: view_inbox, edit_inbox
+- leads: view_leads, create_leads, edit_leads
+- api_configs: view_api_configs, edit_api_configs
+- roles: manage_roles, assign_roles
+
+### Middleware RBAC
+- `checkPermission(permission)` - Verifica permissão granular
+- `checkRole(role)` - Verifica role do usuário
+- `getUserRolesAndPermissions(userId)` - Retorna roles e permissões do usuário
+
+### Admin Credentials
+- Email: admin@quantaflow.com
+- Role: super_admin (todas as permissões)
+- Seed: `npx tsx scripts/seed-rbac.ts`
 
 ## Recent Changes
 - Estrutura base do projeto criada
@@ -161,3 +202,11 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Integração Z-API implementada como alternativa à Evolution API
 - Configuração automática de webhooks via API da Z-API
 - Envio de mensagens suporta Z-API e Evolution API
+- RBAC Enterprise implementado com 5 tabelas (roles, permissions, role_permissions, user_roles, audit_logs)
+- Middleware RBAC com checkPermission e checkRole
+- JWT atualizado para incluir roles e permissions no payload
+- Sidebar dinâmica baseada em permissões do usuário
+- Página de Gestão de Usuários (/admin/users) com edição de status e roles
+- Página de Audit Logs (/admin/audit-logs) com paginação
+- Endpoints admin protegidos com RBAC granular
+- Seção "Administração" no sidebar visível apenas para usuários com permissões adequadas

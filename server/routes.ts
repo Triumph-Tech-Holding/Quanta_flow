@@ -8,8 +8,11 @@ import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
 import { configService } from "./services/configService";
-import { requireAdmin } from "./middleware/configMiddleware";
+import { checkPermission, checkRole, getUserRolesAndPermissions } from "./middleware/rbacMiddleware";
 import { log } from "./index";
+import { db } from "./db";
+import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, permissions } from "@shared/schema";
+import { eq, desc, and, sql as sqlExpr } from "drizzle-orm";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
 if (!process.env.SESSION_SECRET) {
@@ -149,6 +152,8 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Usuário inativo ou suspenso" });
       }
 
+      const rbac = await getUserRolesAndPermissions(user.id);
+
       const token = jwt.sign(
         { userId: user.id, email: user.email, tokenVersion: user.tokenVersion },
         JWT_SECRET,
@@ -159,7 +164,7 @@ export async function registerRoutes(
 
       res.json({
         token,
-        user: userWithoutPassword,
+        user: { ...userWithoutPassword, roles: rbac.roles, permissions: rbac.permissions },
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -177,8 +182,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
+      const rbac = await getUserRolesAndPermissions(user.id);
       const { password, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      res.json({ ...userWithoutPassword, roles: rbac.roles, permissions: rbac.permissions });
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
@@ -769,7 +775,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/settings", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/settings", authenticateToken, checkPermission("view_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const settings = await configService.getAllSettingsForAdmin();
       res.json(settings);
@@ -779,7 +785,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/settings/:key/value", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/settings/:key/value", authenticateToken, checkPermission("view_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
       const value = await configService.getSetting(key);
@@ -793,7 +799,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/settings", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const { key, value, type, category, description, isActive, isEncrypted } = req.body;
       
@@ -823,7 +829,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/admin/settings/:key", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.put("/api/admin/settings/:key", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
       const { value, type, category, description, isActive } = req.body;
@@ -851,7 +857,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/settings/:key", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.delete("/api/admin/settings/:key", authenticateToken, checkPermission("delete_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
 
@@ -873,7 +879,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings/refresh", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/settings/refresh", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
     try {
       await configService.refreshCache();
       emitSettingsRefresh();
@@ -884,7 +890,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings/:key/validate", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/settings/:key/validate", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.key as string;
       const { value } = req.body;
@@ -900,7 +906,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/settings/audit", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/settings/audit", authenticateToken, checkPermission("view_audit_logs"), async (req: AuthRequest, res: Response) => {
     try {
       const { key } = req.query;
       const audit = await configService.getSettingsAudit(key as string | undefined);
@@ -908,6 +914,154 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get audit error:", error);
       res.status(500).json({ message: "Erro ao buscar auditoria" });
+    }
+  });
+
+  app.get("/api/admin/users", authenticateToken, checkPermission("view_users"), async (req: AuthRequest, res: Response) => {
+    try {
+      const allUsers = await db.select({
+        id: usersTable.id,
+        email: usersTable.email,
+        nome: usersTable.nome,
+        tipoAtor: usersTable.tipoAtor,
+        telefone: usersTable.telefone,
+        status: usersTable.status,
+        mustChangePassword: usersTable.mustChangePassword,
+        createdAt: usersTable.createdAt,
+        updatedAt: usersTable.updatedAt,
+      }).from(usersTable).orderBy(desc(usersTable.createdAt));
+
+      const usersWithRoles = await Promise.all(
+        allUsers.map(async (u) => {
+          const rbac = await getUserRolesAndPermissions(u.id);
+          return { ...u, roles: rbac.roles, permissions: rbac.permissions };
+        })
+      );
+
+      res.json(usersWithRoles);
+    } catch (error) {
+      console.error("Get users error:", error);
+      res.status(500).json({ message: "Erro ao buscar usuários" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", authenticateToken, checkPermission("edit_users"), async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.params.id as string;
+      const { status, tipoAtor, mustChangePassword, roleId } = req.body;
+
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const updateData: Record<string, any> = {};
+      if (status !== undefined) updateData.status = status;
+      if (tipoAtor !== undefined) updateData.tipoAtor = tipoAtor;
+      if (mustChangePassword !== undefined) updateData.mustChangePassword = mustChangePassword;
+
+      if (Object.keys(updateData).length > 0) {
+        await storage.updateUser(userId, updateData);
+      }
+
+      if (roleId !== undefined) {
+        await db.delete(userRoles).where(eq(userRoles.userId, userId));
+        if (roleId) {
+          await db.insert(userRoles).values({
+            userId: userId,
+            roleId: roleId,
+            assignedBy: req.user!.userId,
+          });
+        }
+      }
+
+      await db.insert(auditLogs).values({
+        userId: req.user!.userId,
+        action: "update_user",
+        resource: "users",
+        resourceId: userId,
+        oldValue: JSON.stringify({ status: targetUser.status, tipoAtor: targetUser.tipoAtor }),
+        newValue: JSON.stringify(updateData),
+        ipAddress: (req.ip || req.socket.remoteAddress || "unknown") as string,
+        userAgent: (req.headers["user-agent"] || "unknown") as string,
+      });
+
+      const updatedUser = await storage.getUser(userId);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+      const rbac = await getUserRolesAndPermissions(userId);
+      const { password, ...safeUser } = updatedUser;
+      res.json({ ...safeUser, roles: rbac.roles, permissions: rbac.permissions });
+    } catch (error) {
+      console.error("Update user error:", error);
+      res.status(500).json({ message: "Erro ao atualizar usuário" });
+    }
+  });
+
+  app.get("/api/admin/audit-logs", authenticateToken, checkPermission("view_audit_logs"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { page = "1", limit = "50", resource, action } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = Math.min(parseInt(limit as string), 100);
+      const offset = (pageNum - 1) * limitNum;
+
+      let query = db.select({
+        id: auditLogs.id,
+        userId: auditLogs.userId,
+        action: auditLogs.action,
+        resource: auditLogs.resource,
+        resourceId: auditLogs.resourceId,
+        oldValue: auditLogs.oldValue,
+        newValue: auditLogs.newValue,
+        ipAddress: auditLogs.ipAddress,
+        userAgent: auditLogs.userAgent,
+        createdAt: auditLogs.createdAt,
+        userName: usersTable.nome,
+        userEmail: usersTable.email,
+      }).from(auditLogs)
+        .leftJoin(usersTable, eq(auditLogs.userId, usersTable.id))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(limitNum)
+        .offset(offset);
+
+      const logs = await query;
+
+      const countResult = await db.select({
+        count: sqlExpr`count(*)::int`,
+      }).from(auditLogs);
+
+      res.json({
+        logs,
+        total: countResult[0]?.count || 0,
+        page: pageNum,
+        limit: limitNum,
+      });
+    } catch (error) {
+      console.error("Get audit logs error:", error);
+      res.status(500).json({ message: "Erro ao buscar logs de auditoria" });
+    }
+  });
+
+  app.get("/api/admin/roles", authenticateToken, checkPermission("manage_roles"), async (req: AuthRequest, res: Response) => {
+    try {
+      const allRoles = await db.select().from(roles).orderBy(roles.name);
+
+      const rolesWithPermissions = await Promise.all(
+        allRoles.map(async (role) => {
+          const perms = await db
+            .select({ name: permissions.name, description: permissions.description })
+            .from(rolePermissions)
+            .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+            .where(eq(rolePermissions.roleId, role.id));
+          return { ...role, permissions: perms };
+        })
+      );
+
+      res.json(rolesWithPermissions);
+    } catch (error) {
+      console.error("Get roles error:", error);
+      res.status(500).json({ message: "Erro ao buscar roles" });
     }
   });
 

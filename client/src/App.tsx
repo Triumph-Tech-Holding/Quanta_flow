@@ -11,6 +11,8 @@ import Dashboard from "@/pages/dashboard";
 import Inbox from "@/pages/inbox";
 import SettingsPage from "@/pages/settings";
 import ChangePassword from "@/pages/change-password";
+import AdminUsers from "@/pages/admin-users";
+import AdminAuditLogs from "@/pages/admin-audit-logs";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -76,6 +78,12 @@ function Router() {
       </Route>
       <Route path="/change-password">
         <ProtectedRoute component={ChangePassword} allowPasswordChange />
+      </Route>
+      <Route path="/admin/users">
+        <ProtectedRoute component={AdminUsers} />
+      </Route>
+      <Route path="/admin/audit-logs">
+        <ProtectedRoute component={AdminAuditLogs} />
       </Route>
       <Route component={NotFound} />
     </Switch>
