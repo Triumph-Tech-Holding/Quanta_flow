@@ -360,9 +360,13 @@ export async function registerRoutes(
       const instanceName = `quanta_${userId.substring(0, 8)}_${Date.now()}`;
       const result = await service.createInstance(instanceName);
 
-      const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`
-        : `${process.env.BASE_URL || 'http://localhost:5000'}/webhooks/evolution`;
+      // Build webhook URL - prefer production URL, then custom, then dev
+      const webhookBaseUrl = process.env.WEBHOOK_BASE_URL 
+        || (process.env.REPLIT_DEPLOYMENT_URL ? `https://${process.env.REPLIT_DEPLOYMENT_URL}` : null)
+        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+        || process.env.BASE_URL 
+        || 'http://localhost:5000';
+      const webhookUrl = `${webhookBaseUrl}/webhooks/evolution`;
 
       await storage.createEvolutionConfig({
         userId,
@@ -495,12 +499,17 @@ export async function registerRoutes(
         await storage.deleteEvolutionConfig(userId);
       }
 
-      // Build webhook URL
-      const webhookUrl = process.env.REPLIT_DEPLOYMENT_URL 
-        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}/webhooks/evolution`
-        : process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`
-          : `${process.env.BASE_URL || 'http://localhost:5000'}/webhooks/evolution`;
+      // Build webhook URL - prefer production URL, then custom, then dev
+      const webhookBaseUrl = process.env.WEBHOOK_BASE_URL 
+        || (process.env.REPLIT_DEPLOYMENT_URL ? `https://${process.env.REPLIT_DEPLOYMENT_URL}` : null)
+        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+        || process.env.BASE_URL 
+        || 'http://localhost:5000';
+      const webhookUrl = `${webhookBaseUrl}/webhooks/evolution`;
+      
+      if (!process.env.WEBHOOK_BASE_URL && !process.env.REPLIT_DEPLOYMENT_URL) {
+        log(`Warning: No production URL configured, using: ${webhookBaseUrl}`, "zapi");
+      }
 
       // Configure Z-API webhooks via API
       const webhookTypes = [
