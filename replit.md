@@ -51,6 +51,9 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - JWT com expiração de 24h
 - Senhas hasheadas com bcrypt
 - Token armazenado no localStorage
+- Token versioning para invalidação imediata de sessões
+- Status do usuário: active, inactive, suspended
+- Troca de senha obrigatória (mustChangePassword flag)
 
 ### API Endpoints
 - `POST /api/auth/register` - Registro de usuário
@@ -95,8 +98,9 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 
 ### Autenticação
 - `POST /api/auth/register` - Registro de usuário
-- `POST /api/auth/login` - Login
+- `POST /api/auth/login` - Login (valida status do usuário)
 - `GET /api/auth/me` - Dados do usuário autenticado
+- `POST /api/auth/change-password` - Alterar senha (incrementa tokenVersion)
 
 ### Leads
 - `GET /api/leads` - Listar leads do usuário
@@ -144,3 +148,7 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Socket.io configurado para mensagens em tempo real
 - Módulo Settings implementado com criptografia e audit logging
 - Admin panel para gerenciamento de configurações
+- Sistema de segurança aprimorado com token versioning
+- Gerenciamento de status de usuário (active/inactive/suspended)
+- Fluxo de troca de senha obrigatória
+- Script de seed para usuário admin (scripts/seed-admin.ts)
