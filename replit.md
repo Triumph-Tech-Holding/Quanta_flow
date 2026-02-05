@@ -118,6 +118,7 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - `POST /api/zapi/connect` - Conectar Z-API (configura webhooks automaticamente)
 - `GET /api/zapi/status` - Status da conexão
 - `POST /api/zapi/disconnect` - Desconectar Z-API
+- `POST /api/zapi/refresh-webhooks` - Atualizar URLs dos webhooks na Z-API
 
 ### Evolution API (WhatsApp - Legacy)
 - `POST /api/evolution/connect` - Conectar WhatsApp (gera QR Code)

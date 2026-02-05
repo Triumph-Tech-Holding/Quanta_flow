@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Wifi, WifiOff, Settings, Copy, Check, ExternalLink } from "lucide-react";
+import { Loader2, Wifi, WifiOff, Settings, Copy, Check, ExternalLink, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,30 @@ export function ZApiConfig() {
     },
   });
 
+  const refreshWebhooksMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/zapi/refresh-webhooks");
+      return response.json() as Promise<{ message: string; webhookUrl: string; failedCount: number }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Webhooks atualizados",
+        description: data.failedCount === 0
+          ? `Todos os webhooks apontando para: ${data.webhookUrl}`
+          : `${data.failedCount} webhook(s) falharam`,
+        variant: data.failedCount > 0 ? "destructive" : "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/zapi/status"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao atualizar webhooks",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: ConnectFormData) => {
     connectMutation.mutate(data);
   };
@@ -175,17 +199,28 @@ export function ZApiConfig() {
                 </div>
               )}
             </div>
-            <Button
-              variant="destructive"
-              onClick={() => disconnectMutation.mutate()}
-              disabled={disconnectMutation.isPending}
-              data-testid="button-disconnect"
-            >
-              {disconnectMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
-              Desconectar Z-API
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => refreshWebhooksMutation.mutate()}
+                disabled={refreshWebhooksMutation.isPending}
+                data-testid="button-refresh-webhooks"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshWebhooksMutation.isPending ? "animate-spin" : ""}`} />
+                Atualizar Webhooks
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => disconnectMutation.mutate()}
+                disabled={disconnectMutation.isPending}
+                data-testid="button-disconnect"
+              >
+                {disconnectMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : null}
+                Desconectar Z-API
+              </Button>
+            </div>
           </div>
         ) : (
           <Form {...form}>

@@ -61,6 +61,64 @@ async function authenticateToken(req: AuthRequest, res: Response, next: NextFunc
   }
 }
 
+function getWebhookUrl(): string {
+  if (process.env.NODE_ENV === 'production' && process.env.REPLIT_DEPLOYMENT_URL) {
+    return `https://${process.env.REPLIT_DEPLOYMENT_URL}/webhooks/evolution`;
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`;
+  }
+  if (process.env.WEBHOOK_BASE_URL) {
+    return `${process.env.WEBHOOK_BASE_URL}/webhooks/evolution`;
+  }
+  return 'http://localhost:5000/webhooks/evolution';
+}
+
+async function configureZApiWebhooks(
+  instanceId: string, 
+  token: string, 
+  clientToken: string, 
+  webhookUrl: string
+): Promise<{ results: { name: string; success: boolean }[]; failedCount: number }> {
+  const webhookTypes = [
+    { path: "update-webhook-received", name: "Ao receber" },
+    { path: "update-webhook-received-delivery", name: "Receber status" },
+    { path: "update-webhook-connected", name: "Ao conectar" },
+    { path: "update-webhook-disconnected", name: "Ao desconectar" },
+    { path: "update-webhook-send", name: "Ao enviar" },
+  ];
+
+  const results: { name: string; success: boolean }[] = [];
+
+  for (const webhook of webhookTypes) {
+    try {
+      const configUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${webhook.path}`;
+      const webhookResponse = await fetch(configUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Client-Token": clientToken,
+        },
+        body: JSON.stringify({ value: webhookUrl }),
+      });
+
+      const success = webhookResponse.ok;
+      results.push({ name: webhook.name, success });
+
+      if (success) {
+        log(`Z-API webhook ${webhook.name} configured: ${webhookUrl}`, "zapi");
+      } else {
+        log(`Z-API webhook ${webhook.name} failed: ${webhookResponse.status}`, "zapi");
+      }
+    } catch (err) {
+      results.push({ name: webhook.name, success: false });
+      console.error(`Failed to configure webhook ${webhook.name}:`, err);
+    }
+  }
+
+  return { results, failedCount: results.filter(w => !w.success).length };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -543,58 +601,18 @@ export async function registerRoutes(
         await storage.deleteEvolutionConfig(userId);
       }
 
-      // Build webhook URL - prefer production URL, then custom, then dev
-      const webhookBaseUrl = process.env.WEBHOOK_BASE_URL 
-        || (process.env.REPLIT_DEPLOYMENT_URL ? `https://${process.env.REPLIT_DEPLOYMENT_URL}` : null)
-        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-        || process.env.BASE_URL 
-        || 'http://localhost:5000';
-      const webhookUrl = `${webhookBaseUrl}/webhooks/evolution`;
-      
-      if (!process.env.WEBHOOK_BASE_URL && !process.env.REPLIT_DEPLOYMENT_URL) {
-        log(`Warning: No production URL configured, using: ${webhookBaseUrl}`, "zapi");
-      }
+      const webhookUrl = getWebhookUrl();
+      log(`Using webhook URL: ${webhookUrl}`, "zapi");
 
-      // Configure Z-API webhooks via API
-      const webhookTypes = [
-        { path: "update-webhook-received", name: "Ao receber" },
-        { path: "update-webhook-received-delivery", name: "Receber status" },
-        { path: "update-webhook-connected", name: "Ao conectar" },
-        { path: "update-webhook-disconnected", name: "Ao desconectar" },
-        { path: "update-webhook-send", name: "Ao enviar" },
-      ];
+      const { results: webhookResults, failedCount } = await configureZApiWebhooks(
+        validatedData.instanceId,
+        validatedData.token,
+        validatedData.clientToken,
+        webhookUrl
+      );
 
-      const webhookResults: { name: string; success: boolean }[] = [];
-      
-      for (const webhook of webhookTypes) {
-        try {
-          const configUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/${webhook.path}`;
-          const webhookResponse = await fetch(configUrl, {
-            method: "PUT",
-            headers: { 
-              "Content-Type": "application/json",
-              "Client-Token": validatedData.clientToken,
-            },
-            body: JSON.stringify({ value: webhookUrl }),
-          });
-          
-          const success = webhookResponse.ok;
-          webhookResults.push({ name: webhook.name, success });
-          
-          if (success) {
-            log(`Z-API webhook ${webhook.name} configured: ${webhookUrl}`, "zapi");
-          } else {
-            log(`Z-API webhook ${webhook.name} failed: ${webhookResponse.status}`, "zapi");
-          }
-        } catch (err) {
-          webhookResults.push({ name: webhook.name, success: false });
-          console.error(`Failed to configure webhook ${webhook.name}:`, err);
-        }
-      }
-      
-      const failedWebhooks = webhookResults.filter(w => !w.success);
-      if (failedWebhooks.length > 0) {
-        log(`Warning: ${failedWebhooks.length} webhooks failed to configure`, "zapi");
+      if (failedCount > 0) {
+        log(`Warning: ${failedCount} webhooks failed to configure`, "zapi");
       }
 
       // Store config using existing evolution_configs table
@@ -681,6 +699,39 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Z-API disconnect error:", error);
       res.status(500).json({ message: "Erro ao desconectar" });
+    }
+  });
+
+  app.post("/api/zapi/refresh-webhooks", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (!config || !config.evolutionUrl.includes("z-api.io")) {
+        return res.status(400).json({ message: "Z-API não configurada" });
+      }
+
+      const urlParts = config.evolutionUrl.replace("https://api.z-api.io/instances/", "").split("/token/");
+      const instanceId = urlParts[0];
+      const token = urlParts[1];
+      const clientToken = config.globalToken;
+
+      const webhookUrl = getWebhookUrl();
+      log(`Refreshing Z-API webhooks to: ${webhookUrl}`, "zapi");
+
+      const { results, failedCount } = await configureZApiWebhooks(instanceId, token, clientToken, webhookUrl);
+
+      await storage.updateEvolutionConfig(userId, { webhookUrl });
+
+      res.json({
+        message: "Webhooks atualizados",
+        webhookUrl,
+        webhooks: results,
+        failedCount,
+      });
+    } catch (error) {
+      console.error("Z-API refresh webhooks error:", error);
+      res.status(500).json({ message: "Erro ao atualizar webhooks" });
     }
   });
 
