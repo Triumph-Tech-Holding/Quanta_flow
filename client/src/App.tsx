@@ -10,9 +10,10 @@ import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Inbox from "@/pages/inbox";
 import SettingsPage from "@/pages/settings";
+import ChangePassword from "@/pages/change-password";
 import NotFound from "@/pages/not-found";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -25,6 +26,10 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   if (!user) {
     return <Redirect to="/login" />;
+  }
+
+  if (user.mustChangePassword && !allowPasswordChange) {
+    return <Redirect to="/change-password" />;
   }
 
   return <Component />;
@@ -68,6 +73,9 @@ function Router() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
+      </Route>
+      <Route path="/change-password">
+        <ProtectedRoute component={ChangePassword} allowPasswordChange />
       </Route>
       <Route component={NotFound} />
     </Switch>
