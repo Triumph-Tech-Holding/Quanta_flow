@@ -5,6 +5,8 @@ import { z } from "zod";
 
 export const tipoAtorEnum = pgEnum("tipo_ator", ["consumidor", "agente_fidelizacao", "lojista"]);
 export const leadStatusEnum = pgEnum("lead_status", ["novo", "contatado", "qualificado", "convertido"]);
+export const instanceStatusEnum = pgEnum("instance_status", ["disconnected", "connecting", "connected"]);
+export const messageDirectionEnum = pgEnum("message_direction", ["incoming", "outgoing"]);
 
 export const users = pgTable("users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -33,6 +35,46 @@ export const apiConfigs = pgTable("api_configs", {
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
   apiName: varchar("api_name", { length: 50 }).notNull(),
   apiKey: text("api_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const evolutionConfigs = pgTable("evolution_configs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  evolutionUrl: text("evolution_url").notNull(),
+  globalToken: text("global_token").notNull(),
+  instanceName: varchar("instance_name", { length: 100 }).notNull(),
+  instanceId: varchar("instance_id", { length: 100 }),
+  status: instanceStatusEnum("status").notNull().default("disconnected"),
+  webhookUrl: text("webhook_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const conversations = pgTable("conversations", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  leadId: varchar("lead_id", { length: 36 }).references(() => leads.id),
+  remoteJid: varchar("remote_jid", { length: 100 }).notNull(),
+  contactName: varchar("contact_name", { length: 255 }),
+  contactPhone: varchar("contact_phone", { length: 20 }),
+  lastMessage: text("last_message"),
+  lastMessageAt: timestamp("last_message_at"),
+  unreadCount: varchar("unread_count", { length: 10 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const messages = pgTable("messages", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id", { length: 36 }).notNull().references(() => conversations.id),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  messageId: varchar("message_id", { length: 100 }),
+  direction: messageDirectionEnum("direction").notNull(),
+  content: text("content").notNull(),
+  mediaType: varchar("media_type", { length: 50 }),
+  mediaUrl: text("media_url"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -81,3 +123,35 @@ export type Lead = typeof leads.$inferSelect;
 export type InsertApiConfig = z.infer<typeof insertApiConfigSchema>;
 export type ApiConfig = typeof apiConfigs.$inferSelect;
 export type UpdateLead = z.infer<typeof updateLeadSchema>;
+
+export const insertEvolutionConfigSchema = createInsertSchema(evolutionConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  instanceId: true,
+  webhookUrl: true,
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const connectEvolutionSchema = z.object({
+  evolutionUrl: z.string().url("URL inválida"),
+  globalToken: z.string().min(1, "Token obrigatório"),
+});
+
+export type InsertEvolutionConfig = z.infer<typeof insertEvolutionConfigSchema>;
+export type EvolutionConfig = typeof evolutionConfigs.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Message = typeof messages.$inferSelect;
