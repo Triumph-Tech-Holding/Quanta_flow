@@ -696,14 +696,14 @@ export async function registerRoutes(
       const isZApi = req.body.phone !== undefined;
       
       if (isZApi) {
-        // Z-API webhook format
-        const { phone, event, type, text, messageId, senderName, chatName, fromMe, isGroup } = req.body;
+        // Z-API webhook format - uses 'type' field, not 'event'
+        const { phone, type, text, messageId, senderName, chatName, fromMe, isGroup } = req.body;
         
-        log(`Z-API Webhook received: ${event} from ${phone}`, "webhook");
-        console.log("Z-API parsed data:", { event, phone, type, fromMe, isGroup });
+        log(`Z-API Webhook received: type=${type} from ${phone}`, "webhook");
+        console.log("Z-API parsed data:", { type, phone, fromMe, isGroup });
 
-        // Z-API events: ReceivedCallback (incoming), MessageStatusCallback, etc.
-        if (event === "ReceivedCallback" && !fromMe) {
+        // Z-API uses type: ReceivedCallback (incoming), MessageStatusCallback, etc.
+        if (type === "ReceivedCallback" && !fromMe) {
           let messageContent = "[Mensagem]";
           if (text?.message) {
             messageContent = text.message;
@@ -766,8 +766,8 @@ export async function registerRoutes(
         }
 
         // Handle sent message confirmation
-        if (event === "MessageStatusCallback" || event === "SentCallback") {
-          log(`Z-API status update: ${event}`, "webhook");
+        if (type === "MessageStatusCallback" || type === "SentCallback") {
+          log(`Z-API status update: ${type}`, "webhook");
         }
 
         return res.status(200).json({ received: true });
