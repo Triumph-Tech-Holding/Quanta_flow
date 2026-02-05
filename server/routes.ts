@@ -454,8 +454,20 @@ export async function registerRoutes(
 
   app.post("/webhooks/evolution", async (req: Request, res: Response) => {
     try {
-      const { event, data, instance } = req.body;
+      console.log("Webhook raw body:", JSON.stringify(req.body, null, 2));
+      
+      if (!req.body || Object.keys(req.body).length === 0) {
+        log("Webhook received with empty body", "webhook");
+        return res.status(200).json({ received: true, message: "Empty body" });
+      }
+
+      const body = req.body.data ? req.body.data : req.body;
+      const event = body.event || req.body.event;
+      const data = body.data || body;
+      const instance = body.instance || req.body.instance || body.instanceName;
+      
       log(`Webhook received: ${event} for instance ${instance}`, "webhook");
+      console.log("Parsed webhook data:", { event, instance, hasData: !!data });
 
       if (event === "messages.upsert" && data?.key && data?.message) {
         const { key, message, pushName } = data;
