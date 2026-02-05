@@ -1,7 +1,12 @@
-# Quanta Shop - Máquina de Soberania Digital
+# Quanta Flow - Venda no automático
 
 ## Overview
-Quanta Shop é uma plataforma completa de gestão de leads, CRM e automação de marketing. O sistema oferece uma experiência integrada para consumidores, agentes de fidelização e lojistas.
+Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de marketing. O sistema oferece uma experiência integrada para consumidores, agentes de fidelização e lojistas.
+
+### Identidade Visual
+- **Cor Primária**: Verde Quanta (#00A86B / HSL 157 100% 33%)
+- **Cor Secundária**: Azul Navy (#1B3A57 / HSL 210 52% 22%)
+- **Slogan**: "Venda no automático."
 
 ## Project Architecture
 

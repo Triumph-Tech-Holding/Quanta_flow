@@ -9,8 +9,9 @@ import {
   TrendingUp,
   Activity,
   Clock,
-  Zap,
+  MessageSquare,
 } from "lucide-react";
+import { QuantaLogo } from "@/components/quanta-logo";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -132,14 +133,14 @@ export default function Dashboard() {
 
           <main className="flex-1 p-6 space-y-8">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Zap className="h-6 w-6 text-primary" />
+              <div className="flex items-center gap-3">
+                <QuantaLogo size="sm" />
                 <h1 className="text-2xl font-bold" data-testid="text-greeting">
                   {getGreeting()}, {user?.nome?.split(" ")[0] || "Usuário"}!
                 </h1>
               </div>
               <p className="text-muted-foreground" data-testid="text-welcome-message">
-                {user?.tipoAtor ? getTipoAtorMessage(user.tipoAtor) : "Bem-vindo ao Quanta Shop."}
+                {user?.tipoAtor ? getTipoAtorMessage(user.tipoAtor) : "Bem-vindo ao Quanta Flow."}
               </p>
             </div>
 
@@ -162,7 +163,7 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-xl font-semibold">Módulos Disponíveis</h2>
                 <p className="text-sm text-muted-foreground">
-                  Explore os módulos do Quanta Shop para potencializar seu negócio
+                  Explore os módulos do Quanta Flow para potencializar seu negócio
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -201,7 +202,7 @@ export default function Dashboard() {
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-primary" />
+                  <MessageSquare className="h-5 w-5 text-primary" />
                   Próximos Passos
                 </CardTitle>
               </CardHeader>

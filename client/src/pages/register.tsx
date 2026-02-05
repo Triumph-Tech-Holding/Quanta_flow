@@ -2,7 +2,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Lock, User, Phone, Loader2, Zap, Building, Users, ShoppingBag } from "lucide-react";
+import { Mail, Lock, User, Phone, Loader2, Building, Users, ShoppingBag } from "lucide-react";
+import { QuantaLogo } from "@/components/quanta-logo";
 import { registerUserSchema, type RegisterUser } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ export default function Register() {
       login(data.token, data.user);
       toast({
         title: "Conta criada com sucesso!",
-        description: `Bem-vindo ao Quanta Shop, ${data.user.nome}!`,
+        description: `Bem-vindo ao Quanta Flow, ${data.user.nome}!`,
       });
       setLocation("/dashboard");
     },
@@ -74,11 +75,14 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4 py-8">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-            <Zap className="w-8 h-8 text-primary" />
+          <div className="flex justify-center mb-4">
+            <QuantaLogo size="lg" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Quanta Shop</h1>
-          <p className="text-muted-foreground mt-2">Máquina de Soberania Digital</p>
+          <div className="flex items-baseline justify-center gap-2">
+            <span className="text-3xl font-bold text-secondary">quanta</span>
+            <span className="text-3xl font-light text-muted-foreground">FLOW</span>
+          </div>
+          <p className="text-muted-foreground mt-2">Venda no automático.</p>
         </div>
 
         <Card className="border-card-border shadow-lg">

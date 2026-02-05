@@ -9,9 +9,9 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
-  Zap,
   ChevronDown,
 } from "lucide-react";
+import { QuantaLogo } from "./quanta-logo";
 import { useAuth } from "@/lib/auth";
 import {
   Sidebar,
@@ -123,12 +123,13 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
-            <Zap className="w-5 h-5 text-primary" />
-          </div>
+          <QuantaLogo size="md" />
           <div>
-            <h2 className="font-semibold text-base">Quanta Shop</h2>
-            <p className="text-xs text-muted-foreground">Soberania Digital</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-base font-bold text-secondary">quanta</span>
+              <span className="text-base font-light text-muted-foreground">FLOW</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Venda no automático.</p>
           </div>
         </div>
       </SidebarHeader>
