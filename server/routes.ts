@@ -679,12 +679,94 @@ export async function registerRoutes(
         return res.status(200).json({ received: true, message: "Empty body" });
       }
 
+      // Detect if it's Z-API format (has 'phone' field) or Evolution API format
+      const isZApi = req.body.phone !== undefined;
+      
+      if (isZApi) {
+        // Z-API webhook format
+        const { phone, event, type, text, messageId, senderName, chatName, fromMe, isGroup } = req.body;
+        
+        log(`Z-API Webhook received: ${event} from ${phone}`, "webhook");
+        console.log("Z-API parsed data:", { event, phone, type, fromMe, isGroup });
+
+        // Z-API events: ReceivedCallback (incoming), MessageStatusCallback, etc.
+        if (event === "ReceivedCallback" && !fromMe) {
+          let messageContent = "[Mensagem]";
+          if (text?.message) {
+            messageContent = text.message;
+          } else if (req.body.image?.caption) {
+            messageContent = req.body.image.caption;
+          } else if (req.body.audio) {
+            messageContent = "[Áudio]";
+          } else if (req.body.video) {
+            messageContent = req.body.video.caption || "[Vídeo]";
+          } else if (req.body.document) {
+            messageContent = "[Documento]";
+          }
+
+          const remoteJid = `${phone}@s.whatsapp.net`;
+          const contactName = senderName || chatName || phone;
+          
+          // Associate messages with admin user for now
+          const adminUser = await storage.getUserByEmail("admin@quantaflow.com");
+          const userId = adminUser?.id;
+          
+          if (userId) {
+            let conversation = await storage.getConversationByRemoteJid(userId, remoteJid);
+
+            if (!conversation) {
+              conversation = await storage.createConversation({
+                userId,
+                remoteJid,
+                contactName,
+                contactPhone: phone,
+                lastMessage: messageContent,
+                lastMessageAt: new Date(),
+                unreadCount: "1",
+              });
+            } else {
+              const currentUnread = parseInt(conversation.unreadCount || "0");
+              await storage.updateConversation(conversation.id, {
+                lastMessage: messageContent,
+                lastMessageAt: new Date(),
+                unreadCount: String(currentUnread + 1),
+                contactName: contactName || conversation.contactName,
+              });
+            }
+
+            const newMessage = await storage.createMessage({
+              conversationId: conversation.id,
+              userId,
+              messageId: messageId || `zapi_${Date.now()}`,
+              direction: "incoming",
+              content: messageContent,
+              timestamp: new Date(),
+            });
+
+            log(`Z-API message saved: ${newMessage.id}`, "webhook");
+
+            emitMessageReceived(userId, {
+              message: newMessage,
+              conversation: await storage.getConversation(conversation.id),
+            });
+          }
+        }
+
+        // Handle sent message confirmation
+        if (event === "MessageStatusCallback" || event === "SentCallback") {
+          log(`Z-API status update: ${event}`, "webhook");
+        }
+
+        return res.status(200).json({ received: true });
+      }
+
+      // Evolution API webhook format (original code)
       const body = req.body.data ? req.body.data : req.body;
       const event = body.event || req.body.event;
       const data = body.data || body;
       const instance = body.instance || req.body.instance || body.instanceName;
       
-      log(`Webhook received: ${event} for instance ${instance}`, "webhook");
+      log(`Evolution Webhook received: ${event} for instance ${instance}`, "webhook");
       console.log("Parsed webhook data:", { event, instance, hasData: !!data });
 
       if (event === "messages.upsert" && data?.key && data?.message) {
