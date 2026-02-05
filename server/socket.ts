@@ -3,7 +3,10 @@ import type { Server as HttpServer } from "http";
 import jwt from "jsonwebtoken";
 import { log } from "./index";
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+const JWT_SECRET = process.env.SESSION_SECRET;
+if (!JWT_SECRET) {
+  console.error("SESSION_SECRET environment variable is required for JWT authentication");
+}
 
 interface AuthenticatedSocket {
   userId: string;
