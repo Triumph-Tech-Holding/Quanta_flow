@@ -65,8 +65,9 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - `DELETE /api/leads/:id` - Deletar lead
 
 ## Modules
-1. **Inbox** - Central de mensagens unificada (WhatsApp via Evolution API v2)
-   - Conexão WhatsApp via QR Code
+1. **Inbox** - Central de mensagens unificada (WhatsApp via Z-API)
+   - Conexão WhatsApp via Z-API (instância pré-conectada)
+   - Configuração automática de webhooks via API
    - Visualização de conversas em tempo real
    - Envio e recebimento de mensagens
    - Socket.io para atualizações em tempo real
@@ -108,7 +109,12 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - `PATCH /api/leads/:id` - Atualizar lead
 - `DELETE /api/leads/:id` - Deletar lead
 
-### Evolution API (WhatsApp)
+### Z-API (WhatsApp)
+- `POST /api/zapi/connect` - Conectar Z-API (configura webhooks automaticamente)
+- `GET /api/zapi/status` - Status da conexão
+- `POST /api/zapi/disconnect` - Desconectar Z-API
+
+### Evolution API (WhatsApp - Legacy)
 - `POST /api/evolution/connect` - Conectar WhatsApp (gera QR Code)
 - `GET /api/evolution/status` - Status da conexão
 - `GET /api/evolution/qrcode` - Obter QR Code atualizado
@@ -117,10 +123,10 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 ### Conversas e Mensagens
 - `GET /api/conversations` - Listar conversas
 - `GET /api/conversations/:id/messages` - Mensagens de uma conversa
-- `POST /api/conversations/:id/messages` - Enviar mensagem
+- `POST /api/conversations/:id/messages` - Enviar mensagem (suporta Z-API e Evolution)
 
 ### Webhook
-- `POST /webhooks/evolution` - Webhook para receber mensagens da Evolution API
+- `POST /webhooks/evolution` - Webhook para receber mensagens (Z-API e Evolution API)
 
 ### Admin Settings (Requer role admin)
 - `GET /api/admin/settings` - Listar todas as configurações
@@ -152,3 +158,6 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Gerenciamento de status de usuário (active/inactive/suspended)
 - Fluxo de troca de senha obrigatória
 - Script de seed para usuário admin (scripts/seed-admin.ts)
+- Integração Z-API implementada como alternativa à Evolution API
+- Configuração automática de webhooks via API da Z-API
+- Envio de mensagens suporta Z-API e Evolution API
