@@ -148,6 +148,7 @@ export default function Register() {
                             className="pl-10"
                             data-testid="input-telefone"
                             {...field}
+                            value={field.value ?? ""}
                           />
                         </div>
                       </FormControl>

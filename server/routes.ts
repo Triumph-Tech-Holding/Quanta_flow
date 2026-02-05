@@ -6,8 +6,8 @@ import { storage } from "./storage";
 import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema } from "@shared/schema";
 import { z } from "zod";
 
-const JWT_SECRET = process.env.SESSION_SECRET;
-if (!JWT_SECRET) {
+const JWT_SECRET: string = process.env.SESSION_SECRET!;
+if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required for JWT authentication");
 }
 const JWT_EXPIRATION = "24h";
@@ -160,7 +160,7 @@ export async function registerRoutes(
 
   app.patch("/api/leads/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const validatedData = updateLeadSchema.parse(req.body);
       
       const existingLead = await storage.getLead(id);
@@ -185,7 +185,7 @@ export async function registerRoutes(
 
   app.delete("/api/leads/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       
       const existingLead = await storage.getLead(id);
       if (!existingLead) {
@@ -242,7 +242,7 @@ export async function registerRoutes(
 
   app.delete("/api/api-configs/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       
       const configs = await storage.getApiConfigsByUser(req.user!.userId);
       const config = configs.find(c => c.id === id);
