@@ -3,8 +3,11 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema } from "@shared/schema";
 import { z } from "zod";
+import { createEvolutionService } from "./services/evolutionService";
+import { emitMessageReceived, emitInstanceConnected } from "./socket";
+import { log } from "./index";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
 if (!process.env.SESSION_SECRET) {
@@ -259,5 +262,286 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/evolution/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const validatedData = connectEvolutionSchema.parse(req.body);
+      const userId = req.user!.userId;
+
+      const existingConfig = await storage.getEvolutionConfig(userId);
+      if (existingConfig) {
+        const service = createEvolutionService(existingConfig.evolutionUrl, existingConfig.globalToken);
+        await service.deleteInstance(existingConfig.instanceName);
+        await storage.deleteEvolutionConfig(userId);
+      }
+
+      const service = createEvolutionService(validatedData.evolutionUrl, validatedData.globalToken);
+      
+      const isValid = await service.validateToken();
+      if (!isValid) {
+        return res.status(401).json({ message: "Token da Evolution API inválido" });
+      }
+
+      const instanceName = `quanta_${userId.substring(0, 8)}_${Date.now()}`;
+      const result = await service.createInstance(instanceName);
+
+      const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`
+        : `${process.env.BASE_URL || 'http://localhost:5000'}/webhooks/evolution`;
+
+      await storage.createEvolutionConfig({
+        userId,
+        evolutionUrl: validatedData.evolutionUrl,
+        globalToken: validatedData.globalToken,
+        instanceName,
+      });
+
+      await storage.updateEvolutionConfig(userId, {
+        instanceId: result.instance.instanceId,
+        webhookUrl,
+        status: "connecting",
+      });
+
+      log(`Webhook URL: ${webhookUrl}`, "evolution");
+
+      const qrCode = await service.getQRCode(instanceName);
+
+      res.json({
+        instanceName,
+        qrCode: qrCode?.base64 || result.qrcode?.base64,
+        status: "connecting",
+      });
+    } catch (error) {
+      console.error("Evolution connect error:", error);
+      res.status(500).json({ message: "Erro ao conectar Evolution API" });
+    }
+  });
+
+  app.get("/api/evolution/status", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (!config) {
+        return res.json({ status: "not_configured" });
+      }
+
+      const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+      const state = await service.getConnectionStatus(config.instanceName);
+
+      const status = state === "open" ? "connected" : state === "connecting" ? "connecting" : "disconnected";
+      
+      if (config.status !== status) {
+        await storage.updateEvolutionConfig(userId, { status: status as any });
+      }
+
+      res.json({
+        status,
+        instanceName: config.instanceName,
+      });
+    } catch (error) {
+      console.error("Evolution status error:", error);
+      res.status(500).json({ message: "Erro ao verificar status" });
+    }
+  });
+
+  app.get("/api/evolution/qrcode", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (!config) {
+        return res.status(404).json({ message: "Evolution não configurado" });
+      }
+
+      const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+      const qrCode = await service.getQRCode(config.instanceName);
+
+      if (!qrCode) {
+        return res.status(404).json({ message: "QR Code não disponível" });
+      }
+
+      res.json({ qrCode: qrCode.base64 });
+    } catch (error) {
+      console.error("Evolution QR code error:", error);
+      res.status(500).json({ message: "Erro ao obter QR Code" });
+    }
+  });
+
+  app.post("/api/evolution/disconnect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+
+      if (config) {
+        const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+        await service.deleteInstance(config.instanceName);
+        await storage.deleteEvolutionConfig(userId);
+      }
+
+      res.json({ message: "Desconectado com sucesso" });
+    } catch (error) {
+      console.error("Evolution disconnect error:", error);
+      res.status(500).json({ message: "Erro ao desconectar" });
+    }
+  });
+
+  app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const conversations = await storage.getConversationsByUser(req.user!.userId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Get conversations error:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  app.get("/api/conversations/:id/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const conversationId = req.params.id as string;
+      const conversation = await storage.getConversation(conversationId);
+
+      if (!conversation || conversation.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const messages = await storage.getMessagesByConversation(conversationId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Get messages error:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const conversationId = req.params.id as string;
+      const { content } = req.body;
+      const userId = req.user!.userId;
+
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation || conversation.userId !== userId) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const config = await storage.getEvolutionConfig(userId);
+      if (!config || config.status !== "connected") {
+        return res.status(400).json({ message: "WhatsApp não conectado" });
+      }
+
+      const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+      const result = await service.sendMessage(config.instanceName, conversation.remoteJid, content);
+
+      const message = await storage.createMessage({
+        conversationId: conversationId,
+        userId: userId,
+        messageId: result.key.id,
+        direction: "outgoing",
+        content: content,
+        timestamp: new Date(),
+      });
+
+      await storage.updateConversation(conversationId, {
+        lastMessage: content,
+        lastMessageAt: new Date(),
+      });
+
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Send message error:", error);
+      res.status(500).json({ message: "Erro ao enviar mensagem" });
+    }
+  });
+
+  app.post("/webhooks/evolution", async (req: Request, res: Response) => {
+    try {
+      const { event, data, instance } = req.body;
+      log(`Webhook received: ${event} for instance ${instance}`, "webhook");
+
+      if (event === "messages.upsert" && data?.key && data?.message) {
+        const { key, message, pushName } = data;
+        
+        if (key.fromMe) {
+          return res.status(200).json({ received: true });
+        }
+
+        const remoteJid = key.remoteJid;
+        const messageContent = message.conversation || 
+          message.extendedTextMessage?.text || 
+          message.imageMessage?.caption ||
+          "[Mídia]";
+
+        const instanceName = instance;
+        const configs = await storage.getApiConfigsByUser("*");
+        
+        const allUsers = await getAllEvolutionConfigs();
+        const config = allUsers.find(c => c.instanceName === instanceName);
+
+        if (config) {
+          let conversation = await storage.getConversationByRemoteJid(config.userId, remoteJid);
+
+          if (!conversation) {
+            const phoneNumber = remoteJid.split("@")[0];
+            conversation = await storage.createConversation({
+              userId: config.userId,
+              remoteJid,
+              contactName: pushName || phoneNumber,
+              contactPhone: phoneNumber,
+              lastMessage: messageContent,
+              lastMessageAt: new Date(),
+              unreadCount: "1",
+            });
+          } else {
+            const currentUnread = parseInt(conversation.unreadCount || "0");
+            await storage.updateConversation(conversation.id, {
+              lastMessage: messageContent,
+              lastMessageAt: new Date(),
+              unreadCount: String(currentUnread + 1),
+              contactName: pushName || conversation.contactName,
+            });
+          }
+
+          const newMessage = await storage.createMessage({
+            conversationId: conversation.id,
+            userId: config.userId,
+            messageId: key.id,
+            direction: "incoming",
+            content: messageContent,
+            timestamp: new Date(),
+          });
+
+          emitMessageReceived(config.userId, {
+            message: newMessage,
+            conversation: await storage.getConversation(conversation.id),
+          });
+        }
+      }
+
+      if (event === "connection.update") {
+        const { state, instance: instanceName } = data || {};
+        
+        if (state === "open") {
+          const allUsers = await getAllEvolutionConfigs();
+          const config = allUsers.find(c => c.instanceName === instanceName);
+          
+          if (config) {
+            await storage.updateEvolutionConfig(config.userId, { status: "connected" });
+            emitInstanceConnected(config.userId, { status: "connected" });
+          }
+        }
+      }
+
+      res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(500).json({ message: "Webhook error" });
+    }
+  });
+
   return httpServer;
+}
+
+async function getAllEvolutionConfigs() {
+  const { db } = await import("./db");
+  const { evolutionConfigs } = await import("@shared/schema");
+  return db.select().from(evolutionConfigs);
 }
