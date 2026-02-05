@@ -3,10 +3,13 @@ import { pgTable, text, varchar, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const tipoAtorEnum = pgEnum("tipo_ator", ["consumidor", "agente_fidelizacao", "lojista"]);
+import { boolean } from "drizzle-orm/pg-core";
+
+export const tipoAtorEnum = pgEnum("tipo_ator", ["consumidor", "agente_fidelizacao", "lojista", "admin"]);
 export const leadStatusEnum = pgEnum("lead_status", ["novo", "contatado", "qualificado", "convertido"]);
 export const instanceStatusEnum = pgEnum("instance_status", ["disconnected", "connecting", "connected"]);
 export const messageDirectionEnum = pgEnum("message_direction", ["incoming", "outgoing"]);
+export const settingTypeEnum = pgEnum("setting_type", ["api_key", "url", "token", "id", "secret"]);
 
 export const users = pgTable("users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -155,3 +158,46 @@ export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Conversation = typeof conversations.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
+
+export const settings = pgTable("settings", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(),
+  type: settingTypeEnum("type").notNull().default("api_key"),
+  category: varchar("category", { length: 50 }).notNull().default("general"),
+  description: varchar("description", { length: 500 }),
+  isActive: boolean("is_active").notNull().default(true),
+  isEncrypted: boolean("is_encrypted").notNull().default(true),
+  lastUpdatedBy: varchar("last_updated_by", { length: 36 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const settingsAudit = pgTable("settings_audit", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: varchar("setting_key", { length: 100 }).notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  action: varchar("action", { length: 20 }).notNull(),
+  changedBy: varchar("changed_by", { length: 36 }).notNull().references(() => users.id),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+
+export const insertSettingSchema = createInsertSchema(settings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateSettingSchema = z.object({
+  value: z.string().optional(),
+  type: z.enum(["api_key", "url", "token", "id", "secret"]).optional(),
+  category: z.string().optional(),
+  description: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type InsertSetting = z.infer<typeof insertSettingSchema>;
+export type Setting = typeof settings.$inferSelect;
+export type UpdateSetting = z.infer<typeof updateSettingSchema>;
+export type SettingsAudit = typeof settingsAudit.$inferSelect;

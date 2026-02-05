@@ -3,10 +3,11 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, insertSettingSchema, updateSettingSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
-import { emitMessageReceived, emitInstanceConnected } from "./socket";
+import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
+import { configService } from "./services/configService";
 import { log } from "./index";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
@@ -449,6 +450,134 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Send message error:", error);
       res.status(500).json({ message: "Erro ao enviar mensagem" });
+    }
+  });
+
+  app.get("/api/admin/settings", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const settings = await configService.getAllSettingsForAdmin();
+      res.json(settings);
+    } catch (error) {
+      console.error("Get settings error:", error);
+      res.status(500).json({ message: "Erro ao buscar configurações" });
+    }
+  });
+
+  app.post("/api/admin/settings", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { key, value, type, category, description, isActive, isEncrypted } = req.body;
+      
+      if (!key || !value) {
+        return res.status(400).json({ message: "Key e value são obrigatórios" });
+      }
+
+      const existing = await configService.getSettingByKey(key);
+      if (existing) {
+        return res.status(400).json({ message: "Configuração já existe" });
+      }
+
+      const setting = await configService.createSetting(
+        { key, value, type, category, description, isActive, isEncrypted },
+        req.user!.userId
+      );
+
+      if (!setting) {
+        return res.status(500).json({ message: "Erro ao criar configuração" });
+      }
+
+      emitSettingsRefresh();
+      res.status(201).json({ ...setting, maskedValue: configService.maskValue(value) });
+    } catch (error) {
+      console.error("Create setting error:", error);
+      res.status(500).json({ message: "Erro ao criar configuração" });
+    }
+  });
+
+  app.put("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { key } = req.params;
+      const { value, type, category, description, isActive } = req.body;
+
+      const existing = await configService.getSettingByKey(key);
+      if (!existing) {
+        return res.status(404).json({ message: "Configuração não encontrada" });
+      }
+
+      const setting = await configService.updateSetting(
+        key,
+        { value, type, category, description, isActive },
+        req.user!.userId
+      );
+
+      if (!setting) {
+        return res.status(500).json({ message: "Erro ao atualizar configuração" });
+      }
+
+      emitSettingsRefresh();
+      res.json({ ...setting, maskedValue: value ? configService.maskValue(value) : undefined });
+    } catch (error) {
+      console.error("Update setting error:", error);
+      res.status(500).json({ message: "Erro ao atualizar configuração" });
+    }
+  });
+
+  app.delete("/api/admin/settings/:key", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { key } = req.params;
+
+      const existing = await configService.getSettingByKey(key);
+      if (!existing) {
+        return res.status(404).json({ message: "Configuração não encontrada" });
+      }
+
+      const success = await configService.deleteSetting(key, req.user!.userId);
+      if (!success) {
+        return res.status(500).json({ message: "Erro ao deletar configuração" });
+      }
+
+      emitSettingsRefresh();
+      res.json({ message: "Configuração deletada com sucesso" });
+    } catch (error) {
+      console.error("Delete setting error:", error);
+      res.status(500).json({ message: "Erro ao deletar configuração" });
+    }
+  });
+
+  app.post("/api/admin/settings/refresh", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      await configService.refreshCache();
+      emitSettingsRefresh();
+      res.json({ message: "Cache atualizado com sucesso" });
+    } catch (error) {
+      console.error("Refresh cache error:", error);
+      res.status(500).json({ message: "Erro ao atualizar cache" });
+    }
+  });
+
+  app.post("/api/admin/settings/:key/validate", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { key } = req.params;
+      const { value } = req.body;
+
+      const existing = await configService.getSettingByKey(key);
+      const type = existing?.type || "api_key";
+
+      const result = await configService.validateCredential(type, key, value);
+      res.json(result);
+    } catch (error) {
+      console.error("Validate setting error:", error);
+      res.status(500).json({ message: "Erro ao validar configuração" });
+    }
+  });
+
+  app.get("/api/admin/settings/audit", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { key } = req.query;
+      const audit = await configService.getSettingsAudit(key as string | undefined);
+      res.json(audit);
+    } catch (error) {
+      console.error("Get audit error:", error);
+      res.status(500).json({ message: "Erro ao buscar auditoria" });
     }
   });
 

@@ -84,3 +84,10 @@ export function emitMessageSent(userId: string, message: unknown): void {
 export function emitInstanceConnected(userId: string, data: unknown): void {
   emitToUser(userId, "instance:connected", data);
 }
+
+export function emitSettingsRefresh(): void {
+  if (io) {
+    io.of("/inbox").emit("settings:refresh", { timestamp: Date.now() });
+    log("Emitted settings:refresh to all users", "socket");
+  }
+}
