@@ -472,7 +472,9 @@ export async function registerRoutes(
       const zapiUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/status`;
       log(`Z-API testing connection: ${zapiUrl}`, "zapi");
       
-      const response = await fetch(zapiUrl);
+      const response = await fetch(zapiUrl, {
+        headers: { "Client-Token": validatedData.clientToken },
+      });
       const responseText = await response.text();
       
       log(`Z-API response status: ${response.status}`, "zapi");
@@ -516,7 +518,10 @@ export async function registerRoutes(
           const configUrl = `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}/${webhook.path}`;
           const webhookResponse = await fetch(configUrl, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Client-Token": validatedData.clientToken,
+            },
             body: JSON.stringify({ value: webhookUrl }),
           });
           
@@ -540,11 +545,12 @@ export async function registerRoutes(
       }
 
       // Store config using existing evolution_configs table
+      // For Z-API: evolutionUrl contains instance URL, globalToken stores clientToken for authentication
       const instanceName = `zapi_${userId.substring(0, 8)}_${Date.now()}`;
       await storage.createEvolutionConfig({
         userId,
         evolutionUrl: `https://api.z-api.io/instances/${validatedData.instanceId}/token/${validatedData.token}`,
-        globalToken: validatedData.token,
+        globalToken: validatedData.clientToken,
         instanceName,
       });
 
@@ -581,9 +587,11 @@ export async function registerRoutes(
         return res.json({ status: "not_configured" });
       }
 
-      // Check Z-API status
+      // Check Z-API status - globalToken contains Client-Token
       const statusUrl = `${config.evolutionUrl}/status`;
-      const response = await fetch(statusUrl);
+      const response = await fetch(statusUrl, {
+        headers: { "Client-Token": config.globalToken },
+      });
       
       if (!response.ok) {
         return res.json({ status: "disconnected", instanceName: config.instanceName });
@@ -670,13 +678,16 @@ export async function registerRoutes(
 
       // Check if it's Z-API or Evolution API
       if (config.evolutionUrl.includes("z-api.io")) {
-        // Z-API send message
+        // Z-API send message - globalToken contains the Client-Token for authentication
         const phone = conversation.contactPhone?.replace(/\D/g, "") || conversation.remoteJid.replace("@s.whatsapp.net", "");
         const sendUrl = `${config.evolutionUrl}/send-text`;
         
         const response = await fetch(sendUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Client-Token": config.globalToken,
+          },
           body: JSON.stringify({
             phone: phone,
             message: content,

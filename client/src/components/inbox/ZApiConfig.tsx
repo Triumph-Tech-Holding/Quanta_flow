@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 const connectSchema = z.object({
   instanceId: z.string().min(1, "ID da instância obrigatório"),
   token: z.string().min(1, "Token obrigatório"),
+  clientToken: z.string().min(1, "Client-Token obrigatório"),
 });
 
 type ConnectFormData = z.infer<typeof connectSchema>;
@@ -45,6 +46,7 @@ export function ZApiConfig() {
     defaultValues: {
       instanceId: "",
       token: "",
+      clientToken: "",
     },
   });
 
@@ -192,9 +194,9 @@ export function ZApiConfig() {
                 <p className="font-medium">Como obter as credenciais:</p>
                 <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                   <li>Acesse o painel da Z-API</li>
-                  <li>Vá em "Instâncias Web"</li>
-                  <li>Selecione sua instância conectada</li>
+                  <li>Vá em "Instâncias Web" e selecione sua instância</li>
                   <li>Copie o "ID da instância" e "Token da instância"</li>
+                  <li>Vá em "Configurações &gt; Segurança" e copie o "Client-Token"</li>
                 </ol>
                 <a
                   href="https://app.z-api.io/"
@@ -243,6 +245,28 @@ export function ZApiConfig() {
                     </FormControl>
                     <FormDescription>
                       Token de acesso da sua instância Z-API
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="clientToken"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client-Token</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Seu Client-Token de segurança"
+                        {...field}
+                        data-testid="input-client-token"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Token de segurança - encontrado em "Configurações &gt; Segurança" no painel Z-API
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
