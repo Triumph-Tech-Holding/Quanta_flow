@@ -49,7 +49,7 @@ const modulesMenuItems = [
     url: "/inbox",
     icon: Inbox,
     module: 1,
-    badge: "Em breve",
+    enabled: true,
   },
   {
     title: "CRM",
@@ -164,24 +164,37 @@ export function AppSidebar() {
             <SidebarMenu>
               {modulesMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    className="opacity-60 cursor-not-allowed"
-                    data-testid={`nav-${item.title.toLowerCase().replace(/\//g, "-")}`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
+                  {item.enabled ? (
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      data-testid={`nav-${item.title.toLowerCase().replace(/\//g, "-")}`}
+                    >
+                      <Link href={item.url}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      className="opacity-60 cursor-not-allowed"
+                      data-testid={`nav-${item.title.toLowerCase().replace(/\//g, "-")}`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </div>
+                        {item.badge && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {item.badge}
+                          </span>
+                        )}
                       </div>
-                      {item.badge && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                          {item.badge}
-                        </span>
-                      )}
-                    </div>
-                  </SidebarMenuButton>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
