@@ -15,12 +15,21 @@ interface AuthenticatedSocket {
 let io: SocketServer | null = null;
 
 export function initializeSocket(httpServer: HttpServer): SocketServer {
+  const allowedOrigins = process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL]
+    : ["http://localhost:5000", "https://code-companion-31maurosergio.replit.app"];
+
   io = new SocketServer(httpServer, {
     cors: {
-      origin: "*",
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
+      credentials: true,
     },
     path: "/socket.io",
+    transports: ["websocket", "polling"],
+    pingInterval: 25000,
+    pingTimeout: 60000,
+    allowEIO3: true,
   });
 
   const inboxNamespace = io.of("/inbox");

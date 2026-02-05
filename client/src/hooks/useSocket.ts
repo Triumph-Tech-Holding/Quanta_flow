@@ -14,6 +14,10 @@ export function useSocket() {
     const socket = io("/inbox", {
       auth: { token },
       transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 10,
     });
 
     socket.on("connect", () => {

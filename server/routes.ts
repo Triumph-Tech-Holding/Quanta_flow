@@ -90,10 +90,17 @@ export async function registerRoutes(
 
   // Test endpoint to verify anti-cache is working
   app.get("/api/test-cache", (req: Request, res: Response) => {
+    const timestamp = new Date().toISOString();
     res.json({
-      timestamp: new Date().toISOString(),
+      status: 'ok',
+      timestamp,
       message: 'Se o timestamp muda a cada requisição, cache está desabilitado',
-      cacheControl: res.get('Cache-Control')
+      headers: {
+        'Cache-Control': res.get('Cache-Control'),
+        'Pragma': res.get('Pragma'),
+        'Expires': res.get('Expires'),
+        'Surrogate-Control': res.get('Surrogate-Control'),
+      }
     });
   });
 
