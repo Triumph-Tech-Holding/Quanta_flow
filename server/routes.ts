@@ -1327,18 +1327,21 @@ export async function registerRoutes(
   });
 
   // Auto-refresh Z-API webhook URLs on server startup
+  // Always force-update to ensure this environment receives webhooks
+  // (since both dev and production share the same Z-API instance,
+  // whichever environment starts last will receive the webhooks)
   setTimeout(async () => {
     try {
       const configs = await getAllEvolutionConfigs();
       const currentWebhookUrl = getWebhookUrl();
+      log(`Auto-refresh: Current environment webhook URL: ${currentWebhookUrl}`, "zapi");
 
       for (const config of configs) {
         if (
           config.status === "connected" &&
-          config.evolutionUrl?.includes("z-api.io") &&
-          config.webhookUrl !== currentWebhookUrl
+          config.evolutionUrl?.includes("z-api.io")
         ) {
-          log(`Auto-refresh: Updating Z-API webhooks from ${config.webhookUrl} to ${currentWebhookUrl}`, "zapi");
+          log(`Auto-refresh: Forcing Z-API webhooks to ${currentWebhookUrl} for user ${config.userId}`, "zapi");
 
           const urlParts = config.evolutionUrl.match(/instances\/([^/]+)\/token\/([^/]+)/);
           if (urlParts) {
@@ -1346,11 +1349,15 @@ export async function registerRoutes(
             const { failedCount } = await configureZApiWebhooks(instanceId, token, config.globalToken, currentWebhookUrl);
 
             if (failedCount === 0) {
-              await storage.updateEvolutionConfig(config.userId, { webhookUrl: currentWebhookUrl });
-              log(`Auto-refresh: Webhooks updated successfully for user ${config.userId}`, "zapi");
+              if (config.webhookUrl !== currentWebhookUrl) {
+                await storage.updateEvolutionConfig(config.userId, { webhookUrl: currentWebhookUrl });
+              }
+              log(`Auto-refresh: Webhooks configured successfully for user ${config.userId}`, "zapi");
             } else {
               log(`Auto-refresh: ${failedCount} webhooks failed for user ${config.userId}`, "zapi");
             }
+          } else {
+            log(`Auto-refresh: Could not parse instanceId/token from ${config.evolutionUrl}`, "zapi");
           }
         }
       }
