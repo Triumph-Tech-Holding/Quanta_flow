@@ -211,3 +211,9 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Página de Audit Logs (/admin/audit-logs) com paginação
 - Endpoints admin protegidos com RBAC granular
 - Seção "Administração" no sidebar visível apenas para usuários com permissões adequadas
+- Campo contactPhone expandido para varchar(50) para suportar IDs de grupo WhatsApp
+- Filtros de webhook: ignora mensagens de grupo (isGroup) e webhooks de notificação
+- Auto-refresh de webhooks Z-API na inicialização do servidor (força atualização sempre)
+- getWebhookUrl() corrigido: usa WEBHOOK_BASE_URL (prioridade), REPLIT_DEPLOYMENT para detectar produção, REPLIT_DEV_DOMAIN para desenvolvimento
+- WEBHOOK_BASE_URL configurado em produção: https://code-companion-31maurosergio.replit.app
+- NOTA: REPLIT_DEPLOYMENT_URL não existe no Replit; REPLIT_DEV_DOMAIN não disponível em deployments; usar WEBHOOK_BASE_URL para produção
