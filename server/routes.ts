@@ -1332,45 +1332,48 @@ export async function registerRoutes(
     }
   });
 
-  // Auto-refresh Z-API webhook URLs on server startup
-  // Always force-update to ensure this environment receives webhooks
-  // (since both dev and production share the same Z-API instance,
-  // whichever environment starts last will receive the webhooks)
-  setTimeout(async () => {
-    try {
-      const configs = await getAllEvolutionConfigs();
-      const currentWebhookUrl = getWebhookUrl();
-      log(`Auto-refresh: Current environment webhook URL: ${currentWebhookUrl}`, "zapi");
+  // Auto-refresh Z-API webhook URLs ONLY in production (when WEBHOOK_BASE_URL is set)
+  // In development, use the "Refresh Webhooks" button manually to avoid
+  // stealing webhooks from production when both servers start simultaneously
+  if (process.env.WEBHOOK_BASE_URL) {
+    setTimeout(async () => {
+      try {
+        const configs = await getAllEvolutionConfigs();
+        const currentWebhookUrl = getWebhookUrl();
+        log(`Auto-refresh (production): Webhook URL: ${currentWebhookUrl}`, "zapi");
 
-      for (const config of configs) {
-        if (
-          config.status === "connected" &&
-          config.evolutionUrl?.includes("z-api.io")
-        ) {
-          log(`Auto-refresh: Forcing Z-API webhooks to ${currentWebhookUrl} for user ${config.userId}`, "zapi");
+        for (const config of configs) {
+          if (
+            config.status === "connected" &&
+            config.evolutionUrl?.includes("z-api.io")
+          ) {
+            log(`Auto-refresh: Configuring Z-API webhooks to ${currentWebhookUrl} for user ${config.userId}`, "zapi");
 
-          const urlParts = config.evolutionUrl.match(/instances\/([^/]+)\/token\/([^/]+)/);
-          if (urlParts) {
-            const [, instanceId, token] = urlParts;
-            const { failedCount } = await configureZApiWebhooks(instanceId, token, config.globalToken, currentWebhookUrl);
+            const urlParts = config.evolutionUrl.match(/instances\/([^/]+)\/token\/([^/]+)/);
+            if (urlParts) {
+              const [, instanceId, token] = urlParts;
+              const { failedCount } = await configureZApiWebhooks(instanceId, token, config.globalToken, currentWebhookUrl);
 
-            if (failedCount === 0) {
-              if (config.webhookUrl !== currentWebhookUrl) {
-                await storage.updateEvolutionConfig(config.userId, { webhookUrl: currentWebhookUrl });
+              if (failedCount === 0) {
+                if (config.webhookUrl !== currentWebhookUrl) {
+                  await storage.updateEvolutionConfig(config.userId, { webhookUrl: currentWebhookUrl });
+                }
+                log(`Auto-refresh: Webhooks configured successfully for user ${config.userId}`, "zapi");
+              } else {
+                log(`Auto-refresh: ${failedCount} webhooks failed for user ${config.userId}`, "zapi");
               }
-              log(`Auto-refresh: Webhooks configured successfully for user ${config.userId}`, "zapi");
             } else {
-              log(`Auto-refresh: ${failedCount} webhooks failed for user ${config.userId}`, "zapi");
+              log(`Auto-refresh: Could not parse instanceId/token from ${config.evolutionUrl}`, "zapi");
             }
-          } else {
-            log(`Auto-refresh: Could not parse instanceId/token from ${config.evolutionUrl}`, "zapi");
           }
         }
+      } catch (error) {
+        console.error("Auto-refresh webhooks error:", error);
       }
-    } catch (error) {
-      console.error("Auto-refresh webhooks error:", error);
-    }
-  }, 5000);
+    }, 5000);
+  } else {
+    log("Auto-refresh skipped: WEBHOOK_BASE_URL not set (development mode). Use 'Refresh Webhooks' button to update manually.", "zapi");
+  }
 
   return httpServer;
 }
