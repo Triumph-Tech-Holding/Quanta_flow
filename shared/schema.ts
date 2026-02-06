@@ -64,7 +64,7 @@ export const conversations = pgTable("conversations", {
   leadId: varchar("lead_id", { length: 36 }).references(() => leads.id),
   remoteJid: varchar("remote_jid", { length: 100 }).notNull(),
   contactName: varchar("contact_name", { length: 255 }),
-  contactPhone: varchar("contact_phone", { length: 20 }),
+  contactPhone: varchar("contact_phone", { length: 50 }),
   lastMessage: text("last_message"),
   lastMessageAt: timestamp("last_message_at"),
   unreadCount: varchar("unread_count", { length: 10 }).default("0"),

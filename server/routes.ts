@@ -1155,6 +1155,17 @@ export async function registerRoutes(
         log(`Z-API Webhook received: type=${type} from ${phone}`, "webhook");
         console.log("Z-API parsed data:", { type, phone, fromMe, isGroup });
 
+        // Skip group messages and notification-only webhooks (no actual message content)
+        if (isGroup) {
+          log(`Skipping group message from ${phone}`, "webhook");
+          return res.status(200).json({ received: true, message: "Group message skipped" });
+        }
+
+        if (req.body.notification) {
+          log(`Skipping notification webhook: ${req.body.notification}`, "webhook");
+          return res.status(200).json({ received: true, message: "Notification skipped" });
+        }
+
         // Z-API uses type: ReceivedCallback (incoming), MessageStatusCallback, etc.
         if (type === "ReceivedCallback" && !fromMe) {
           let messageContent = "[Mensagem]";
