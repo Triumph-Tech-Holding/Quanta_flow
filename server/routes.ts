@@ -62,14 +62,20 @@ async function authenticateToken(req: AuthRequest, res: Response, next: NextFunc
 }
 
 function getWebhookUrl(): string {
-  if (process.env.NODE_ENV === 'production' && process.env.REPLIT_DEPLOYMENT_URL) {
-    return `https://${process.env.REPLIT_DEPLOYMENT_URL}/webhooks/evolution`;
+  // 1. Explicit WEBHOOK_BASE_URL always wins (user-configured)
+  if (process.env.WEBHOOK_BASE_URL) {
+    const base = process.env.WEBHOOK_BASE_URL.replace(/\/$/, '');
+    return `${base}/webhooks/evolution`;
   }
+  // 2. In Replit deployment (production), REPLIT_DEV_DOMAIN is NOT available
+  //    so we need WEBHOOK_BASE_URL above. Log a warning if missing.
+  if (process.env.REPLIT_DEPLOYMENT === '1') {
+    console.warn('[webhook] WARNING: Running in production but WEBHOOK_BASE_URL is not set. Webhooks will not work correctly.');
+    return 'https://localhost/webhooks/evolution';
+  }
+  // 3. Development: use REPLIT_DEV_DOMAIN
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`;
-  }
-  if (process.env.WEBHOOK_BASE_URL) {
-    return `${process.env.WEBHOOK_BASE_URL}/webhooks/evolution`;
   }
   return 'http://localhost:5000/webhooks/evolution';
 }
