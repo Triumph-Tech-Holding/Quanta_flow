@@ -1,4 +1,4 @@
-import quantaLogoImage from "@assets/logo_quanta_flow_1770251478040.png";
+import quantaLogoImage from "@assets/Quanta_Flow_SEM_FUNDO_1770475375407.png";
 
 interface QuantaLogoProps {
   className?: string;
