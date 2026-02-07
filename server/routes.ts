@@ -1276,6 +1276,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/crm/dashboard", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const stats = await storage.getDashboardStats(req.user!.userId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Dashboard stats error:", error);
+      res.status(500).json({ message: "Erro ao buscar estatísticas" });
+    }
+  });
+
   app.get("/api/crm/pipeline/summary", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const summary = await storage.getPipelineSummary(req.user!.userId);

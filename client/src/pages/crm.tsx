@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,16 @@ import {
   Youtube,
   AtSign,
   MessageSquare,
+  Search,
+  Filter,
+  ShoppingCart,
+  HelpCircle,
+  AlertTriangle,
+  Headphones,
+  CircleDot,
+  Brain,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -100,6 +111,15 @@ const TEMPERATURE_CONFIG: Record<Temperature, { label: string; variant: "default
   quente: { label: "Quente", variant: "secondary", className: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30" },
 };
 
+const INTENT_CONFIG: Record<string, { label: string; icon: typeof Brain; className: string }> = {
+  compra_quente: { label: "Compra", icon: ShoppingCart, className: "text-emerald-600 dark:text-emerald-400" },
+  duvida: { label: "Dúvida", icon: HelpCircle, className: "text-blue-600 dark:text-blue-400" },
+  reclamacao: { label: "Reclamação", icon: AlertTriangle, className: "text-red-600 dark:text-red-400" },
+  suporte: { label: "Suporte", icon: Headphones, className: "text-amber-600 dark:text-amber-400" },
+  elogio: { label: "Elogio", icon: Star, className: "text-violet-600 dark:text-violet-400" },
+  indefinido: { label: "Indefinido", icon: CircleDot, className: "text-muted-foreground" },
+};
+
 function getChannelIcon(channelType: string) {
   switch (channelType) {
     case "whatsapp": return <MessageCircle className="h-3 w-3" />;
@@ -129,6 +149,8 @@ function ContactCard({
   onClick: () => void;
 }) {
   const tempConfig = TEMPERATURE_CONFIG[contact.temperature];
+  const intentConfig = contact.lastIntent ? INTENT_CONFIG[contact.lastIntent] : null;
+  const IntentIcon = intentConfig?.icon;
 
   return (
     <Card
@@ -154,6 +176,15 @@ function ContactCard({
             {tempConfig.label}
           </Badge>
         </div>
+
+        {intentConfig && IntentIcon && (
+          <div className="flex items-center gap-1.5">
+            <IntentIcon className={`h-3 w-3 ${intentConfig.className}`} />
+            <span className={`text-[11px] ${intentConfig.className}`} data-testid={`text-intent-${contact.id}`}>
+              {intentConfig.label}
+            </span>
+          </div>
+        )}
 
         <div className="space-y-1">
           {contact.telefone && (
@@ -223,6 +254,7 @@ function KanbanColumn({
   onDragLeave: () => void;
 }) {
   const isDragOver = dragOverStage === stage.key;
+  const totalScore = contacts.reduce((sum, c) => sum + c.score, 0);
 
   return (
     <div
@@ -240,13 +272,20 @@ function KanbanColumn({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="font-semibold text-sm">{stage.label}</span>
-          <Badge variant="secondary" className="text-xs no-default-hover-elevate no-default-active-elevate" data-testid={`badge-count-${stage.key}`}>
-            {contacts.length}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {totalScore > 0 && (
+              <span className="text-[10px] text-muted-foreground" data-testid={`score-total-${stage.key}`}>
+                {totalScore} pts
+              </span>
+            )}
+            <Badge variant="secondary" className="text-xs no-default-hover-elevate no-default-active-elevate" data-testid={`badge-count-${stage.key}`}>
+              {contacts.length}
+            </Badge>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-220px)]">
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
         {contacts.length === 0 ? (
           <div className="text-center py-8 text-xs text-muted-foreground" data-testid={`empty-column-${stage.key}`}>
             Nenhum contato
@@ -289,6 +328,7 @@ function AddContactDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
       toast({ title: "Contato criado com sucesso" });
       resetForm();
       onOpenChange(false);
@@ -430,6 +470,7 @@ function ContactDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
       toast({ title: "Temperatura atualizada" });
     },
     onError: (error: Error) => {
@@ -443,6 +484,7 @@ function ContactDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
       toast({ title: "Estágio atualizado" });
     },
     onError: (error: Error) => {
@@ -469,6 +511,7 @@ function ContactDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
       toast({ title: "Contato excluído" });
       onOpenChange(false);
     },
@@ -479,12 +522,22 @@ function ContactDetailDialog({
 
   if (!contact) return null;
 
+  const intentConfig = activeContact?.lastIntent ? INTENT_CONFIG[activeContact.lastIntent] : null;
+  const IntentIcon = intentConfig?.icon;
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-lg" data-testid="dialog-contact-detail">
           <DialogHeader>
-            <DialogTitle data-testid="text-detail-name">{activeContact?.nome}</DialogTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <DialogTitle data-testid="text-detail-name">{activeContact?.nome}</DialogTitle>
+              <Link href={`/crm/contact/${contact.id}`}>
+                <Button variant="ghost" size="icon" title="Ver perfil completo" data-testid="button-view-profile">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
             <DialogDescription>Detalhes do contato</DialogDescription>
           </DialogHeader>
 
@@ -559,6 +612,14 @@ function ContactDetailDialog({
                   <span data-testid="text-detail-score">Score: {activeContact.score}</span>
                 </div>
               )}
+              {intentConfig && IntentIcon && (
+                <div className="flex items-center gap-2">
+                  <IntentIcon className={`h-4 w-4 flex-shrink-0 ${intentConfig.className}`} />
+                  <span className={`${intentConfig.className}`} data-testid="text-detail-intent">
+                    Intenção: {intentConfig.label}
+                  </span>
+                </div>
+              )}
             </div>
 
             {activeContact?.identifiers && activeContact.identifiers.length > 0 && (
@@ -631,7 +692,7 @@ function ContactDetailDialog({
             <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
-              className="bg-destructive text-destructive-foreground"
+              disabled={deleteMutation.isPending}
               data-testid="button-confirm-delete"
             >
               {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
@@ -664,10 +725,45 @@ export default function CrmPage() {
   const [detailContact, setDetailContact] = useState<UnifiedContact | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterTemp, setFilterTemp] = useState<Temperature | "all">("all");
+  const [filterIntent, setFilterIntent] = useState<string>("all");
 
   const contactsQuery = useQuery<UnifiedContact[]>({
     queryKey: ["/api/crm/contacts"],
   });
+
+  const filteredContacts = useMemo(() => {
+    if (!contactsQuery.data) return [];
+    let results = contactsQuery.data;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      results = results.filter(c =>
+        c.nome.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.telefone?.includes(q)
+      );
+    }
+
+    if (filterTemp !== "all") {
+      results = results.filter(c => c.temperature === filterTemp);
+    }
+
+    if (filterIntent !== "all") {
+      results = results.filter(c => c.lastIntent === filterIntent);
+    }
+
+    return results;
+  }, [contactsQuery.data, searchQuery, filterTemp, filterIntent]);
+
+  const hasActiveFilters = searchQuery.trim() !== "" || filterTemp !== "all" || filterIntent !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilterTemp("all");
+    setFilterIntent("all");
+  };
 
   const moveStageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: PipelineStage }) => {
@@ -689,6 +785,7 @@ export default function CrmPage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
     },
   });
 
@@ -729,8 +826,7 @@ export default function CrmPage() {
   }, []);
 
   const contactsByStage = (stage: PipelineStage): UnifiedContact[] => {
-    if (!contactsQuery.data) return [];
-    return contactsQuery.data.filter((c) => c.pipelineStage === stage);
+    return filteredContacts.filter((c) => c.pipelineStage === stage);
   };
 
   const sidebarStyle = {
@@ -757,6 +853,54 @@ export default function CrmPage() {
               <ThemeToggle />
             </div>
           </header>
+
+          <div className="flex items-center gap-2 px-4 py-2 border-b bg-background flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar contatos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                data-testid="input-search"
+              />
+            </div>
+            <Select value={filterTemp} onValueChange={(v) => setFilterTemp(v as Temperature | "all")}>
+              <SelectTrigger className="w-[140px]" data-testid="select-filter-temp">
+                <SelectValue placeholder="Temperatura" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="quente">Quente</SelectItem>
+                <SelectItem value="morno">Morno</SelectItem>
+                <SelectItem value="frio">Frio</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterIntent} onValueChange={(v) => setFilterIntent(v)}>
+              <SelectTrigger className="w-[140px]" data-testid="select-filter-intent">
+                <SelectValue placeholder="Intenção" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="compra_quente">Compra</SelectItem>
+                <SelectItem value="duvida">Dúvida</SelectItem>
+                <SelectItem value="reclamacao">Reclamação</SelectItem>
+                <SelectItem value="suporte">Suporte</SelectItem>
+                <SelectItem value="elogio">Elogio</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            )}
+            {hasActiveFilters && (
+              <span className="text-xs text-muted-foreground" data-testid="text-filter-count">
+                {filteredContacts.length} contato{filteredContacts.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
 
           <main className="flex-1 overflow-x-auto overflow-y-hidden">
             {contactsQuery.isLoading ? (

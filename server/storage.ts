@@ -55,6 +55,15 @@ export interface IStorage {
   getPipelineStages(userId: string): Promise<PipelineStage[]>;
   createPipelineStage(stage: InsertPipelineStage): Promise<PipelineStage>;
   getPipelineSummary(userId: string): Promise<{ stage: string; count: number }[]>;
+  getDashboardStats(userId: string): Promise<{
+    totalContacts: number;
+    temperatureCounts: { frio: number; morno: number; quente: number };
+    pipelineCounts: Record<string, number>;
+    avgScore: number;
+    recentContacts: UnifiedContact[];
+    intentCounts: Record<string, number>;
+    hotLeads: UnifiedContact[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -323,6 +332,48 @@ export class DatabaseStorage implements IStorage {
       stageCounts[contact.pipelineStage] = (stageCounts[contact.pipelineStage] || 0) + 1;
     }
     return Object.entries(stageCounts).map(([stage, count]) => ({ stage, count }));
+  }
+
+  async getDashboardStats(userId: string) {
+    const contacts = await this.getUnifiedContactsByUser(userId);
+    const totalContacts = contacts.length;
+
+    const temperatureCounts = { frio: 0, morno: 0, quente: 0 };
+    const pipelineCounts: Record<string, number> = {};
+    const intentCounts: Record<string, number> = {};
+    let totalScore = 0;
+
+    for (const c of contacts) {
+      if (c.temperature in temperatureCounts) {
+        temperatureCounts[c.temperature as keyof typeof temperatureCounts]++;
+      }
+      pipelineCounts[c.pipelineStage] = (pipelineCounts[c.pipelineStage] || 0) + 1;
+      if (c.lastIntent) {
+        intentCounts[c.lastIntent] = (intentCounts[c.lastIntent] || 0) + 1;
+      }
+      totalScore += c.score;
+    }
+
+    const avgScore = totalContacts > 0 ? Math.round(totalScore / totalContacts) : 0;
+
+    const recentContacts = [...contacts]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    const hotLeads = contacts
+      .filter(c => c.temperature === "quente")
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    return {
+      totalContacts,
+      temperatureCounts,
+      pipelineCounts,
+      avgScore,
+      recentContacts,
+      intentCounts,
+      hotLeads,
+    };
   }
 }
 
