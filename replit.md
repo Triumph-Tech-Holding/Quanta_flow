@@ -236,3 +236,8 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Webhook Z-API integrado com CRM: auto-cria contatos e classifica intenções em tempo real
 - Endpoint /api/ai/detect-intent para classificação manual de mensagens
 - LSP errors corrigidos em routes.ts (req.params.id type casting)
+- Dashboard reescrito com métricas CRM reais: temperatura, pipeline, score médio, intenções IA, leads quentes, contatos recentes
+- Endpoint GET /api/crm/dashboard para estatísticas do dashboard
+- CRM Kanban melhorado: busca por nome/email/telefone, filtros por temperatura e intenção, indicadores visuais de intenção IA nos cards, pontuação total por coluna
+- Página de perfil de contato (/crm/contact/:id): timeline de mensagens omnichannel, resumo de intenções IA, gerenciamento de canais, edição de stage/temperatura/notas
+- Rota /crm/contact/:id adicionada ao App.tsx
