@@ -261,3 +261,134 @@ export type Permission = typeof permissions.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type UserRole = typeof userRoles.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+
+// ==================== OMNICHANNEL CRM ====================
+
+export const channelTypeEnum = pgEnum("channel_type", [
+  "whatsapp", "instagram", "facebook", "linkedin", "youtube", "tiktok", "x", "email", "sms"
+]);
+
+export const pipelineStageEnum = pgEnum("pipeline_stage", [
+  "novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"
+]);
+
+export const leadTemperatureEnum = pgEnum("lead_temperature", [
+  "frio", "morno", "quente"
+]);
+
+export const intentTypeEnum = pgEnum("intent_type", [
+  "compra_quente", "duvida", "reclamacao", "suporte", "elogio", "indefinido"
+]);
+
+export const channels = pgTable("channels", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: channelTypeEnum("type").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  config: text("config"),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const unifiedContacts = pgTable("unified_contacts", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  telefone: varchar("telefone", { length: 50 }),
+  avatarUrl: text("avatar_url"),
+  pipelineStage: pipelineStageEnum("pipeline_stage").notNull().default("novo"),
+  temperature: leadTemperatureEnum("temperature").notNull().default("frio"),
+  lastIntent: intentTypeEnum("last_intent").default("indefinido"),
+  notes: text("notes"),
+  tags: text("tags"),
+  score: integer("score").notNull().default(0),
+  lastContactAt: timestamp("last_contact_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const contactIdentifiers = pgTable("contact_identifiers", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  unifiedContactId: varchar("unified_contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  channelType: channelTypeEnum("channel_type").notNull(),
+  identifier: varchar("identifier", { length: 255 }).notNull(),
+  displayName: varchar("display_name", { length: 255 }),
+  profileUrl: text("profile_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const omnichannelMessages = pgTable("omnichannel_messages", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  unifiedContactId: varchar("unified_contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  channelType: channelTypeEnum("channel_type").notNull(),
+  direction: messageDirectionEnum("direction").notNull(),
+  content: text("content").notNull(),
+  mediaType: varchar("media_type", { length: 50 }),
+  mediaUrl: text("media_url"),
+  externalMessageId: varchar("external_message_id", { length: 200 }),
+  detectedIntent: intentTypeEnum("detected_intent"),
+  intentConfidence: varchar("intent_confidence", { length: 10 }),
+  metadata: text("metadata"),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const pipelineStages = pgTable("pipeline_stages", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  stage: pipelineStageEnum("stage").notNull(),
+  color: varchar("color", { length: 20 }).notNull().default("#00A86B"),
+  order: integer("order").notNull().default(0),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ==================== Omnichannel Schemas & Types ====================
+
+export const insertChannelSchema = createInsertSchema(channels).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const insertUnifiedContactSchema = createInsertSchema(unifiedContacts).omit({
+  id: true, createdAt: true, updatedAt: true, score: true,
+});
+
+export const updateUnifiedContactSchema = z.object({
+  nome: z.string().min(1).optional(),
+  email: z.string().email().optional().nullable(),
+  telefone: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  pipelineStage: z.enum(["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"]).optional(),
+  temperature: z.enum(["frio", "morno", "quente"]).optional(),
+  lastIntent: z.enum(["compra_quente", "duvida", "reclamacao", "suporte", "elogio", "indefinido"]).optional(),
+  notes: z.string().optional().nullable(),
+  tags: z.string().optional().nullable(),
+  score: z.number().optional(),
+});
+
+export const insertContactIdentifierSchema = createInsertSchema(contactIdentifiers).omit({
+  id: true, createdAt: true,
+});
+
+export const insertOmnichannelMessageSchema = createInsertSchema(omnichannelMessages).omit({
+  id: true, createdAt: true,
+});
+
+export const insertPipelineStageSchema = createInsertSchema(pipelineStages).omit({
+  id: true, createdAt: true,
+});
+
+export type Channel = typeof channels.$inferSelect;
+export type InsertChannel = z.infer<typeof insertChannelSchema>;
+export type UnifiedContact = typeof unifiedContacts.$inferSelect;
+export type InsertUnifiedContact = z.infer<typeof insertUnifiedContactSchema>;
+export type UpdateUnifiedContact = z.infer<typeof updateUnifiedContactSchema>;
+export type ContactIdentifier = typeof contactIdentifiers.$inferSelect;
+export type InsertContactIdentifier = z.infer<typeof insertContactIdentifierSchema>;
+export type OmnichannelMessage = typeof omnichannelMessages.$inferSelect;
+export type InsertOmnichannelMessage = z.infer<typeof insertOmnichannelMessageSchema>;
+export type PipelineStage = typeof pipelineStages.$inferSelect;
+export type InsertPipelineStage = z.infer<typeof insertPipelineStageSchema>;

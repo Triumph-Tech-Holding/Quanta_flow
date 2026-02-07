@@ -1,10 +1,16 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, ilike } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, leads, apiConfigs, evolutionConfigs, conversations, messages,
+  unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
-  type Message, type InsertMessage
+  type Message, type InsertMessage,
+  type UnifiedContact, type InsertUnifiedContact, type UpdateUnifiedContact,
+  type ContactIdentifier, type InsertContactIdentifier,
+  type OmnichannelMessage, type InsertOmnichannelMessage,
+  type PipelineStage, type InsertPipelineStage,
+  type Channel, type InsertChannel
 } from "@shared/schema";
 
 export interface IStorage {
@@ -32,6 +38,23 @@ export interface IStorage {
   updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation | undefined>;
   getMessagesByConversation(conversationId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
+  // Omnichannel CRM
+  getUnifiedContactsByUser(userId: string): Promise<UnifiedContact[]>;
+  getUnifiedContactsByStage(userId: string, stage: string): Promise<UnifiedContact[]>;
+  getUnifiedContact(id: string): Promise<UnifiedContact | undefined>;
+  findUnifiedContactByIdentifier(userId: string, channelType: string, identifier: string): Promise<UnifiedContact | undefined>;
+  findUnifiedContactByPhoneOrEmail(userId: string, phone?: string, email?: string): Promise<UnifiedContact | undefined>;
+  createUnifiedContact(contact: InsertUnifiedContact): Promise<UnifiedContact>;
+  updateUnifiedContact(id: string, data: UpdateUnifiedContact): Promise<UnifiedContact | undefined>;
+  deleteUnifiedContact(id: string): Promise<boolean>;
+  getContactIdentifiers(unifiedContactId: string): Promise<ContactIdentifier[]>;
+  createContactIdentifier(identifier: InsertContactIdentifier): Promise<ContactIdentifier>;
+  deleteContactIdentifier(id: string): Promise<boolean>;
+  getOmnichannelMessages(unifiedContactId: string, limit?: number): Promise<OmnichannelMessage[]>;
+  createOmnichannelMessage(message: InsertOmnichannelMessage): Promise<OmnichannelMessage>;
+  getPipelineStages(userId: string): Promise<PipelineStage[]>;
+  createPipelineStage(stage: InsertPipelineStage): Promise<PipelineStage>;
+  getPipelineSummary(userId: string): Promise<{ stage: string; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -184,6 +207,122 @@ export class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db.insert(messages).values(message).returning();
     return newMessage;
+  }
+
+  // ==================== Omnichannel CRM ====================
+
+  async getUnifiedContactsByUser(userId: string): Promise<UnifiedContact[]> {
+    return db.select().from(unifiedContacts)
+      .where(eq(unifiedContacts.userId, userId))
+      .orderBy(desc(unifiedContacts.updatedAt));
+  }
+
+  async getUnifiedContactsByStage(userId: string, stage: string): Promise<UnifiedContact[]> {
+    return db.select().from(unifiedContacts)
+      .where(and(
+        eq(unifiedContacts.userId, userId),
+        eq(unifiedContacts.pipelineStage, stage as any)
+      ))
+      .orderBy(desc(unifiedContacts.updatedAt));
+  }
+
+  async getUnifiedContact(id: string): Promise<UnifiedContact | undefined> {
+    const [contact] = await db.select().from(unifiedContacts)
+      .where(eq(unifiedContacts.id, id)).limit(1);
+    return contact;
+  }
+
+  async findUnifiedContactByIdentifier(userId: string, channelType: string, identifier: string): Promise<UnifiedContact | undefined> {
+    const [result] = await db.select({ contact: unifiedContacts })
+      .from(unifiedContacts)
+      .innerJoin(contactIdentifiers, eq(unifiedContacts.id, contactIdentifiers.unifiedContactId))
+      .where(and(
+        eq(unifiedContacts.userId, userId),
+        eq(contactIdentifiers.channelType, channelType as any),
+        eq(contactIdentifiers.identifier, identifier)
+      ))
+      .limit(1);
+    return result?.contact;
+  }
+
+  async findUnifiedContactByPhoneOrEmail(userId: string, phone?: string, email?: string): Promise<UnifiedContact | undefined> {
+    if (!phone && !email) return undefined;
+    const conditions = [eq(unifiedContacts.userId, userId)];
+    const orConditions = [];
+    if (phone) orConditions.push(eq(unifiedContacts.telefone, phone));
+    if (email) orConditions.push(ilike(unifiedContacts.email, email));
+    if (orConditions.length > 0) {
+      conditions.push(or(...orConditions)!);
+    }
+    const [contact] = await db.select().from(unifiedContacts)
+      .where(and(...conditions))
+      .limit(1);
+    return contact;
+  }
+
+  async createUnifiedContact(contact: InsertUnifiedContact): Promise<UnifiedContact> {
+    const [newContact] = await db.insert(unifiedContacts).values(contact).returning();
+    return newContact;
+  }
+
+  async updateUnifiedContact(id: string, data: UpdateUnifiedContact): Promise<UnifiedContact | undefined> {
+    const [updated] = await db.update(unifiedContacts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(unifiedContacts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUnifiedContact(id: string): Promise<boolean> {
+    const result = await db.delete(unifiedContacts).where(eq(unifiedContacts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getContactIdentifiers(unifiedContactId: string): Promise<ContactIdentifier[]> {
+    return db.select().from(contactIdentifiers)
+      .where(eq(contactIdentifiers.unifiedContactId, unifiedContactId));
+  }
+
+  async createContactIdentifier(identifier: InsertContactIdentifier): Promise<ContactIdentifier> {
+    const [newIdentifier] = await db.insert(contactIdentifiers).values(identifier).returning();
+    return newIdentifier;
+  }
+
+  async deleteContactIdentifier(id: string): Promise<boolean> {
+    const result = await db.delete(contactIdentifiers).where(eq(contactIdentifiers.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getOmnichannelMessages(unifiedContactId: string, limit = 50): Promise<OmnichannelMessage[]> {
+    return db.select().from(omnichannelMessages)
+      .where(eq(omnichannelMessages.unifiedContactId, unifiedContactId))
+      .orderBy(desc(omnichannelMessages.timestamp))
+      .limit(limit);
+  }
+
+  async createOmnichannelMessage(message: InsertOmnichannelMessage): Promise<OmnichannelMessage> {
+    const [newMessage] = await db.insert(omnichannelMessages).values(message).returning();
+    return newMessage;
+  }
+
+  async getPipelineStages(userId: string): Promise<PipelineStage[]> {
+    return db.select().from(pipelineStages)
+      .where(eq(pipelineStages.userId, userId))
+      .orderBy(pipelineStages.order);
+  }
+
+  async createPipelineStage(stage: InsertPipelineStage): Promise<PipelineStage> {
+    const [newStage] = await db.insert(pipelineStages).values(stage).returning();
+    return newStage;
+  }
+
+  async getPipelineSummary(userId: string): Promise<{ stage: string; count: number }[]> {
+    const contacts = await this.getUnifiedContactsByUser(userId);
+    const stageCounts: Record<string, number> = {};
+    for (const contact of contacts) {
+      stageCounts[contact.pipelineStage] = (stageCounts[contact.pipelineStage] || 0) + 1;
+    }
+    return Object.entries(stageCounts).map(([stage, count]) => ({ stage, count }));
   }
 }
 

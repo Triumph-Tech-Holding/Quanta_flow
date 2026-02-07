@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -1128,6 +1128,174 @@ export async function registerRoutes(
       res.status(500).json({ message: "Erro ao buscar roles" });
     }
   });
+
+  // ==================== CRM PIPELINE ROUTES ====================
+
+  app.get("/api/crm/contacts", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { stage } = req.query;
+      let contacts;
+      if (stage && typeof stage === "string") {
+        contacts = await storage.getUnifiedContactsByStage(req.user!.userId, stage);
+      } else {
+        contacts = await storage.getUnifiedContactsByUser(req.user!.userId);
+      }
+      const contactsWithIdentifiers = await Promise.all(
+        contacts.map(async (contact) => {
+          const identifiers = await storage.getContactIdentifiers(contact.id);
+          return { ...contact, identifiers };
+        })
+      );
+      res.json(contactsWithIdentifiers);
+    } catch (error) {
+      console.error("Get contacts error:", error);
+      res.status(500).json({ message: "Erro ao buscar contatos" });
+    }
+  });
+
+  app.get("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const contact = await storage.getUnifiedContact(req.params.id);
+      if (!contact) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      const identifiers = await storage.getContactIdentifiers(contact.id);
+      const recentMessages = await storage.getOmnichannelMessages(contact.id, 20);
+      res.json({ ...contact, identifiers, recentMessages });
+    } catch (error) {
+      console.error("Get contact error:", error);
+      res.status(500).json({ message: "Erro ao buscar contato" });
+    }
+  });
+
+  app.post("/api/crm/contacts", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = insertUnifiedContactSchema.parse({
+        ...req.body,
+        userId: req.user!.userId,
+      });
+      const existing = await storage.findUnifiedContactByPhoneOrEmail(
+        req.user!.userId,
+        data.telefone || undefined,
+        data.email || undefined
+      );
+      if (existing) {
+        return res.status(409).json({ message: "Contato com este telefone ou email já existe", existing });
+      }
+      const contact = await storage.createUnifiedContact(data);
+      res.status(201).json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Create contact error:", error);
+      res.status(500).json({ message: "Erro ao criar contato" });
+    }
+  });
+
+  app.patch("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = updateUnifiedContactSchema.parse(req.body);
+      const updated = await storage.updateUnifiedContact(req.params.id, data);
+      if (!updated) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Update contact error:", error);
+      res.status(500).json({ message: "Erro ao atualizar contato" });
+    }
+  });
+
+  app.patch("/api/crm/contacts/:id/stage", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { stage } = req.body;
+      if (!stage) {
+        return res.status(400).json({ message: "Stage é obrigatório" });
+      }
+      const updated = await storage.updateUnifiedContact(req.params.id, { pipelineStage: stage });
+      if (!updated) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Update stage error:", error);
+      res.status(500).json({ message: "Erro ao atualizar estágio" });
+    }
+  });
+
+  app.patch("/api/crm/contacts/:id/temperature", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { temperature } = req.body;
+      if (!temperature) {
+        return res.status(400).json({ message: "Temperature é obrigatório" });
+      }
+      const updated = await storage.updateUnifiedContact(req.params.id, { temperature });
+      if (!updated) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Update temperature error:", error);
+      res.status(500).json({ message: "Erro ao atualizar temperatura" });
+    }
+  });
+
+  app.delete("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const deleted = await storage.deleteUnifiedContact(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      res.json({ message: "Contato removido" });
+    } catch (error) {
+      console.error("Delete contact error:", error);
+      res.status(500).json({ message: "Erro ao remover contato" });
+    }
+  });
+
+  app.post("/api/crm/contacts/:id/identifiers", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = insertContactIdentifierSchema.parse({
+        ...req.body,
+        unifiedContactId: req.params.id,
+      });
+      const identifier = await storage.createContactIdentifier(data);
+      res.status(201).json(identifier);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Create identifier error:", error);
+      res.status(500).json({ message: "Erro ao criar identificador" });
+    }
+  });
+
+  app.get("/api/crm/pipeline/summary", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const summary = await storage.getPipelineSummary(req.user!.userId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Pipeline summary error:", error);
+      res.status(500).json({ message: "Erro ao buscar resumo do pipeline" });
+    }
+  });
+
+  app.get("/api/crm/contacts/:id/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const messagesResult = await storage.getOmnichannelMessages(req.params.id, limit);
+      res.json(messagesResult);
+    } catch (error) {
+      console.error("Get messages error:", error);
+      res.status(500).json({ message: "Erro ao buscar mensagens" });
+    }
+  });
+
+  // ==================== WEBHOOK ROUTES ====================
 
   // CORS preflight for webhooks
   app.options("/webhooks/evolution", (req: Request, res: Response) => {

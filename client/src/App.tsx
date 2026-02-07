@@ -13,6 +13,7 @@ import SettingsPage from "@/pages/settings";
 import ChangePassword from "@/pages/change-password";
 import AdminUsers from "@/pages/admin-users";
 import AdminAuditLogs from "@/pages/admin-audit-logs";
+import CrmPage from "@/pages/crm";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -72,6 +73,9 @@ function Router() {
       </Route>
       <Route path="/inbox">
         <ProtectedRoute component={Inbox} />
+      </Route>
+      <Route path="/crm">
+        <ProtectedRoute component={CrmPage} />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />

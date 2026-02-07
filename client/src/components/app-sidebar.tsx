@@ -65,7 +65,8 @@ const modulesMenuItems = [
     url: "/crm",
     icon: Users,
     module: 2,
-    badge: "Em breve",
+    enabled: true,
+    permission: "view_leads",
   },
   {
     title: "Automação",
