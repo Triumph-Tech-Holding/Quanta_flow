@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -1331,6 +1331,152 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Intent detection error:", error);
       res.status(500).json({ message: "Erro na detecção de intenção" });
+    }
+  });
+
+  // ==================== QUICK REPLIES ====================
+
+  app.get("/api/quick-replies", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const replies = await storage.getQuickRepliesByUser(req.user!.userId);
+      res.json(replies);
+    } catch (error) {
+      console.error("Error fetching quick replies:", error);
+      res.status(500).json({ message: "Erro ao buscar respostas rápidas" });
+    }
+  });
+
+  app.post("/api/quick-replies", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = insertQuickReplySchema.parse({ ...req.body, userId: req.user!.userId });
+      const reply = await storage.createQuickReply(data);
+      res.status(201).json(reply);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Error creating quick reply:", error);
+      res.status(500).json({ message: "Erro ao criar resposta rápida" });
+    }
+  });
+
+  app.put("/api/quick-replies/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const existing = await storage.getQuickReply(id);
+      if (!existing || existing.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Resposta rápida não encontrada" });
+      }
+      const data = updateQuickReplySchema.parse(req.body);
+      const updated = await storage.updateQuickReply(id, data);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Error updating quick reply:", error);
+      res.status(500).json({ message: "Erro ao atualizar resposta rápida" });
+    }
+  });
+
+  app.delete("/api/quick-replies/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const existing = await storage.getQuickReply(id);
+      if (!existing || existing.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Resposta rápida não encontrada" });
+      }
+      await storage.deleteQuickReply(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting quick reply:", error);
+      res.status(500).json({ message: "Erro ao excluir resposta rápida" });
+    }
+  });
+
+  // ==================== AUTOMATION FLOWS ====================
+
+  app.get("/api/automation-flows", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const flows = await storage.getAutomationFlowsByUser(req.user!.userId);
+      res.json(flows);
+    } catch (error) {
+      console.error("Error fetching automation flows:", error);
+      res.status(500).json({ message: "Erro ao buscar fluxos de automação" });
+    }
+  });
+
+  app.post("/api/automation-flows", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = insertAutomationFlowSchema.parse({ ...req.body, userId: req.user!.userId });
+      const flow = await storage.createAutomationFlow(data);
+      res.status(201).json(flow);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Error creating automation flow:", error);
+      res.status(500).json({ message: "Erro ao criar fluxo de automação" });
+    }
+  });
+
+  app.put("/api/automation-flows/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const existing = await storage.getAutomationFlow(id);
+      if (!existing || existing.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Fluxo de automação não encontrado" });
+      }
+      const data = updateAutomationFlowSchema.parse(req.body);
+      const updated = await storage.updateAutomationFlow(id, data);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Error updating automation flow:", error);
+      res.status(500).json({ message: "Erro ao atualizar fluxo de automação" });
+    }
+  });
+
+  app.delete("/api/automation-flows/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const existing = await storage.getAutomationFlow(id);
+      if (!existing || existing.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Fluxo de automação não encontrado" });
+      }
+      await storage.deleteAutomationFlow(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting automation flow:", error);
+      res.status(500).json({ message: "Erro ao excluir fluxo de automação" });
+    }
+  });
+
+  // ==================== BRANDING CONFIG ====================
+
+  app.get("/api/branding", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const config = await storage.getBrandingConfig(req.user!.userId);
+      res.json(config || { companyName: null, primaryColor: "#00A86B", secondaryColor: "#1B3A57", logoUrl: null, faviconUrl: null });
+    } catch (error) {
+      console.error("Error fetching branding config:", error);
+      res.status(500).json({ message: "Erro ao buscar configuração de branding" });
+    }
+  });
+
+  app.put("/api/branding", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const data = updateBrandingConfigSchema.parse(req.body);
+      const config = await storage.upsertBrandingConfig(req.user!.userId, data);
+      res.json(config);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      console.error("Error updating branding config:", error);
+      res.status(500).json({ message: "Erro ao atualizar branding" });
     }
   });
 

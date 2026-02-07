@@ -1,14 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Send, Loader2, User, MessageCircle } from "lucide-react";
+import { Send, Loader2, User, MessageCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Conversation, Message } from "@shared/schema";
+
+interface QuickReply {
+  id: string;
+  shortcut: string;
+  response: string;
+  category: string | null;
+  isActive: boolean;
+}
 
 interface ChatWindowProps {
   conversation: Conversation | null;
@@ -16,7 +25,11 @@ interface ChatWindowProps {
 
 export function ChatWindow({ conversation }: ChatWindowProps) {
   const [message, setMessage] = useState("");
+  const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
+  const [slashFilter, setSlashFilter] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -24,6 +37,22 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
     queryKey: ["/api/conversations", conversation?.id, "messages"],
     enabled: !!conversation?.id,
   });
+
+  const { data: quickReplies } = useQuery<QuickReply[]>({
+    queryKey: ["/api/quick-replies"],
+  });
+
+  const activeQuickReplies = useMemo(
+    () => quickReplies?.filter((qr) => qr.isActive) || [],
+    [quickReplies]
+  );
+
+  const filteredSlashReplies = useMemo(() => {
+    if (!slashFilter) return activeQuickReplies;
+    return activeQuickReplies.filter((qr) =>
+      qr.shortcut.toLowerCase().includes(slashFilter.toLowerCase())
+    );
+  }, [activeQuickReplies, slashFilter]);
 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -59,10 +88,39 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
     sendMutation.mutate(message);
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setMessage(val);
+
+    if (val.startsWith("/")) {
+      setShowSlashSuggestions(true);
+      setSlashFilter(val.slice(1));
+    } else {
+      setShowSlashSuggestions(false);
+      setSlashFilter("");
+    }
+  };
+
+  const handleSelectQuickReply = (qr: QuickReply) => {
+    setMessage(qr.response);
+    setQuickReplyOpen(false);
+    setShowSlashSuggestions(false);
+    setSlashFilter("");
+    inputRef.current?.focus();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      if (showSlashSuggestions && filteredSlashReplies.length > 0) {
+        e.preventDefault();
+        handleSelectQuickReply(filteredSlashReplies[0]);
+        return;
+      }
       e.preventDefault();
       handleSend();
+    }
+    if (e.key === "Escape" && showSlashSuggestions) {
+      setShowSlashSuggestions(false);
     }
   };
 
@@ -142,27 +200,90 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
       </ScrollArea>
 
       <div className="border-t p-4">
-        <div className="flex gap-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Digite sua mensagem..."
-            disabled={sendMutation.isPending}
-            data-testid="input-message"
-          />
-          <Button
-            onClick={handleSend}
-            disabled={!message.trim() || sendMutation.isPending}
-            size="icon"
-            data-testid="button-send"
-          >
-            {sendMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+        <div className="relative">
+          {showSlashSuggestions && filteredSlashReplies.length > 0 && (
+            <div
+              className="absolute bottom-full left-0 right-0 mb-1 border rounded-md bg-popover text-popover-foreground shadow-md max-h-48 overflow-y-auto z-50"
+              data-testid="slash-suggestions"
+            >
+              {filteredSlashReplies.map((qr) => (
+                <button
+                  key={qr.id}
+                  onClick={() => handleSelectQuickReply(qr)}
+                  className="w-full text-left px-3 py-2 hover-elevate flex flex-col gap-0.5"
+                  data-testid={`slash-suggestion-${qr.id}`}
+                >
+                  <span className="text-sm font-medium">{qr.shortcut}</span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {qr.response.length > 60 ? qr.response.slice(0, 60) + "..." : qr.response}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Popover open={quickReplyOpen} onOpenChange={setQuickReplyOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  data-testid="button-quick-replies"
+                  title="Respostas rápidas"
+                >
+                  <Zap className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-0" align="start" side="top">
+                <div className="p-2 border-b">
+                  <p className="text-sm font-medium" data-testid="text-quick-replies-title">Respostas Rápidas</p>
+                </div>
+                <ScrollArea className="max-h-64">
+                  {activeQuickReplies.length > 0 ? (
+                    <div className="p-1">
+                      {activeQuickReplies.map((qr) => (
+                        <button
+                          key={qr.id}
+                          onClick={() => handleSelectQuickReply(qr)}
+                          className="w-full text-left px-3 py-2 rounded-md hover-elevate flex flex-col gap-0.5"
+                          data-testid={`quick-reply-item-${qr.id}`}
+                        >
+                          <span className="text-sm font-medium">{qr.shortcut}</span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {qr.response.length > 80 ? qr.response.slice(0, 80) + "..." : qr.response}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground" data-testid="text-no-quick-replies">
+                      Nenhuma resposta rápida cadastrada
+                    </div>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+            <Input
+              ref={inputRef}
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              placeholder="Digite sua mensagem... (/ para atalhos)"
+              disabled={sendMutation.isPending}
+              data-testid="input-message"
+            />
+            <Button
+              onClick={handleSend}
+              disabled={!message.trim() || sendMutation.isPending}
+              size="icon"
+              data-testid="button-send"
+            >
+              {sendMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

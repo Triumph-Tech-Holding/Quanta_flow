@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Inbox as InboxIcon, Settings, User, Phone, Mail, Thermometer, ChevronRight, X, MessageSquare } from "lucide-react";
+import { Inbox as InboxIcon, Settings, User, Phone, Mail, Thermometer, ChevronRight, X, MessageSquare, Zap, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -15,6 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { SiWhatsapp, SiInstagram, SiFacebook, SiLinkedin, SiYoutube, SiTiktok } from "react-icons/si";
 import type { Conversation } from "@shared/schema";
@@ -57,6 +63,16 @@ interface UnifiedContactWithDetails {
   score: number;
   lastContactAt: string | null;
   identifiers: Array<{ id: string; channelType: string; identifier: string; displayName: string | null }>;
+}
+
+interface QuickReply {
+  id: string;
+  userId: string;
+  shortcut: string;
+  response: string;
+  category: string | null;
+  isActive: boolean;
+  createdAt: string;
 }
 
 function LeadCardPanel({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) {
@@ -261,6 +277,257 @@ function LeadCardPanel({ conversation, onClose }: { conversation: Conversation; 
   );
 }
 
+function QuickRepliesManager() {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingReply, setEditingReply] = useState<QuickReply | null>(null);
+  const [formShortcut, setFormShortcut] = useState("");
+  const [formResponse, setFormResponse] = useState("");
+  const [formCategory, setFormCategory] = useState("geral");
+
+  const { data: quickReplies, isLoading } = useQuery<QuickReply[]>({
+    queryKey: ["/api/quick-replies"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { shortcut: string; response: string; category: string }) => {
+      const res = await apiRequest("POST", "/api/quick-replies", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quick-replies"] });
+      toast({ title: "Resposta rápida criada" });
+      closeDialog();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { shortcut?: string; response?: string; category?: string; isActive?: boolean } }) => {
+      const res = await apiRequest("PUT", `/api/quick-replies/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quick-replies"] });
+      toast({ title: "Resposta rápida atualizada" });
+      closeDialog();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/quick-replies/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quick-replies"] });
+      toast({ title: "Resposta rápida excluída" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const openCreateDialog = () => {
+    setEditingReply(null);
+    setFormShortcut("");
+    setFormResponse("");
+    setFormCategory("geral");
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (reply: QuickReply) => {
+    setEditingReply(reply);
+    setFormShortcut(reply.shortcut);
+    setFormResponse(reply.response);
+    setFormCategory(reply.category || "geral");
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingReply(null);
+    setFormShortcut("");
+    setFormResponse("");
+    setFormCategory("geral");
+  };
+
+  const handleSubmit = () => {
+    if (!formShortcut.trim() || !formResponse.trim()) return;
+    if (editingReply) {
+      updateMutation.mutate({
+        id: editingReply.id,
+        data: { shortcut: formShortcut, response: formResponse, category: formCategory },
+      });
+    } else {
+      createMutation.mutate({ shortcut: formShortcut, response: formResponse, category: formCategory });
+    }
+  };
+
+  const handleToggleActive = (reply: QuickReply) => {
+    updateMutation.mutate({
+      id: reply.id,
+      data: { isActive: !reply.isActive },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-semibold" data-testid="text-quick-replies-heading">Respostas Rápidas</h2>
+          <p className="text-sm text-muted-foreground">
+            Gerencie atalhos para respostas frequentes
+          </p>
+        </div>
+        <Button onClick={openCreateDialog} data-testid="button-create-quick-reply">
+          <Plus className="h-4 w-4 mr-1" />
+          Nova Resposta
+        </Button>
+      </div>
+
+      {quickReplies && quickReplies.length > 0 ? (
+        <div className="space-y-2">
+          {quickReplies.map((reply) => (
+            <Card key={reply.id} className="p-4" data-testid={`quick-reply-card-${reply.id}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm" data-testid={`text-shortcut-${reply.id}`}>
+                      {reply.shortcut}
+                    </span>
+                    {reply.category && (
+                      <Badge variant="outline" data-testid={`badge-category-${reply.id}`}>
+                        {reply.category}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={reply.isActive ? "secondary" : "outline"}
+                      className={reply.isActive ? "" : "opacity-50"}
+                      data-testid={`badge-status-${reply.id}`}
+                    >
+                      {reply.isActive ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate" data-testid={`text-response-preview-${reply.id}`}>
+                    {reply.response.length > 100 ? reply.response.slice(0, 100) + "..." : reply.response}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Switch
+                    checked={reply.isActive}
+                    onCheckedChange={() => handleToggleActive(reply)}
+                    data-testid={`switch-active-${reply.id}`}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => openEditDialog(reply)}
+                    data-testid={`button-edit-${reply.id}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => deleteMutation.mutate(reply.id)}
+                    disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-${reply.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-2">
+            <Zap className="h-10 w-10 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground" data-testid="text-no-replies">
+              Nenhuma resposta rápida cadastrada
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Crie atalhos para agilizar suas respostas
+            </p>
+          </div>
+        </Card>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent data-testid="dialog-quick-reply">
+          <DialogHeader>
+            <DialogTitle data-testid="text-dialog-title">
+              {editingReply ? "Editar Resposta Rápida" : "Nova Resposta Rápida"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="shortcut">Atalho</Label>
+              <Input
+                id="shortcut"
+                value={formShortcut}
+                onChange={(e) => setFormShortcut(e.target.value)}
+                placeholder="/ola"
+                data-testid="input-shortcut"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="response">Resposta</Label>
+              <Textarea
+                id="response"
+                value={formResponse}
+                onChange={(e) => setFormResponse(e.target.value)}
+                placeholder="Digite a resposta completa..."
+                rows={4}
+                data-testid="input-response"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoria</Label>
+              <Input
+                id="category"
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value)}
+                placeholder="geral"
+                data-testid="input-category"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog} data-testid="button-cancel-dialog">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!formShortcut.trim() || !formResponse.trim() || createMutation.isPending || updateMutation.isPending}
+              data-testid="button-save-quick-reply"
+            >
+              {(createMutation.isPending || updateMutation.isPending) ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : null}
+              {editingReply ? "Salvar" : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function InboxPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showLeadCard, setShowLeadCard] = useState(true);
@@ -305,6 +572,14 @@ export default function InboxPage() {
                     Conversas
                   </TabsTrigger>
                   <TabsTrigger
+                    value="quick-replies"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                    data-testid="tab-quick-replies"
+                  >
+                    <Zap className="h-4 w-4 mr-1" />
+                    Respostas Rápidas
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="settings"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
                     data-testid="tab-settings"
@@ -333,6 +608,10 @@ export default function InboxPage() {
                     />
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="quick-replies" className="flex-1 m-0 p-6 overflow-auto">
+                <QuickRepliesManager />
               </TabsContent>
 
               <TabsContent value="settings" className="flex-1 m-0 p-6 overflow-auto">

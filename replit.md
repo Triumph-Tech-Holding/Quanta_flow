@@ -241,3 +241,14 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - CRM Kanban melhorado: busca por nome/email/telefone, filtros por temperatura e intenção, indicadores visuais de intenção IA nos cards, pontuação total por coluna
 - Página de perfil de contato (/crm/contact/:id): timeline de mensagens omnichannel, resumo de intenções IA, gerenciamento de canais, edição de stage/temperatura/notas
 - Rota /crm/contact/:id adicionada ao App.tsx
+- Tabelas quick_replies, automation_flows, branding_config criadas no schema Drizzle
+- CRUD completo Quick Replies: GET/POST/PUT/DELETE /api/quick-replies
+- CRUD completo Automation Flows: GET/POST/PUT/DELETE /api/automation-flows
+- Branding Config: GET/PUT /api/branding
+- findMatchingAutomationFlow: busca fluxo ativo por keyword match na mensagem
+- ConversationList melhorado: indicadores de temperatura (dot colorido), score, e última intenção nos cards de conversa
+- ChatWindow melhorado: botão de Quick Replies no input, detecção de "/" para sugestões
+- Inbox: nova aba "Respostas Rápidas" com CRUD completo de respostas rápidas
+- Página de Automação (/automation): CRUD de fluxos com keywords e templates de resposta
+- Página de Branding (/admin/branding): edição de nome, cores primária/secundária, logo URL, favicon URL
+- Sidebar: Automação habilitada, Branding adicionado em Administração

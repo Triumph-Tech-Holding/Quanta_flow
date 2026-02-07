@@ -346,6 +346,41 @@ export const pipelineStages = pgTable("pipeline_stages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ==================== Quick Replies & Automation Flows ====================
+
+export const quickReplies = pgTable("quick_replies", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  shortcut: varchar("shortcut", { length: 50 }).notNull(),
+  response: text("response").notNull(),
+  category: varchar("category", { length: 50 }).default("geral"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const automationFlows = pgTable("automation_flows", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  triggerKeywords: text("trigger_keywords").notNull(),
+  responseTemplate: text("response_template").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const brandingConfig = pgTable("branding_config", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  companyName: varchar("company_name", { length: 255 }),
+  primaryColor: varchar("primary_color", { length: 20 }).default("#00A86B"),
+  secondaryColor: varchar("secondary_color", { length: 20 }).default("#1B3A57"),
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ==================== Omnichannel Schemas & Types ====================
 
 export const insertChannelSchema = createInsertSchema(channels).omit({
@@ -392,3 +427,49 @@ export type OmnichannelMessage = typeof omnichannelMessages.$inferSelect;
 export type InsertOmnichannelMessage = z.infer<typeof insertOmnichannelMessageSchema>;
 export type PipelineStage = typeof pipelineStages.$inferSelect;
 export type InsertPipelineStage = z.infer<typeof insertPipelineStageSchema>;
+
+// ==================== Quick Replies & Automation & Branding Schemas ====================
+
+export const insertQuickReplySchema = createInsertSchema(quickReplies).omit({
+  id: true, createdAt: true,
+});
+
+export const updateQuickReplySchema = z.object({
+  shortcut: z.string().min(1).optional(),
+  response: z.string().min(1).optional(),
+  category: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const insertAutomationFlowSchema = createInsertSchema(automationFlows).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateAutomationFlowSchema = z.object({
+  name: z.string().min(1).optional(),
+  triggerKeywords: z.string().optional(),
+  responseTemplate: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateBrandingConfigSchema = z.object({
+  companyName: z.string().optional().nullable(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  logoUrl: z.string().optional().nullable(),
+  faviconUrl: z.string().optional().nullable(),
+});
+
+export type QuickReply = typeof quickReplies.$inferSelect;
+export type InsertQuickReply = z.infer<typeof insertQuickReplySchema>;
+export type UpdateQuickReply = z.infer<typeof updateQuickReplySchema>;
+export type AutomationFlow = typeof automationFlows.$inferSelect;
+export type InsertAutomationFlow = z.infer<typeof insertAutomationFlowSchema>;
+export type UpdateAutomationFlow = z.infer<typeof updateAutomationFlowSchema>;
+export type BrandingConfig = typeof brandingConfig.$inferSelect;
+export type InsertBrandingConfig = z.infer<typeof insertBrandingConfigSchema>;
+export type UpdateBrandingConfig = z.infer<typeof updateBrandingConfigSchema>;

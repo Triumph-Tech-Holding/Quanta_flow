@@ -15,6 +15,8 @@ import AdminUsers from "@/pages/admin-users";
 import AdminAuditLogs from "@/pages/admin-audit-logs";
 import CrmPage from "@/pages/crm";
 import ContactProfile from "@/pages/contact-profile";
+import AutomationPage from "@/pages/automation";
+import AdminBranding from "@/pages/admin-branding";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -92,6 +94,12 @@ function Router() {
       </Route>
       <Route path="/admin/audit-logs">
         <ProtectedRoute component={AdminAuditLogs} />
+      </Route>
+      <Route path="/automation">
+        <ProtectedRoute component={AutomationPage} />
+      </Route>
+      <Route path="/admin/branding">
+        <ProtectedRoute component={AdminBranding} />
       </Route>
       <Route component={NotFound} />
     </Switch>

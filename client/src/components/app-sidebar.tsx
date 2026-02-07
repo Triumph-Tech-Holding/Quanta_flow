@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Shield,
   ScrollText,
+  Palette,
 } from "lucide-react";
 import { QuantaLogo } from "./quanta-logo";
 import { useAuth } from "@/lib/auth";
@@ -73,7 +74,7 @@ const modulesMenuItems = [
     url: "/automation",
     icon: Bot,
     module: 3,
-    badge: "Em breve",
+    enabled: true,
   },
   {
     title: "Social/Ads",
@@ -99,6 +100,12 @@ const modulesMenuItems = [
 ];
 
 const adminMenuItems = [
+  {
+    title: "Branding",
+    url: "/admin/branding",
+    icon: Palette,
+    permission: "edit_settings",
+  },
   {
     title: "Usuários",
     url: "/admin/users",

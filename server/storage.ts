@@ -3,6 +3,7 @@ import { db } from "./db";
 import { 
   users, leads, apiConfigs, evolutionConfigs, conversations, messages,
   unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
+  quickReplies, automationFlows, brandingConfig,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -10,7 +11,10 @@ import {
   type ContactIdentifier, type InsertContactIdentifier,
   type OmnichannelMessage, type InsertOmnichannelMessage,
   type PipelineStage, type InsertPipelineStage,
-  type Channel, type InsertChannel
+  type Channel, type InsertChannel,
+  type QuickReply, type InsertQuickReply, type UpdateQuickReply,
+  type AutomationFlow, type InsertAutomationFlow, type UpdateAutomationFlow,
+  type BrandingConfig, type InsertBrandingConfig, type UpdateBrandingConfig
 } from "@shared/schema";
 
 export interface IStorage {
@@ -64,6 +68,22 @@ export interface IStorage {
     intentCounts: Record<string, number>;
     hotLeads: UnifiedContact[];
   }>;
+  // Quick Replies
+  getQuickRepliesByUser(userId: string): Promise<QuickReply[]>;
+  getQuickReply(id: string): Promise<QuickReply | undefined>;
+  createQuickReply(data: InsertQuickReply): Promise<QuickReply>;
+  updateQuickReply(id: string, data: UpdateQuickReply): Promise<QuickReply | undefined>;
+  deleteQuickReply(id: string): Promise<boolean>;
+  // Automation Flows
+  getAutomationFlowsByUser(userId: string): Promise<AutomationFlow[]>;
+  getAutomationFlow(id: string): Promise<AutomationFlow | undefined>;
+  createAutomationFlow(data: InsertAutomationFlow): Promise<AutomationFlow>;
+  updateAutomationFlow(id: string, data: UpdateAutomationFlow): Promise<AutomationFlow | undefined>;
+  deleteAutomationFlow(id: string): Promise<boolean>;
+  findMatchingAutomationFlow(userId: string, message: string): Promise<AutomationFlow | undefined>;
+  // Branding
+  getBrandingConfig(userId: string): Promise<BrandingConfig | undefined>;
+  upsertBrandingConfig(userId: string, data: UpdateBrandingConfig): Promise<BrandingConfig>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -374,6 +394,110 @@ export class DatabaseStorage implements IStorage {
       intentCounts,
       hotLeads,
     };
+  }
+
+  // ==================== Quick Replies ====================
+
+  async getQuickRepliesByUser(userId: string): Promise<QuickReply[]> {
+    return db.select().from(quickReplies)
+      .where(eq(quickReplies.userId, userId))
+      .orderBy(quickReplies.shortcut);
+  }
+
+  async getQuickReply(id: string): Promise<QuickReply | undefined> {
+    const [reply] = await db.select().from(quickReplies)
+      .where(eq(quickReplies.id, id)).limit(1);
+    return reply;
+  }
+
+  async createQuickReply(data: InsertQuickReply): Promise<QuickReply> {
+    const [reply] = await db.insert(quickReplies).values(data).returning();
+    return reply;
+  }
+
+  async updateQuickReply(id: string, data: UpdateQuickReply): Promise<QuickReply | undefined> {
+    const [updated] = await db.update(quickReplies)
+      .set(data)
+      .where(eq(quickReplies.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteQuickReply(id: string): Promise<boolean> {
+    const result = await db.delete(quickReplies).where(eq(quickReplies.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== Automation Flows ====================
+
+  async getAutomationFlowsByUser(userId: string): Promise<AutomationFlow[]> {
+    return db.select().from(automationFlows)
+      .where(eq(automationFlows.userId, userId))
+      .orderBy(desc(automationFlows.updatedAt));
+  }
+
+  async getAutomationFlow(id: string): Promise<AutomationFlow | undefined> {
+    const [flow] = await db.select().from(automationFlows)
+      .where(eq(automationFlows.id, id)).limit(1);
+    return flow;
+  }
+
+  async createAutomationFlow(data: InsertAutomationFlow): Promise<AutomationFlow> {
+    const [flow] = await db.insert(automationFlows).values(data).returning();
+    return flow;
+  }
+
+  async updateAutomationFlow(id: string, data: UpdateAutomationFlow): Promise<AutomationFlow | undefined> {
+    const [updated] = await db.update(automationFlows)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(automationFlows.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAutomationFlow(id: string): Promise<boolean> {
+    const result = await db.delete(automationFlows).where(eq(automationFlows.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async findMatchingAutomationFlow(userId: string, message: string): Promise<AutomationFlow | undefined> {
+    const flows = await db.select().from(automationFlows)
+      .where(and(
+        eq(automationFlows.userId, userId),
+        eq(automationFlows.isActive, true)
+      ));
+    const lowerMsg = message.toLowerCase();
+    for (const flow of flows) {
+      const keywords = flow.triggerKeywords.split(",").map(k => k.trim().toLowerCase());
+      if (keywords.some(kw => kw && lowerMsg.includes(kw))) {
+        return flow;
+      }
+    }
+    return undefined;
+  }
+
+  // ==================== Branding Config ====================
+
+  async getBrandingConfig(userId: string): Promise<BrandingConfig | undefined> {
+    const [config] = await db.select().from(brandingConfig)
+      .where(eq(brandingConfig.userId, userId)).limit(1);
+    return config;
+  }
+
+  async upsertBrandingConfig(userId: string, data: UpdateBrandingConfig): Promise<BrandingConfig> {
+    const existing = await this.getBrandingConfig(userId);
+    if (existing) {
+      const [updated] = await db.update(brandingConfig)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(brandingConfig.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(brandingConfig)
+        .values({ userId, ...data })
+        .returning();
+      return created;
+    }
   }
 }
 
