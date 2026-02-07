@@ -156,7 +156,7 @@ export function AppSidebar() {
           <QuantaLogo size="md" />
           <div>
             <div className="flex items-baseline gap-1">
-              <span className="text-base font-bold text-secondary">quanta</span>
+              <span className="text-base font-bold text-secondary">Quanta</span>
               <span className="text-base font-light text-muted-foreground">FLOW</span>
             </div>
             <p className="text-xs text-muted-foreground">Venda no automático.</p>

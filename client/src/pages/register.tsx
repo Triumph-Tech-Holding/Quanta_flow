@@ -79,7 +79,7 @@ export default function Register() {
             <QuantaLogo size="lg" />
           </div>
           <div className="flex items-baseline justify-center gap-2">
-            <span className="text-3xl font-bold text-secondary">quanta</span>
+            <span className="text-3xl font-bold text-secondary">Quanta</span>
             <span className="text-3xl font-light text-muted-foreground">FLOW</span>
           </div>
           <p className="text-muted-foreground mt-2">Venda no automático.</p>
