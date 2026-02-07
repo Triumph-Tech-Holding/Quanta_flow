@@ -7,9 +7,9 @@ interface QuantaLogoProps {
 
 export function QuantaLogo({ className = "", size = "md" }: QuantaLogoProps) {
   const sizeClasses = {
-    sm: "h-[3.9rem]",
-    md: "h-[4.9rem]",
-    lg: "h-[7.8rem]",
+    sm: "h-12",
+    md: "h-14",
+    lg: "h-24",
   };
 
   return (
@@ -17,6 +17,7 @@ export function QuantaLogo({ className = "", size = "md" }: QuantaLogoProps) {
       src={quantaLogoImage} 
       alt="Quanta Flow Logo" 
       className={`${sizeClasses[size]} w-auto object-contain ${className}`}
+      style={{ imageRendering: "auto" }}
     />
   );
 }
