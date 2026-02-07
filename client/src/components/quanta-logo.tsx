@@ -7,9 +7,9 @@ interface QuantaLogoProps {
 
 export function QuantaLogo({ className = "", size = "md" }: QuantaLogoProps) {
   const sizeClasses = {
-    sm: "h-[2.6rem]",
-    md: "h-[3.25rem]",
-    lg: "h-[5.2rem]",
+    sm: "h-[3.9rem]",
+    md: "h-[4.9rem]",
+    lg: "h-[7.8rem]",
   };
 
   return (
