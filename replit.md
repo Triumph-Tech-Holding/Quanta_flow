@@ -187,6 +187,21 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Role: super_admin (todas as permissões)
 - Seed: `npx tsx scripts/seed-rbac.ts`
 
+### AI Intent Detection
+- `POST /api/ai/detect-intent` - Detectar intenção de mensagem via OpenAI (com ou sem contactId)
+
+## AI Services
+
+### Intent Detection (server/services/intentService.ts)
+- Usa OpenAI (gpt-4o-mini via Replit AI Integrations) para classificar mensagens
+- Intents: compra_quente, duvida, reclamacao, suporte, elogio, indefinido
+- Temperaturas: frio, morno, quente
+- Auto-scoring: -10 a +20 pontos por mensagem
+- Auto-pipeline: "compra_quente" com alta confiança move de "novo" → "qualificado"
+- Integrado no webhook Z-API: cada mensagem recebida é classificada automaticamente
+- Contatos CRM são auto-criados quando nova mensagem WhatsApp chega
+- Env vars: AI_INTEGRATIONS_OPENAI_API_KEY, AI_INTEGRATIONS_OPENAI_BASE_URL
+
 ## Recent Changes
 - Estrutura base do projeto criada
 - Autenticação JWT implementada
@@ -217,3 +232,7 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - getWebhookUrl() corrigido: usa WEBHOOK_BASE_URL (prioridade), REPLIT_DEPLOYMENT para detectar produção, REPLIT_DEV_DOMAIN para desenvolvimento
 - WEBHOOK_BASE_URL configurado em produção: https://code-companion-31maurosergio.replit.app
 - NOTA: REPLIT_DEPLOYMENT_URL não existe no Replit; REPLIT_DEV_DOMAIN não disponível em deployments; usar WEBHOOK_BASE_URL para produção
+- AI Intent Detection implementado com OpenAI (gpt-4o-mini) via Replit AI Integrations
+- Webhook Z-API integrado com CRM: auto-cria contatos e classifica intenções em tempo real
+- Endpoint /api/ai/detect-intent para classificação manual de mensagens
+- LSP errors corrigidos em routes.ts (req.params.id type casting)

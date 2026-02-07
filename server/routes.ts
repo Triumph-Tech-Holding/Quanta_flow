@@ -13,6 +13,7 @@ import { log } from "./index";
 import { db } from "./db";
 import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, permissions } from "@shared/schema";
 import { eq, desc, and, sql as sqlExpr } from "drizzle-orm";
+import { detectIntent, processMessageIntent } from "./services/intentService";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
 if (!process.env.SESSION_SECRET) {
@@ -1155,7 +1156,8 @@ export async function registerRoutes(
 
   app.get("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const contact = await storage.getUnifiedContact(req.params.id);
+      const contactId = req.params.id as string;
+      const contact = await storage.getUnifiedContact(contactId);
       if (!contact) {
         return res.status(404).json({ message: "Contato não encontrado" });
       }
@@ -1196,7 +1198,7 @@ export async function registerRoutes(
   app.patch("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const data = updateUnifiedContactSchema.parse(req.body);
-      const updated = await storage.updateUnifiedContact(req.params.id, data);
+      const updated = await storage.updateUnifiedContact(req.params.id as string, data);
       if (!updated) {
         return res.status(404).json({ message: "Contato não encontrado" });
       }
@@ -1216,7 +1218,7 @@ export async function registerRoutes(
       if (!stage) {
         return res.status(400).json({ message: "Stage é obrigatório" });
       }
-      const updated = await storage.updateUnifiedContact(req.params.id, { pipelineStage: stage });
+      const updated = await storage.updateUnifiedContact(req.params.id as string, { pipelineStage: stage });
       if (!updated) {
         return res.status(404).json({ message: "Contato não encontrado" });
       }
@@ -1233,7 +1235,7 @@ export async function registerRoutes(
       if (!temperature) {
         return res.status(400).json({ message: "Temperature é obrigatório" });
       }
-      const updated = await storage.updateUnifiedContact(req.params.id, { temperature });
+      const updated = await storage.updateUnifiedContact(req.params.id as string, { temperature });
       if (!updated) {
         return res.status(404).json({ message: "Contato não encontrado" });
       }
@@ -1246,7 +1248,7 @@ export async function registerRoutes(
 
   app.delete("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const deleted = await storage.deleteUnifiedContact(req.params.id);
+      const deleted = await storage.deleteUnifiedContact(req.params.id as string);
       if (!deleted) {
         return res.status(404).json({ message: "Contato não encontrado" });
       }
@@ -1287,11 +1289,38 @@ export async function registerRoutes(
   app.get("/api/crm/contacts/:id/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
-      const messagesResult = await storage.getOmnichannelMessages(req.params.id, limit);
+      const messagesResult = await storage.getOmnichannelMessages(req.params.id as string, limit);
       res.json(messagesResult);
     } catch (error) {
       console.error("Get messages error:", error);
       res.status(500).json({ message: "Erro ao buscar mensagens" });
+    }
+  });
+
+  // ==================== AI INTENT DETECTION ====================
+
+  app.post("/api/ai/detect-intent", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { message, contactId } = req.body;
+      if (!message) {
+        return res.status(400).json({ message: "Mensagem é obrigatória" });
+      }
+
+      if (contactId) {
+        const result = await processMessageIntent(
+          message,
+          contactId,
+          req.user!.userId,
+          storage
+        );
+        return res.json(result);
+      }
+
+      const result = await detectIntent(message);
+      res.json(result);
+    } catch (error) {
+      console.error("Intent detection error:", error);
+      res.status(500).json({ message: "Erro na detecção de intenção" });
     }
   });
 
@@ -1400,6 +1429,58 @@ export async function registerRoutes(
               message: newMessage,
               conversation: await storage.getConversation(conversation.id),
             });
+
+            // AI Intent Detection - auto-classify and update CRM contact
+            if (messageContent && messageContent !== "[Mensagem]") {
+              try {
+                let crmContact = await storage.findUnifiedContactByIdentifier(userId, "whatsapp", phone);
+                if (!crmContact) {
+                  crmContact = await storage.findUnifiedContactByPhoneOrEmail(userId, phone);
+                }
+
+                if (!crmContact) {
+                  crmContact = await storage.createUnifiedContact({
+                    userId,
+                    nome: contactName || phone,
+                    telefone: phone,
+                    pipelineStage: "novo",
+                    temperature: "frio",
+                    lastIntent: "indefinido",
+                  });
+                  await storage.createContactIdentifier({
+                    unifiedContactId: crmContact.id,
+                    channelType: "whatsapp",
+                    identifier: phone,
+                    displayName: contactName || phone,
+                  });
+                  log(`CRM: Auto-created contact ${crmContact.id} for ${phone}`, "webhook");
+                }
+
+                const intentResult = await processMessageIntent(
+                  messageContent,
+                  crmContact.id,
+                  userId,
+                  storage
+                );
+
+                if (intentResult) {
+                  await storage.createOmnichannelMessage({
+                    unifiedContactId: crmContact.id,
+                    channelType: "whatsapp",
+                    direction: "incoming",
+                    content: messageContent,
+                    externalMessageId: messageId || `zapi_${Date.now()}`,
+                    detectedIntent: intentResult.intent,
+                    intentConfidence: String(intentResult.confidence),
+                    userId,
+                    timestamp: new Date(),
+                  });
+                  log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "webhook");
+                }
+              } catch (intentError) {
+                console.error("CRM/Intent processing error (non-blocking):", intentError);
+              }
+            }
           }
         }
 
