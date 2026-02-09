@@ -1,7 +1,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema } from "@shared/schema";
 import { z } from "zod";
@@ -1478,6 +1482,53 @@ export async function registerRoutes(
       console.error("Error updating branding config:", error);
       res.status(500).json({ message: "Erro ao atualizar branding" });
     }
+  });
+
+  // ==================== FILE UPLOAD ====================
+
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  app.use("/uploads", express.static(uploadsDir));
+
+  const uploadStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      cb(null, uniqueSuffix + ext);
+    },
+  });
+
+  const upload = multer({
+    storage: uploadStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Tipo de arquivo não permitido. Use PNG, JPG, GIF ou WebP."));
+      }
+    },
+  });
+
+  app.post("/api/upload", authenticateToken, (req: AuthRequest, res: Response, next: Function) => {
+    upload.single("file")(req as any, res, (err: any) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "Arquivo muito grande. Limite: 5MB." });
+        }
+        return res.status(400).json({ message: err.message || "Erro no upload" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      }
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url, filename: req.file.filename });
+    });
   });
 
   // ==================== WEBHOOK ROUTES ====================

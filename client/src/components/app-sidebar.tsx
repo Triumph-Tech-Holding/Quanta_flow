@@ -14,7 +14,7 @@ import {
   ScrollText,
   Palette,
 } from "lucide-react";
-import { QuantaLogo } from "./quanta-logo";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
   Sidebar,
@@ -144,9 +144,21 @@ function getTipoAtorLabel(tipo: string) {
   }
 }
 
+interface BrandingData {
+  companyName: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+}
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout, hasPermission } = useAuth();
+
+  const { data: branding } = useQuery<BrandingData>({
+    queryKey: ["/api/branding"],
+  });
 
   const handleLogout = () => {
     logout();
@@ -160,15 +172,22 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <QuantaLogo size="md" />
-          <div>
+        <div className="flex items-center justify-center">
+          {branding?.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.companyName || "Logo"}
+              className="h-10 w-auto max-w-[180px] object-contain"
+              data-testid="sidebar-logo"
+            />
+          ) : (
             <div className="flex items-baseline gap-1">
-              <span className="text-base font-bold text-secondary">Quanta</span>
-              <span className="text-base font-light text-muted-foreground">FLOW</span>
+              <span className="text-lg font-bold" style={{ color: branding?.primaryColor || "#00A86B" }}>
+                {branding?.companyName || "Quanta"}
+              </span>
+              <span className="text-lg font-light text-muted-foreground">FLOW</span>
             </div>
-            <p className="text-xs text-muted-foreground">Venda no automático.</p>
-          </div>
+          )}
         </div>
       </SidebarHeader>
 

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Palette, Save, Loader2, Building2, Image } from "lucide-react";
+import { Palette, Save, Loader2, Building2, Image, Upload, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BrandingData {
@@ -18,6 +19,125 @@ interface BrandingData {
   secondaryColor: string;
   logoUrl: string | null;
   faviconUrl: string | null;
+}
+
+function ImageUpload({
+  label,
+  value,
+  onChange,
+  previewSize = "h-20 w-20",
+  testIdPrefix,
+}: {
+  label: string;
+  value: string;
+  onChange: (url: string) => void;
+  previewSize?: string;
+  testIdPrefix: string;
+}) {
+  const { token } = useAuth();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erro no upload");
+      }
+
+      const { url } = await res.json();
+      onChange(url);
+      toast({ title: "Imagem enviada com sucesso" });
+    } catch (error: any) {
+      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex items-start gap-4">
+        {value ? (
+          <div className="relative group">
+            <img
+              src={value}
+              alt={label}
+              className={`${previewSize} object-contain rounded-md border bg-muted/30`}
+              onError={(e) => {
+                e.currentTarget.src = "";
+                e.currentTarget.style.display = "none";
+              }}
+              data-testid={`${testIdPrefix}-preview`}
+            />
+            <Button
+              size="icon"
+              variant="secondary"
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+              onClick={() => onChange("")}
+              data-testid={`${testIdPrefix}-remove`}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <div
+            className={`${previewSize} rounded-md border border-dashed flex items-center justify-center bg-muted/30 cursor-pointer`}
+            onClick={() => fileInputRef.current?.click()}
+            data-testid={`${testIdPrefix}-placeholder`}
+          >
+            <Image className="h-6 w-6 text-muted-foreground/50" />
+          </div>
+        )}
+        <div className="flex-1 space-y-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileSelect}
+            data-testid={`${testIdPrefix}-file-input`}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            data-testid={`${testIdPrefix}-upload-btn`}
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4 mr-2" />
+            )}
+            {uploading ? "Enviando..." : "Enviar imagem"}
+          </Button>
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Ou cole a URL da imagem"
+            className="text-xs"
+            data-testid={`${testIdPrefix}-url-input`}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminBranding() {
@@ -104,7 +224,7 @@ export default function AdminBranding() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="primary-color">Cor Primária</Label>
+                      <Label htmlFor="primary-color">Cor Primaria</Label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
@@ -125,7 +245,7 @@ export default function AdminBranding() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="secondary-color">Cor Secundária</Label>
+                      <Label htmlFor="secondary-color">Cor Secundaria</Label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
@@ -168,42 +288,26 @@ export default function AdminBranding() {
                     <Image className="h-5 w-5" />
                     Logo e Favicon
                   </CardTitle>
-                  <CardDescription>URLs para logo e favicon da sua marca</CardDescription>
+                  <CardDescription>Envie as imagens da sua marca</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="logo-url">URL do Logo</Label>
-                    <Input
-                      id="logo-url"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://exemplo.com/logo.png"
-                      data-testid="input-logo-url"
-                    />
-                    {logoUrl && (
-                      <div className="mt-2 p-3 rounded-md bg-muted/50 flex items-center gap-3">
-                        <img
-                          src={logoUrl}
-                          alt="Logo preview"
-                          className="h-12 w-12 object-contain rounded"
-                          onError={(e) => (e.currentTarget.style.display = "none")}
-                          data-testid="preview-logo"
-                        />
-                        <span className="text-sm text-muted-foreground">Preview do logo</span>
-                      </div>
-                    )}
-                  </div>
+                <CardContent className="space-y-6">
+                  <ImageUpload
+                    label="Logo da Empresa"
+                    value={logoUrl}
+                    onChange={setLogoUrl}
+                    previewSize="h-20 w-48"
+                    testIdPrefix="logo"
+                  />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="favicon-url">URL do Favicon</Label>
-                    <Input
-                      id="favicon-url"
-                      value={faviconUrl}
-                      onChange={(e) => setFaviconUrl(e.target.value)}
-                      placeholder="https://exemplo.com/favicon.ico"
-                      data-testid="input-favicon-url"
-                    />
-                  </div>
+                  <Separator />
+
+                  <ImageUpload
+                    label="Favicon"
+                    value={faviconUrl}
+                    onChange={setFaviconUrl}
+                    previewSize="h-12 w-12"
+                    testIdPrefix="favicon"
+                  />
                 </CardContent>
               </Card>
 
