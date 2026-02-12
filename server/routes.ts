@@ -90,7 +90,7 @@ async function configureZApiWebhooks(
 ): Promise<{ results: { name: string; success: boolean }[]; failedCount: number }> {
   const webhookTypes = [
     { path: "update-webhook-received", name: "Ao receber" },
-    { path: "update-webhook-send", name: "Ao enviar" },
+    { path: "update-webhook-delivery", name: "Ao enviar" },
     { path: "update-webhook-connected", name: "Ao conectar" },
     { path: "update-webhook-disconnected", name: "Ao desconectar" },
     { path: "update-webhook-message-status", name: "Receber status da mensagem" },
