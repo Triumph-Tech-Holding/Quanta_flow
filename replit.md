@@ -131,8 +131,9 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - `GET /api/conversations/:id/messages` - Mensagens de uma conversa
 - `POST /api/conversations/:id/messages` - Enviar mensagem (suporta Z-API e Evolution)
 
-### Webhook
-- `POST /webhooks/evolution` - Webhook para receber mensagens (Z-API e Evolution API)
+### Webhooks
+- `POST /api/webhooks/zapi` - Webhook dedicado Z-API (ReceivedCallback, SentCallback, MessageStatusCallback, ConnectedCallback, DisconnectedCallback, PresenceChatCallback)
+- `POST /webhooks/evolution` - Webhook Evolution API (legacy)
 
 ### Admin Settings (Requer permissão view_settings/edit_settings/delete_settings)
 - `GET /api/admin/settings` - Listar todas as configurações
@@ -252,3 +253,11 @@ Quanta Flow é uma plataforma completa de gestão de leads, CRM e automação de
 - Página de Automação (/automation): CRUD de fluxos com keywords e templates de resposta
 - Página de Branding (/admin/branding): edição de nome, cores primária/secundária, logo URL, favicon URL
 - Sidebar: Automação habilitada, Branding adicionado em Administração
+- Upload de imagens: POST /api/upload com multer, limite 5MB, aceita PNG/JPG/GIF/WebP
+- Branding page: upload direto de logo e favicon (file upload + URL input), preview ao vivo
+- Sidebar dinâmica: mostra logo do branding se disponível, fallback para nome da empresa com cor primária
+- Endpoint dedicado Z-API: POST /api/webhooks/zapi separado do /webhooks/evolution
+- getWebhookUrl() aceita provider ("zapi" | "evolution"), default "zapi" → /api/webhooks/zapi
+- configureZApiWebhooks inclui 6 webhooks: received, send, connected, disconnected, message-status, chat-presence
+- Z-API webhook handler: processa ReceivedCallback, SentCallback, MessageStatusCallback, ConnectedCallback, DisconnectedCallback, PresenceChatCallback
+- Suporte a mais tipos de mídia no webhook: imagem, sticker, contato, localização
