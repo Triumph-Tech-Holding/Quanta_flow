@@ -66,23 +66,20 @@ async function authenticateToken(req: AuthRequest, res: Response, next: NextFunc
   }
 }
 
-function getWebhookUrl(): string {
-  // 1. Explicit WEBHOOK_BASE_URL always wins (user-configured)
+function getWebhookUrl(provider: "zapi" | "evolution" = "zapi"): string {
+  const endpoint = provider === "zapi" ? "/api/webhooks/zapi" : "/webhooks/evolution";
   if (process.env.WEBHOOK_BASE_URL) {
     const base = process.env.WEBHOOK_BASE_URL.replace(/\/$/, '');
-    return `${base}/webhooks/evolution`;
+    return `${base}${endpoint}`;
   }
-  // 2. In Replit deployment (production), REPLIT_DEV_DOMAIN is NOT available
-  //    so we need WEBHOOK_BASE_URL above. Log a warning if missing.
   if (process.env.REPLIT_DEPLOYMENT === '1') {
     console.warn('[webhook] WARNING: Running in production but WEBHOOK_BASE_URL is not set. Webhooks will not work correctly.');
-    return 'https://localhost/webhooks/evolution';
+    return `https://localhost${endpoint}`;
   }
-  // 3. Development: use REPLIT_DEV_DOMAIN
   if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}/webhooks/evolution`;
+    return `https://${process.env.REPLIT_DEV_DOMAIN}${endpoint}`;
   }
-  return 'http://localhost:5000/webhooks/evolution';
+  return `http://localhost:5000${endpoint}`;
 }
 
 async function configureZApiWebhooks(
@@ -93,10 +90,11 @@ async function configureZApiWebhooks(
 ): Promise<{ results: { name: string; success: boolean }[]; failedCount: number }> {
   const webhookTypes = [
     { path: "update-webhook-received", name: "Ao receber" },
-    { path: "update-webhook-received-delivery", name: "Receber status" },
+    { path: "update-webhook-send", name: "Ao enviar" },
     { path: "update-webhook-connected", name: "Ao conectar" },
     { path: "update-webhook-disconnected", name: "Ao desconectar" },
-    { path: "update-webhook-send", name: "Ao enviar" },
+    { path: "update-webhook-message-status", name: "Receber status da mensagem" },
+    { path: "update-webhook-chat-presence", name: "Presença do chat" },
   ];
 
   const results: { name: string; success: boolean }[] = [];
@@ -473,13 +471,7 @@ export async function registerRoutes(
       const instanceName = `quanta_${userId.substring(0, 8)}_${Date.now()}`;
       const result = await service.createInstance(instanceName);
 
-      // Build webhook URL - prefer production URL, then custom, then dev
-      const webhookBaseUrl = process.env.WEBHOOK_BASE_URL 
-        || (process.env.REPLIT_DEPLOYMENT_URL ? `https://${process.env.REPLIT_DEPLOYMENT_URL}` : null)
-        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-        || process.env.BASE_URL 
-        || 'http://localhost:5000';
-      const webhookUrl = `${webhookBaseUrl}/webhooks/evolution`;
+      const webhookUrl = getWebhookUrl("evolution");
 
       await storage.createEvolutionConfig({
         userId,
@@ -1533,8 +1525,193 @@ export async function registerRoutes(
 
   // ==================== WEBHOOK ROUTES ====================
 
-  // CORS preflight for webhooks
-  app.options("/webhooks/evolution", (req: Request, res: Response) => {
+  // ---- Z-API Dedicated Webhook ----
+  app.options("/api/webhooks/zapi", (_req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
+    res.status(200).end();
+  });
+
+  app.post("/api/webhooks/zapi", async (req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
+
+    try {
+      if (!req.body || Object.keys(req.body).length === 0) {
+        log("Z-API webhook received with empty body", "zapi-webhook");
+        return res.status(200).json({ received: true, message: "Empty body" });
+      }
+
+      const { phone, type, text, messageId, senderName, chatName, fromMe, isGroup } = req.body;
+
+      log(`Z-API Webhook: type=${type} phone=${phone || "N/A"}`, "zapi-webhook");
+
+      if (isGroup) {
+        log(`Skipping group message from ${phone}`, "zapi-webhook");
+        return res.status(200).json({ received: true, message: "Group message skipped" });
+      }
+
+      if (req.body.notification) {
+        log(`Skipping notification: ${req.body.notification}`, "zapi-webhook");
+        return res.status(200).json({ received: true, message: "Notification skipped" });
+      }
+
+      if (type === "ReceivedCallback" && !fromMe && phone) {
+        let messageContent = "[Mensagem]";
+        if (text?.message) {
+          messageContent = text.message;
+        } else if (req.body.image?.caption) {
+          messageContent = req.body.image.caption;
+        } else if (req.body.image) {
+          messageContent = "[Imagem]";
+        } else if (req.body.audio) {
+          messageContent = "[Áudio]";
+        } else if (req.body.video) {
+          messageContent = req.body.video.caption || "[Vídeo]";
+        } else if (req.body.document) {
+          messageContent = "[Documento]";
+        } else if (req.body.sticker) {
+          messageContent = "[Sticker]";
+        } else if (req.body.contact) {
+          messageContent = "[Contato]";
+        } else if (req.body.location) {
+          messageContent = "[Localização]";
+        }
+
+        const remoteJid = `${phone}@s.whatsapp.net`;
+        const contactName = senderName || chatName || phone;
+
+        const adminUser = await storage.getUserByEmail("admin@quantaflow.com");
+        const userId = adminUser?.id;
+
+        if (userId) {
+          let conversation = await storage.getConversationByRemoteJid(userId, remoteJid);
+
+          if (!conversation) {
+            conversation = await storage.createConversation({
+              userId,
+              remoteJid,
+              contactName,
+              contactPhone: phone,
+              lastMessage: messageContent,
+              lastMessageAt: new Date(),
+              unreadCount: "1",
+            });
+          } else {
+            const currentUnread = parseInt(conversation.unreadCount || "0");
+            await storage.updateConversation(conversation.id, {
+              lastMessage: messageContent,
+              lastMessageAt: new Date(),
+              unreadCount: String(currentUnread + 1),
+              contactName: contactName || conversation.contactName,
+            });
+          }
+
+          const newMessage = await storage.createMessage({
+            conversationId: conversation.id,
+            userId,
+            messageId: messageId || `zapi_${Date.now()}`,
+            direction: "incoming",
+            content: messageContent,
+            timestamp: new Date(),
+          });
+
+          log(`Z-API message saved: ${newMessage.id} from ${phone}`, "zapi-webhook");
+
+          emitMessageReceived(userId, {
+            message: newMessage,
+            conversation: await storage.getConversation(conversation.id),
+          });
+
+          if (messageContent && !["[Mensagem]", "[Imagem]", "[Sticker]", "[Contato]", "[Localização]"].includes(messageContent)) {
+            try {
+              let crmContact = await storage.findUnifiedContactByIdentifier(userId, "whatsapp", phone);
+              if (!crmContact) {
+                crmContact = await storage.findUnifiedContactByPhoneOrEmail(userId, phone);
+              }
+
+              if (!crmContact) {
+                crmContact = await storage.createUnifiedContact({
+                  userId,
+                  nome: contactName || phone,
+                  telefone: phone,
+                  pipelineStage: "novo",
+                  temperature: "frio",
+                  lastIntent: "indefinido",
+                });
+                await storage.createContactIdentifier({
+                  unifiedContactId: crmContact.id,
+                  channelType: "whatsapp",
+                  identifier: phone,
+                  displayName: contactName || phone,
+                });
+                log(`CRM: Auto-created contact ${crmContact.id} for ${phone}`, "zapi-webhook");
+              }
+
+              const intentResult = await processMessageIntent(
+                messageContent,
+                crmContact.id,
+                userId,
+                storage
+              );
+
+              if (intentResult) {
+                await storage.createOmnichannelMessage({
+                  unifiedContactId: crmContact.id,
+                  channelType: "whatsapp",
+                  direction: "incoming",
+                  content: messageContent,
+                  externalMessageId: messageId || `zapi_${Date.now()}`,
+                  detectedIntent: intentResult.intent,
+                  intentConfidence: String(intentResult.confidence),
+                  userId,
+                  timestamp: new Date(),
+                });
+                log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "zapi-webhook");
+              }
+            } catch (intentError) {
+              console.error("CRM/Intent processing error (non-blocking):", intentError);
+            }
+          }
+        }
+      }
+
+      if (type === "SentCallback" && fromMe && phone) {
+        log(`Z-API sent confirmation for ${phone}`, "zapi-webhook");
+      }
+
+      if (type === "MessageStatusCallback") {
+        const status = req.body.status;
+        log(`Z-API message status: ${status} for messageId=${messageId}`, "zapi-webhook");
+      }
+
+      if (type === "ConnectedCallback") {
+        log(`Z-API instance connected`, "zapi-webhook");
+        const adminUser2 = await storage.getUserByEmail("admin@quantaflow.com");
+        if (adminUser2) {
+          emitInstanceConnected(adminUser2.id, { status: "connected" });
+        }
+      }
+
+      if (type === "DisconnectedCallback") {
+        log(`Z-API instance disconnected: ${req.body.reason || "unknown"}`, "zapi-webhook");
+      }
+
+      if (type === "PresenceChatCallback") {
+        log(`Z-API presence: ${req.body.presence} for ${phone}`, "zapi-webhook");
+      }
+
+      return res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Z-API webhook error:", error);
+      return res.status(200).json({ received: true, error: "Processing error" });
+    }
+  });
+
+  // ---- Evolution API Webhook (legacy) ----
+  app.options("/webhooks/evolution", (_req: Request, res: Response) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
@@ -1542,164 +1719,17 @@ export async function registerRoutes(
   });
 
   app.post("/webhooks/evolution", async (req: Request, res: Response) => {
-    // Set CORS headers for webhook responses
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
-    
+
     try {
-      console.log("Webhook raw body:", JSON.stringify(req.body, null, 2));
-      
       if (!req.body || Object.keys(req.body).length === 0) {
-        log("Webhook received with empty body", "webhook");
+        log("Evolution webhook received with empty body", "webhook");
         return res.status(200).json({ received: true, message: "Empty body" });
       }
 
-      // Detect if it's Z-API format (has 'phone' field) or Evolution API format
-      const isZApi = req.body.phone !== undefined;
-      
-      if (isZApi) {
-        // Z-API webhook format - uses 'type' field, not 'event'
-        const { phone, type, text, messageId, senderName, chatName, fromMe, isGroup } = req.body;
-        
-        log(`Z-API Webhook received: type=${type} from ${phone}`, "webhook");
-        console.log("Z-API parsed data:", { type, phone, fromMe, isGroup });
-
-        // Skip group messages and notification-only webhooks (no actual message content)
-        if (isGroup) {
-          log(`Skipping group message from ${phone}`, "webhook");
-          return res.status(200).json({ received: true, message: "Group message skipped" });
-        }
-
-        if (req.body.notification) {
-          log(`Skipping notification webhook: ${req.body.notification}`, "webhook");
-          return res.status(200).json({ received: true, message: "Notification skipped" });
-        }
-
-        // Z-API uses type: ReceivedCallback (incoming), MessageStatusCallback, etc.
-        if (type === "ReceivedCallback" && !fromMe) {
-          let messageContent = "[Mensagem]";
-          if (text?.message) {
-            messageContent = text.message;
-          } else if (req.body.image?.caption) {
-            messageContent = req.body.image.caption;
-          } else if (req.body.audio) {
-            messageContent = "[Áudio]";
-          } else if (req.body.video) {
-            messageContent = req.body.video.caption || "[Vídeo]";
-          } else if (req.body.document) {
-            messageContent = "[Documento]";
-          }
-
-          const remoteJid = `${phone}@s.whatsapp.net`;
-          const contactName = senderName || chatName || phone;
-          
-          // Associate messages with admin user for now
-          const adminUser = await storage.getUserByEmail("admin@quantaflow.com");
-          const userId = adminUser?.id;
-          
-          if (userId) {
-            let conversation = await storage.getConversationByRemoteJid(userId, remoteJid);
-
-            if (!conversation) {
-              conversation = await storage.createConversation({
-                userId,
-                remoteJid,
-                contactName,
-                contactPhone: phone,
-                lastMessage: messageContent,
-                lastMessageAt: new Date(),
-                unreadCount: "1",
-              });
-            } else {
-              const currentUnread = parseInt(conversation.unreadCount || "0");
-              await storage.updateConversation(conversation.id, {
-                lastMessage: messageContent,
-                lastMessageAt: new Date(),
-                unreadCount: String(currentUnread + 1),
-                contactName: contactName || conversation.contactName,
-              });
-            }
-
-            const newMessage = await storage.createMessage({
-              conversationId: conversation.id,
-              userId,
-              messageId: messageId || `zapi_${Date.now()}`,
-              direction: "incoming",
-              content: messageContent,
-              timestamp: new Date(),
-            });
-
-            log(`Z-API message saved: ${newMessage.id}`, "webhook");
-
-            emitMessageReceived(userId, {
-              message: newMessage,
-              conversation: await storage.getConversation(conversation.id),
-            });
-
-            // AI Intent Detection - auto-classify and update CRM contact
-            if (messageContent && messageContent !== "[Mensagem]") {
-              try {
-                let crmContact = await storage.findUnifiedContactByIdentifier(userId, "whatsapp", phone);
-                if (!crmContact) {
-                  crmContact = await storage.findUnifiedContactByPhoneOrEmail(userId, phone);
-                }
-
-                if (!crmContact) {
-                  crmContact = await storage.createUnifiedContact({
-                    userId,
-                    nome: contactName || phone,
-                    telefone: phone,
-                    pipelineStage: "novo",
-                    temperature: "frio",
-                    lastIntent: "indefinido",
-                  });
-                  await storage.createContactIdentifier({
-                    unifiedContactId: crmContact.id,
-                    channelType: "whatsapp",
-                    identifier: phone,
-                    displayName: contactName || phone,
-                  });
-                  log(`CRM: Auto-created contact ${crmContact.id} for ${phone}`, "webhook");
-                }
-
-                const intentResult = await processMessageIntent(
-                  messageContent,
-                  crmContact.id,
-                  userId,
-                  storage
-                );
-
-                if (intentResult) {
-                  await storage.createOmnichannelMessage({
-                    unifiedContactId: crmContact.id,
-                    channelType: "whatsapp",
-                    direction: "incoming",
-                    content: messageContent,
-                    externalMessageId: messageId || `zapi_${Date.now()}`,
-                    detectedIntent: intentResult.intent,
-                    intentConfidence: String(intentResult.confidence),
-                    userId,
-                    timestamp: new Date(),
-                  });
-                  log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "webhook");
-                }
-              } catch (intentError) {
-                console.error("CRM/Intent processing error (non-blocking):", intentError);
-              }
-            }
-          }
-        }
-
-        // Handle sent message confirmation
-        if (type === "MessageStatusCallback" || type === "SentCallback") {
-          log(`Z-API status update: ${type}`, "webhook");
-        }
-
-        return res.status(200).json({ received: true });
-      }
-
-      // Evolution API webhook format (original code)
+      // Evolution API webhook format
       const body = req.body.data ? req.body.data : req.body;
       const event = body.event || req.body.event;
       const data = body.data || body;
