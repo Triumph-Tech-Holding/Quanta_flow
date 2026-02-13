@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Lock, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { QuantaLogo } from "@/components/quanta-logo";
 import { loginUserSchema, type LoginUser } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
@@ -17,6 +17,7 @@ export default function Login() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginUser>({
     resolver: zodResolver(loginUserSchema),
@@ -117,11 +118,21 @@ export default function Login() {
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
                             placeholder="Sua senha"
-                            type="password"
-                            className="pl-10"
+                            type={showPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
                             data-testid="input-password"
                             {...field}
                           />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0"
+                            onClick={() => setShowPassword(!showPassword)}
+                            data-testid="button-toggle-password"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
                         </div>
                       </FormControl>
                       <FormMessage />
