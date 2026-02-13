@@ -1060,6 +1060,44 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/users/:id/reset-password", authenticateToken, checkPermission("edit_users"), async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.params.id as string;
+      const { newPassword } = req.body;
+
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return res.status(400).json({ message: "A nova senha deve ter pelo menos 6 caracteres" });
+      }
+
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(userId, {
+        password: hashedPassword,
+        mustChangePassword: true,
+        tokenVersion: targetUser.tokenVersion + 1,
+      });
+
+      await db.insert(auditLogs).values({
+        userId: req.user!.userId,
+        action: "reset_password",
+        resource: "users",
+        resourceId: userId,
+        newValue: JSON.stringify({ mustChangePassword: true }),
+        ipAddress: (req.ip || req.socket.remoteAddress || "unknown") as string,
+        userAgent: (req.headers["user-agent"] || "unknown") as string,
+      });
+
+      res.json({ message: "Senha resetada com sucesso. O usuário precisará trocar a senha no próximo login." });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Erro ao resetar senha" });
+    }
+  });
+
   app.post("/api/admin/users", authenticateToken, checkPermission("create_users"), async (req: AuthRequest, res: Response) => {
     try {
       const { nome, email, password, roleId } = req.body;

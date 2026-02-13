@@ -44,12 +44,6 @@ const mainMenuItems = [
     url: "/dashboard",
     icon: LayoutDashboard,
   },
-  {
-    title: "Configurações",
-    url: "/settings",
-    icon: Settings,
-    permission: "view_settings",
-  },
 ];
 
 const modulesMenuItems = [
@@ -100,6 +94,12 @@ const modulesMenuItems = [
 ];
 
 const adminMenuItems = [
+  {
+    title: "Configurações API",
+    url: "/settings",
+    icon: Settings,
+    permission: "view_settings",
+  },
   {
     title: "Branding",
     url: "/admin/branding",
@@ -195,23 +195,20 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainMenuItems.map((item) => {
-                if (item.permission && !hasPermission(item.permission)) return null;
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url}
-                      data-testid={`nav-${item.title.toLowerCase()}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {mainMenuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === item.url}
+                    data-testid={`nav-${item.title.toLowerCase()}`}
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -311,12 +308,12 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {hasPermission("view_settings") && (
-              <DropdownMenuItem data-testid="menu-settings">
+            <DropdownMenuItem asChild data-testid="menu-settings">
+              <Link href="/user-settings">
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
-              </DropdownMenuItem>
-            )}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}

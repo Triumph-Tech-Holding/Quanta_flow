@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Shield, UserPlus, Loader2, Eye, EyeOff } from "lucide-react";
+import { Shield, UserPlus, Loader2, Eye, EyeOff, KeyRound } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -101,6 +101,9 @@ export default function AdminUsers() {
   const [createPassword, setCreatePassword] = useState("");
   const [createRole, setCreateRole] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -140,6 +143,27 @@ export default function AdminUsers() {
       setShowCreateDialog(false);
       resetCreateForm();
       toast({ title: "Colaborador adicionado com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      const response = await apiRequest("POST", `/api/admin/users/${userId}/reset-password`, { newPassword });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Erro ao resetar senha");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setResetPasswordUser(null);
+      setResetNewPassword("");
+      setShowResetPassword(false);
+      toast({ title: "Senha resetada com sucesso. O usuário precisará trocar a senha no próximo login." });
     },
     onError: (error: Error) => {
       toast({ title: error.message, variant: "destructive" });
@@ -289,14 +313,25 @@ export default function AdminUsers() {
                             )}
                           </div>
                           {hasPermission("edit_users") && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(u)}
-                              data-testid={`button-edit-${u.id}`}
-                            >
-                              Editar
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setResetPasswordUser(u); setResetNewPassword(""); setShowResetPassword(false); }}
+                                data-testid={`button-reset-password-${u.id}`}
+                              >
+                                <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                                Resetar Senha
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEdit(u)}
+                                data-testid={`button-edit-${u.id}`}
+                              >
+                                Editar
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </CardContent>
@@ -458,6 +493,68 @@ export default function AdminUsers() {
                 <UserPlus className="h-4 w-4 mr-2" />
               )}
               Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!resetPasswordUser} onOpenChange={(open) => { if (!open) { setResetPasswordUser(null); setResetNewPassword(""); setShowResetPassword(false); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resetar Senha</DialogTitle>
+          </DialogHeader>
+          {resetPasswordUser && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Definir nova senha temporária para <span className="font-medium text-foreground">{resetPasswordUser.nome}</span> ({resetPasswordUser.email}).
+                O usuário precisará trocar a senha no próximo login.
+              </p>
+              <div>
+                <Label htmlFor="reset-password">Nova senha temporária *</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="reset-password"
+                    type={showResetPassword ? "text" : "password"}
+                    value={resetNewPassword}
+                    onChange={(e) => setResetNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="pr-10"
+                    data-testid="input-reset-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                    tabIndex={-1}
+                  >
+                    {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setResetPasswordUser(null); setResetNewPassword(""); setShowResetPassword(false); }} data-testid="button-cancel-reset">
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!resetPasswordUser) return;
+                if (!resetNewPassword || resetNewPassword.length < 6) {
+                  toast({ title: "A senha deve ter pelo menos 6 caracteres", variant: "destructive" });
+                  return;
+                }
+                resetPasswordMutation.mutate({ userId: resetPasswordUser.id, newPassword: resetNewPassword });
+              }}
+              disabled={resetPasswordMutation.isPending}
+              data-testid="button-confirm-reset"
+            >
+              {resetPasswordMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <KeyRound className="h-4 w-4 mr-2" />
+              )}
+              Resetar Senha
             </Button>
           </DialogFooter>
         </DialogContent>
