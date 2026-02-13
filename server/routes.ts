@@ -1060,6 +1060,70 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/users", authenticateToken, checkPermission("create_users"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { nome, email, password, roleId } = req.body;
+
+      if (!nome || typeof nome !== "string" || nome.trim().length < 2) {
+        return res.status(400).json({ message: "Nome deve ter pelo menos 2 caracteres" });
+      }
+      if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Email inválido" });
+      }
+      if (!password || typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({ message: "A senha deve ter pelo menos 6 caracteres" });
+      }
+      if (!roleId || typeof roleId !== "string") {
+        return res.status(400).json({ message: "Nível de acesso é obrigatório" });
+      }
+
+      const [validRole] = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
+      if (!validRole) {
+        return res.status(400).json({ message: "Nível de acesso inválido" });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        return res.status(400).json({ message: "Este email já está cadastrado" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const newUser = await storage.createUser({
+        nome: nome.trim(),
+        email: normalizedEmail,
+        password: hashedPassword,
+        tipoAtor: "agente_fidelizacao",
+        mustChangePassword: true,
+        status: "active",
+      });
+
+      await db.insert(userRoles).values({
+        userId: newUser.id,
+        roleId: validRole.id,
+        assignedBy: req.user!.userId,
+      });
+
+      await db.insert(auditLogs).values({
+        userId: req.user!.userId,
+        action: "create_user",
+        resource: "users",
+        resourceId: newUser.id,
+        newValue: JSON.stringify({ nome: nome.trim(), email: normalizedEmail, role: validRole.name, roleId }),
+        ipAddress: (req.ip || req.socket.remoteAddress || "unknown") as string,
+        userAgent: (req.headers["user-agent"] || "unknown") as string,
+      });
+
+      const rbac = await getUserRolesAndPermissions(newUser.id);
+      const { password: _, ...safeUser } = newUser;
+      res.status(201).json({ ...safeUser, roles: rbac.roles, permissions: rbac.permissions });
+    } catch (error) {
+      console.error("Create user error:", error);
+      res.status(500).json({ message: "Erro ao criar usuário" });
+    }
+  });
+
   app.get("/api/admin/audit-logs", authenticateToken, checkPermission("view_audit_logs"), async (req: AuthRequest, res: Response) => {
     try {
       const { page = "1", limit = "50", resource, action } = req.query;

@@ -5,14 +5,16 @@ import { Redirect } from "wouter";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Shield, Users, Loader2 } from "lucide-react";
+import { Shield, UserPlus, Loader2, Eye, EyeOff } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -74,12 +76,31 @@ function getRoleLabel(role: string) {
   }
 }
 
+function getRoleDescription(role: string) {
+  switch (role) {
+    case "super_admin":
+      return "Acesso total ao sistema";
+    case "admin":
+      return "Gerente com acesso limitado";
+    case "user":
+      return "Atendente com acesso básico";
+    default:
+      return "";
+  }
+}
+
 export default function AdminUsers() {
   const { user, hasPermission, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editStatus, setEditStatus] = useState("");
   const [editRole, setEditRole] = useState("");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createNome, setCreateNome] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createRole, setCreateRole] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -87,7 +108,7 @@ export default function AdminUsers() {
 
   const { data: rolesData = [] } = useQuery<Role[]>({
     queryKey: ["/api/admin/roles"],
-    enabled: hasPermission("manage_roles"),
+    enabled: hasPermission("manage_roles") || hasPermission("assign_roles") || hasPermission("create_users"),
   });
 
   const updateUserMutation = useMutation({
@@ -104,6 +125,34 @@ export default function AdminUsers() {
       toast({ title: "Erro ao atualizar usuário", variant: "destructive" });
     },
   });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { nome: string; email: string; password: string; roleId?: string }) => {
+      const response = await apiRequest("POST", "/api/admin/users", data);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Erro ao criar colaborador");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setShowCreateDialog(false);
+      resetCreateForm();
+      toast({ title: "Colaborador adicionado com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  function resetCreateForm() {
+    setCreateNome("");
+    setCreateEmail("");
+    setCreatePassword("");
+    setCreateRole("");
+    setShowPassword(false);
+  }
 
   if (authLoading) {
     return (
@@ -137,6 +186,29 @@ export default function AdminUsers() {
     updateUserMutation.mutate({ userId: editingUser.id, data });
   };
 
+  const handleCreate = () => {
+    if (!createNome.trim() || !createEmail.trim() || !createPassword.trim()) {
+      toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
+      return;
+    }
+    if (createPassword.length < 6) {
+      toast({ title: "A senha deve ter pelo menos 6 caracteres", variant: "destructive" });
+      return;
+    }
+    const selectedRole = rolesData.find((r) => r.name === createRole);
+    if (!selectedRole) {
+      toast({ title: "Selecione o nível de acesso", variant: "destructive" });
+      return;
+    }
+
+    createUserMutation.mutate({
+      nome: createNome.trim(),
+      email: createEmail.trim().toLowerCase(),
+      password: createPassword,
+      roleId: selectedRole.id,
+    });
+  };
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -159,11 +231,20 @@ export default function AdminUsers() {
             <div className="max-w-6xl mx-auto space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
+                  <Shield className="h-5 w-5 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
-                    {users.length} usuário{users.length !== 1 ? "s" : ""}
+                    {users.length} colaborador{users.length !== 1 ? "es" : ""}
                   </span>
                 </div>
+                {hasPermission("create_users") && (
+                  <Button
+                    onClick={() => setShowCreateDialog(true)}
+                    data-testid="button-add-collaborator"
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Adicionar Colaborador
+                  </Button>
+                )}
               </div>
 
               {isLoading ? (
@@ -191,10 +272,20 @@ export default function AdminUsers() {
                                   {getRoleLabel(r)}
                                 </Badge>
                               ))}
+                              {u.mustChangePassword && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Senha temporária
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-1" data-testid={`text-email-${u.id}`}>{u.email}</p>
                             {u.telefone && (
                               <p className="text-xs text-muted-foreground">{u.telefone}</p>
+                            )}
+                            {u.roles[0] && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {getRoleDescription(u.roles[0])}
+                              </p>
                             )}
                           </div>
                           {hasPermission("edit_users") && (
@@ -234,7 +325,7 @@ export default function AdminUsers() {
                 <p className="text-sm text-muted-foreground">{editingUser.email}</p>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Status</label>
+                <Label className="text-sm font-medium mb-1 block">Status</Label>
                 <Select value={editStatus} onValueChange={setEditStatus}>
                   <SelectTrigger data-testid="select-status">
                     <SelectValue />
@@ -248,7 +339,7 @@ export default function AdminUsers() {
               </div>
               {hasPermission("assign_roles") && (
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Role</label>
+                  <Label className="text-sm font-medium mb-1 block">Nível de Acesso</Label>
                   <Select value={editRole} onValueChange={setEditRole}>
                     <SelectTrigger data-testid="select-role">
                       <SelectValue />
@@ -256,7 +347,7 @@ export default function AdminUsers() {
                     <SelectContent>
                       {rolesData.map((r) => (
                         <SelectItem key={r.id} value={r.name}>
-                          {getRoleLabel(r.name)}
+                          {getRoleLabel(r.name)} — {getRoleDescription(r.name)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -278,6 +369,95 @@ export default function AdminUsers() {
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); resetCreateForm(); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Colaborador</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="create-nome" className="text-sm font-medium mb-1 block">Nome *</Label>
+              <Input
+                id="create-nome"
+                placeholder="Nome completo"
+                value={createNome}
+                onChange={(e) => setCreateNome(e.target.value)}
+                data-testid="input-create-nome"
+              />
+            </div>
+            <div>
+              <Label htmlFor="create-email" className="text-sm font-medium mb-1 block">Email *</Label>
+              <Input
+                id="create-email"
+                type="email"
+                placeholder="email@exemplo.com"
+                value={createEmail}
+                onChange={(e) => setCreateEmail(e.target.value)}
+                data-testid="input-create-email"
+              />
+            </div>
+            <div>
+              <Label htmlFor="create-password" className="text-sm font-medium mb-1 block">Senha temporária *</Label>
+              <div className="relative">
+                <Input
+                  id="create-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Mínimo 6 caracteres"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  data-testid="input-create-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0"
+                  onClick={() => setShowPassword(!showPassword)}
+                  data-testid="button-toggle-password"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                O colaborador precisará trocar a senha no primeiro acesso.
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-1 block">Nível de Acesso *</Label>
+              <Select value={createRole} onValueChange={setCreateRole}>
+                <SelectTrigger data-testid="select-create-role">
+                  <SelectValue placeholder="Selecione o nível de acesso" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rolesData.map((r) => (
+                    <SelectItem key={r.id} value={r.name}>
+                      {getRoleLabel(r.name)} — {getRoleDescription(r.name)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); resetCreateForm(); }} data-testid="button-cancel-create">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={createUserMutation.isPending}
+              data-testid="button-confirm-create"
+            >
+              {createUserMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <UserPlus className="h-4 w-4 mr-2" />
+              )}
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
