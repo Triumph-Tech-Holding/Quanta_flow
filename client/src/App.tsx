@@ -18,6 +18,7 @@ import ContactProfile from "@/pages/contact-profile";
 import AutomationPage from "@/pages/automation";
 import AdminBranding from "@/pages/admin-branding";
 import UserSettings from "@/pages/user-settings";
+import ForgotPassword from "@/pages/forgot-password";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -71,6 +72,9 @@ function Router() {
       </Route>
       <Route path="/register">
         <PublicRoute component={Register} />
+      </Route>
+      <Route path="/forgot-password">
+        <PublicRoute component={ForgotPassword} />
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute component={Dashboard} />

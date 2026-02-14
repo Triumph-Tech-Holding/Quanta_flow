@@ -28,6 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (storedToken) {
       setToken(storedToken);
+      const cachedUser = localStorage.getItem("user");
+      if (cachedUser) {
+        try {
+          const parsed = JSON.parse(cachedUser);
+          if (parsed.roles && parsed.permissions) {
+            setUser(parsed);
+          }
+        } catch {}
+      }
       fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${storedToken}` },
       })

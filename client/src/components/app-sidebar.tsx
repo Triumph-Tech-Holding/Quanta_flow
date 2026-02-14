@@ -154,7 +154,7 @@ interface BrandingData {
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout, hasPermission, hasRole } = useAuth();
 
   const { data: branding } = useQuery<BrandingData>({
     queryKey: ["/api/branding"],
@@ -165,8 +165,9 @@ export function AppSidebar() {
     window.location.href = "/login";
   };
 
+  const isAdmin = user?.tipoAtor === "admin" || hasRole("super_admin") || hasRole("admin");
   const visibleAdminItems = adminMenuItems.filter(
-    (item) => hasPermission(item.permission)
+    (item) => hasPermission(item.permission) || isAdmin
   );
 
   return (
