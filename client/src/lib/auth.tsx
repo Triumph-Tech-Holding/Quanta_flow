@@ -74,14 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const hasPermission = (permission: string): boolean => {
-    if (!user?.permissions) return false;
-    return user.permissions.includes(permission);
-  };
-
   const hasRole = (role: string): boolean => {
     if (!user?.roles) return false;
     return user.roles.includes(role);
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    if (user?.permissions && user.permissions.includes(permission)) return true;
+    if (user?.tipoAtor === "admin" || hasRole("super_admin")) return true;
+    return false;
   };
 
   return (

@@ -76,7 +76,7 @@ function formatDate(dateStr: string) {
 }
 
 export default function AdminAuditLogs() {
-  const { user, hasPermission, isLoading: authLoading } = useAuth();
+  const { user, hasPermission, hasRole, isLoading: authLoading } = useAuth();
   const [page, setPage] = useState(1);
   const limit = 20;
 
@@ -102,7 +102,8 @@ export default function AdminAuditLogs() {
     );
   }
 
-  if (!user || !hasPermission("view_audit_logs")) {
+  const isAdmin = user?.tipoAtor === "admin" || hasRole("super_admin") || hasRole("admin");
+  if (!user || (!hasPermission("view_audit_logs") && !isAdmin)) {
     return <Redirect to="/dashboard" />;
   }
 

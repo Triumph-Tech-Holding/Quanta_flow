@@ -90,7 +90,7 @@ function getRoleDescription(role: string) {
 }
 
 export default function AdminUsers() {
-  const { user, hasPermission, isLoading: authLoading } = useAuth();
+  const { user, hasPermission, hasRole, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editStatus, setEditStatus] = useState("");
@@ -186,7 +186,8 @@ export default function AdminUsers() {
     );
   }
 
-  if (!user || !hasPermission("view_users")) {
+  const isAdmin = user?.tipoAtor === "admin" || hasRole("super_admin") || hasRole("admin");
+  if (!user || (!hasPermission("view_users") && !isAdmin)) {
     return <Redirect to="/dashboard" />;
   }
 
