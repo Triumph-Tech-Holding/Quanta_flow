@@ -287,7 +287,7 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
