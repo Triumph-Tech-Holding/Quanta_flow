@@ -16,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 interface Setting {
   id: string;
@@ -270,15 +273,28 @@ export default function SettingsPage() {
     return TYPES.find((t) => t.value === type)?.label || type;
   };
 
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between gap-2 p-2 border-b sticky top-0 z-50 bg-background">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <h1 className="text-lg font-semibold">Configurações</h1>
+            </div>
+            <ThemeToggle />
+          </header>
+
+          <main className="flex-1 overflow-auto p-6">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <SettingsIcon className="h-6 w-6" />
-              Configurações
-            </h1>
             <p className="text-muted-foreground">
               Gerencie as credenciais e configurações das APIs
             </p>
@@ -573,6 +589,9 @@ export default function SettingsPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
