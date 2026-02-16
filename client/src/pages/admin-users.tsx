@@ -446,18 +446,18 @@ export default function AdminUsers() {
                   placeholder="Mínimo 6 caracteres"
                   value={createPassword}
                   onChange={(e) => setCreatePassword(e.target.value)}
+                  className="pr-10"
                   data-testid="input-create-password"
                 />
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
                   data-testid="button-toggle-password"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+                </button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 O colaborador precisará trocar a senha no primeiro acesso.

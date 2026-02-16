@@ -4,9 +4,97 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocket } from "./socket";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { users, roles, permissions, rolePermissions, userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+
+const RBAC_SEED = {
+  roles: [
+    { name: "super_admin", description: "Acesso total ao sistema" },
+    { name: "admin", description: "Gerente com acesso limitado" },
+    { name: "user", description: "Atendente com acesso básico" },
+  ],
+  permissions: [
+    { name: "view_settings", resource: "settings", action: "view", description: "Visualizar configurações" },
+    { name: "edit_settings", resource: "settings", action: "edit", description: "Editar configurações" },
+    { name: "delete_settings", resource: "settings", action: "delete", description: "Deletar configurações" },
+    { name: "view_users", resource: "users", action: "view", description: "Visualizar usuários" },
+    { name: "create_users", resource: "users", action: "create", description: "Criar usuários" },
+    { name: "edit_users", resource: "users", action: "edit", description: "Editar usuários" },
+    { name: "delete_users", resource: "users", action: "delete", description: "Deletar usuários" },
+    { name: "view_audit_logs", resource: "audit_logs", action: "view", description: "Visualizar logs" },
+    { name: "export_audit_logs", resource: "audit_logs", action: "export", description: "Exportar logs" },
+    { name: "view_inbox", resource: "inbox", action: "view", description: "Visualizar inbox" },
+    { name: "edit_inbox", resource: "inbox", action: "edit", description: "Editar inbox" },
+    { name: "view_leads", resource: "leads", action: "view", description: "Visualizar leads" },
+    { name: "create_leads", resource: "leads", action: "create", description: "Criar leads" },
+    { name: "edit_leads", resource: "leads", action: "edit", description: "Editar leads" },
+    { name: "view_api_configs", resource: "api_configs", action: "view", description: "Visualizar APIs" },
+    { name: "edit_api_configs", resource: "api_configs", action: "edit", description: "Editar APIs" },
+    { name: "manage_roles", resource: "roles", action: "manage", description: "Gerenciar roles" },
+    { name: "assign_roles", resource: "roles", action: "assign", description: "Atribuir roles" },
+  ],
+  rolePermissions: {
+    super_admin: "all",
+    admin: [
+      "view_settings", "edit_settings",
+      "view_users", "create_users", "edit_users",
+      "view_audit_logs",
+      "view_inbox", "edit_inbox",
+      "view_leads", "create_leads", "edit_leads",
+    ],
+    user: [
+      "view_inbox", "edit_inbox",
+      "view_leads", "create_leads", "edit_leads",
+    ],
+  } as Record<string, string | string[]>,
+};
+
+async function ensureRBAC() {
+  try {
+    const existingRoles = await db.select({ name: roles.name }).from(roles);
+    if (existingRoles.length >= 3) {
+      log(`RBAC seed OK (${existingRoles.length} roles)`, "seed");
+      return;
+    }
+
+    for (const r of RBAC_SEED.roles) {
+      const exists = existingRoles.find((er) => er.name === r.name);
+      if (!exists) {
+        await db.insert(roles).values(r);
+      }
+    }
+
+    const existingPerms = await db.select({ name: permissions.name }).from(permissions);
+    for (const p of RBAC_SEED.permissions) {
+      const exists = existingPerms.find((ep) => ep.name === p.name);
+      if (!exists) {
+        await db.insert(permissions).values(p);
+      }
+    }
+
+    const allRoles = await db.select().from(roles);
+    const allPerms = await db.select().from(permissions);
+    const existingRP = await db.select().from(rolePermissions);
+
+    for (const [roleName, permList] of Object.entries(RBAC_SEED.rolePermissions)) {
+      const role = allRoles.find((r) => r.name === roleName);
+      if (!role) continue;
+
+      const assignPerms = permList === "all" ? allPerms : allPerms.filter((p) => (permList as string[]).includes(p.name));
+      for (const perm of assignPerms) {
+        const exists = existingRP.find((rp) => rp.roleId === role.id && rp.permissionId === perm.id);
+        if (!exists) {
+          await db.insert(rolePermissions).values({ roleId: role.id, permissionId: perm.id });
+        }
+      }
+    }
+
+    log(`RBAC seed completed (${RBAC_SEED.roles.length} roles, ${RBAC_SEED.permissions.length} permissions)`, "seed");
+  } catch (err) {
+    console.error("Error seeding RBAC:", err);
+  }
+}
 
 async function ensureAdminUser() {
   try {
@@ -95,6 +183,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await ensureRBAC();
   await ensureAdminUser();
   await registerRoutes(httpServer, app);
 
