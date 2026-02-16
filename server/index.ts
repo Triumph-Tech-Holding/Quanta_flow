@@ -3,6 +3,38 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocket } from "./socket";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+
+async function ensureAdminUser() {
+  try {
+    const existing = await db
+      .select({ id: users.id, tipoAtor: users.tipoAtor })
+      .from(users)
+      .where(eq(users.email, "admin@quantaflow.com"))
+      .limit(1);
+
+    if (existing.length === 0) {
+      const hashedPassword = await bcrypt.hash("Admin@123", 10);
+      await db.insert(users).values({
+        email: "admin@quantaflow.com",
+        password: hashedPassword,
+        nome: "Admin",
+        tipoAtor: "admin",
+        status: "active",
+        tokenVersion: 0,
+        mustChangePassword: false,
+      });
+      log("Admin user created: admin@quantaflow.com", "seed");
+    } else {
+      log(`Admin user exists (id: ${existing[0].id})`, "seed");
+    }
+  } catch (err) {
+    console.error("Error ensuring admin user:", err);
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -63,6 +95,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await ensureAdminUser();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

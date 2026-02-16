@@ -1,7 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { userRoles, rolePermissions, permissions, roles } from "@shared/schema";
+import { userRoles, rolePermissions, permissions, roles, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+
+const ALL_PERMISSIONS = [
+  "view_settings", "edit_settings", "delete_settings",
+  "view_users", "create_users", "edit_users", "delete_users",
+  "view_audit_logs", "export_audit_logs",
+  "view_inbox", "edit_inbox",
+  "view_leads", "create_leads", "edit_leads",
+  "view_api_configs", "edit_api_configs",
+  "manage_roles", "assign_roles",
+];
 
 interface RBACRequest extends Request {
   user?: {
@@ -11,6 +21,15 @@ interface RBACRequest extends Request {
     roles?: string[];
     permissions?: string[];
   };
+}
+
+async function isAdminUser(userId: string): Promise<boolean> {
+  const user = await db
+    .select({ tipoAtor: users.tipoAtor })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return user.length > 0 && user[0].tipoAtor === "admin";
 }
 
 export async function getUserRolesAndPermissions(userId: string): Promise<{
@@ -28,13 +47,12 @@ export async function getUserRolesAndPermissions(userId: string): Promise<{
   const roleNames = userRoleRows.map((r) => r.roleName);
 
   if (roleNames.length === 0) {
+    const admin = await isAdminUser(userId);
+    if (admin) {
+      return { roles: ["super_admin"], permissions: [...ALL_PERMISSIONS] };
+    }
     return { roles: [], permissions: [] };
   }
-
-  const roleIds = await db
-    .select({ id: roles.id })
-    .from(roles)
-    .where(eq(roles.name, roleNames[0]));
 
   let allPermNames: string[] = [];
   for (const roleName of roleNames) {
@@ -57,6 +75,13 @@ export async function getUserRolesAndPermissions(userId: string): Promise<{
 
   const uniquePerms = Array.from(new Set(allPermNames));
 
+  if (uniquePerms.length === 0) {
+    const admin = await isAdminUser(userId);
+    if (admin) {
+      return { roles: roleNames, permissions: [...ALL_PERMISSIONS] };
+    }
+  }
+
   return { roles: roleNames, permissions: uniquePerms };
 }
 
@@ -67,18 +92,26 @@ export function checkPermission(requiredPermission: string) {
     }
 
     try {
-      const { permissions: userPerms } = await getUserRolesAndPermissions(req.user.userId);
+      const { permissions: userPerms, roles: userRolesList } = await getUserRolesAndPermissions(req.user.userId);
 
-      if (!userPerms.includes(requiredPermission)) {
-        await logUnauthorizedAccess(req, requiredPermission);
-        return res.status(403).json({
-          message: "Acesso negado. Permissão insuficiente.",
-          required: requiredPermission,
-        });
+      if (userPerms.includes(requiredPermission)) {
+        req.user.permissions = userPerms;
+        req.user.roles = userRolesList;
+        return next();
       }
 
-      req.user.permissions = userPerms;
-      next();
+      const admin = await isAdminUser(req.user.userId);
+      if (admin) {
+        req.user.permissions = [...ALL_PERMISSIONS];
+        req.user.roles = userRolesList.length > 0 ? userRolesList : ["super_admin"];
+        return next();
+      }
+
+      await logUnauthorizedAccess(req, requiredPermission);
+      return res.status(403).json({
+        message: "Acesso negado. Permissão insuficiente.",
+        required: requiredPermission,
+      });
     } catch (error) {
       console.error("[rbac] Error checking permission:", error);
       return res.status(500).json({ message: "Erro ao verificar permissões" });
@@ -95,16 +128,22 @@ export function checkRole(requiredRole: string) {
     try {
       const { roles: userRoleNames } = await getUserRolesAndPermissions(req.user.userId);
 
-      if (!userRoleNames.includes(requiredRole)) {
-        await logUnauthorizedAccess(req, `role:${requiredRole}`);
-        return res.status(403).json({
-          message: "Acesso negado. Role insuficiente.",
-          required: requiredRole,
-        });
+      if (userRoleNames.includes(requiredRole)) {
+        req.user.roles = userRoleNames;
+        return next();
       }
 
-      req.user.roles = userRoleNames;
-      next();
+      const admin = await isAdminUser(req.user.userId);
+      if (admin) {
+        req.user.roles = ["super_admin"];
+        return next();
+      }
+
+      await logUnauthorizedAccess(req, `role:${requiredRole}`);
+      return res.status(403).json({
+        message: "Acesso negado. Role insuficiente.",
+        required: requiredRole,
+      });
     } catch (error) {
       console.error("[rbac] Error checking role:", error);
       return res.status(500).json({ message: "Erro ao verificar role" });
