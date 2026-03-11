@@ -7,6 +7,7 @@ import { db } from "./db";
 import { users, roles, permissions, rolePermissions, userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { jobQueue } from "./jobQueue";
 
 const RBAC_SEED = {
   roles: [
@@ -185,6 +186,7 @@ app.use((req, res, next) => {
 (async () => {
   await ensureRBAC();
   await ensureAdminUser();
+  jobQueue.start();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

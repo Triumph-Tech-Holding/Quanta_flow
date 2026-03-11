@@ -1,8 +1,8 @@
 import { storage } from "../storage";
 import { emitMessageReceived } from "../socket";
 import { processMessageIntent } from "./intentService";
-import { getWhatsAppProvider } from "./whatsappProvider";
 import { log } from "../index";
+import { jobQueue } from "../jobQueue";
 
 export interface IncomingMessageParams {
   userId: string;
@@ -89,6 +89,9 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
         await storage.autoAssignContact(userId, crmContact.id);
       }
 
+      // Cancela jobs de inatividade pendentes para este contato (nova mensagem reinicia o timer)
+      jobQueue.cancelByContactAndType(crmContact.id, "check_inactivity");
+
       const intentResult = await processMessageIntent(messageContent, crmContact.id, userId, storage);
 
       if (intentResult) {
@@ -106,28 +109,61 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
         log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "msg-processor");
       }
 
-      // TAREFA 1: Conectar automação ao webhook
+      // Automação com delay e steps
       try {
         const automationFlow = await storage.findMatchingAutomationFlow(userId, messageContent);
         if (automationFlow && automationFlow.isActive) {
-          const provider = await getWhatsAppProvider(userId);
-          const responseText = automationFlow.responseTemplate;
-          
-          try {
-            const result = await provider.sendMessage(phone, responseText);
-            log(`[${provider}] Auto-response sent: ${result.messageId} to ${phone}`, "msg-processor");
+          const delay = (automationFlow.responseDelay ?? 10) * 1000;
+          const now = Date.now();
 
-            // Salvar resposta automática como mensagem outgoing
-            await storage.createMessage({
-              conversationId: conversation.id,
-              userId,
-              messageId: `auto_${result.messageId}`,
-              direction: "outgoing",
-              content: responseText,
-              timestamp: new Date(),
+          const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
+
+          if (steps && steps.length > 0) {
+            // Fluxo multi-etapa: agendar cada step com seu delay
+            const sorted = [...steps].sort((a, b) => a.order - b.order);
+            for (const step of sorted) {
+              const runAt = now + (step.delaySeconds * 1000);
+              jobQueue.add({
+                type: "send_message",
+                payload: {
+                  userId,
+                  phone,
+                  message: step.message,
+                  conversationId: conversation.id,
+                },
+                runAt,
+              });
+            }
+            log(`Automation: scheduled ${sorted.length} steps for ${phone}`, "msg-processor");
+          } else {
+            // Fluxo simples: usar responseTemplate com responseDelay
+            jobQueue.add({
+              type: "send_message",
+              payload: {
+                userId,
+                phone,
+                message: automationFlow.responseTemplate,
+                conversationId: conversation.id,
+              },
+              runAt: now + delay,
             });
-          } catch (sendErr) {
-            log(`Failed to send auto-response: ${sendErr instanceof Error ? sendErr.message : "unknown error"}`, "msg-processor");
+            log(`Automation: scheduled response to ${phone} in ${delay / 1000}s`, "msg-processor");
+          }
+
+          // Agendar job de inatividade após o envio
+          if (automationFlow.inactivityTimeout && automationFlow.inactivityTimeout > 0) {
+            const inactivityMs = automationFlow.inactivityTimeout * 60 * 1000;
+            jobQueue.add({
+              type: "check_inactivity",
+              payload: {
+                userId,
+                contactId: crmContact.id,
+                conversationId: conversation.id,
+                lastMessageAt: now,
+                inactivityTimeout: automationFlow.inactivityTimeout,
+              },
+              runAt: now + delay + inactivityMs,
+            });
           }
         }
       } catch (automationErr) {

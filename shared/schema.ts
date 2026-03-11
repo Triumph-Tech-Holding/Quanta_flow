@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, integer, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -378,6 +378,7 @@ export const automationFlows = pgTable("automation_flows", {
   interruptCondition: text("interrupt_condition"),
   summaryEnabled: boolean("summary_enabled").default(false),
   summaryFields: text("summary_fields"),
+  steps: jsonb("steps").$type<Array<{ order: number; message: string; delaySeconds: number }>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -473,6 +474,11 @@ export const updateAutomationFlowSchema = z.object({
   interruptCondition: z.string().optional().nullable(),
   summaryEnabled: z.boolean().optional().nullable(),
   summaryFields: z.string().optional().nullable(),
+  steps: z.array(z.object({
+    order: z.number().int(),
+    message: z.string(),
+    delaySeconds: z.number().int().min(0),
+  })).optional().nullable(),
 });
 
 export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({
