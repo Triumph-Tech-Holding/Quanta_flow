@@ -1,0 +1,283 @@
+SPRINT 4 — QUANTA FLOW
+Objetivo: Implementar fila de leads, atribuição de agentes, SLA de resposta,
+microlearning automático e saídas condicionais entre assistentes.
+
+=== CONTEXTO DO SISTEMA ===
+
+Stack:
+- Backend: Node.js + Express + Drizzle ORM
+- Banco: PostgreSQL (produção) — 49 contatos reais, NÃO pode quebrar
+- Frontend: React + Vite + TypeScript + Shadcn UI + Tailwind CSS
+- API: REST via React Query v5 + WebSocket via Socket.io
+- Deploy: Replit (produção separado do desenvolvimento)
+- ORM: Drizzle — todas as mudanças de schema via migration
+
+=== O QUE FOI ENTREGUE NOS SPRINTS ANTERIORES ===
+
+SPRINT 1 (concluído):
+- findMatchingAutomationFlow() conectada ao webhook
+- detectIntent() chamada automaticamente a cada mensagem recebida
+- sendMessage() disparada automaticamente quando há match de keyword
+- Fluxo: mensagem recebida → IA classifica → keyword bate → resposta enviada
+
+SPRINT 2 (concluído):
+- Schema atualizado com 9 novos campos no automation_flows:
+  systemPrompt, initialMessage, temperature, responseDelay,
+  inactivityTimeout, successCondition, interruptCondition,
+  summaryEnabled, summaryFields
+- Frontend /automation com formulário das 7 seções completas
+
+SPRINT 3 (concluído):
+- JobQueue in-memory implementada em server/jobQueue.ts
+- Delay de resposta via jobQueue (responseDelay em segundos)
+- Inatividade via job 'check_inactivity' (inactivityTimeout em minutos)
+- Fluxos multi-etapa com campo steps (jsonb) na tabela automation_flows
+- 4 templates pré-configurados: Qualificador, Resolutivo,
+  Transacional, Especialista
+
+=== O QUE ESTÁ FALTANDO (GAPS DO SPRINT 4) ===
+
+GAP 1: Sem fila de leads e atribuição de agentes
+- Não existe fila de leads aguardando atendimento humano
+- Não existe atribuição de lead para agente específico
+- Não existe visibilidade de quem está atendendo quem
+
+GAP 2: Sem SLA e prazo de resposta
+- Não existe tempo máximo de resposta configurável
+- Não existe alerta quando lead fica sem resposta por muito tempo
+- Não existe notificação para agente ou supervisor
+
+GAP 3: Sem microlearning automático
+- Não existe tabela learning_tracks no banco
+- Não existe disparo de conteúdo educativo por intent ou stage
+- Não existe worker processando trilhas de aprendizado
+
+GAP 4: Sem saídas condicionais entre assistentes
+- Não existe encadeamento de assistentes (A → B → C)
+- Não existe lógica de transferência baseada em condição
+- Não existe roteamento por setor (vendas, suporte, financeiro)
+
+=== TAREFAS EXATAS A EXECUTAR ===
+
+--- TAREFA 4.1 — FILA DE LEADS E ATRIBUIÇÃO DE AGENTES ---
+
+  a) Adicionar campos à tabela unified_contacts via migration Drizzle:
+     assignedAgentId    integer    (nullable, FK → users.id)
+     queueStatus        text       (nullable, valores: 'waiting' |
+                                   'assigned' | 'resolved')
+     queueEnteredAt     timestamp  (nullable)
+     assignedAt         timestamp  (nullable)
+
+  b) Criar nova tabela agent_assignments:
+     id                 serial primary key
+     contactId          integer    (FK → unified_contacts.id)
+     agentId            integer    (FK → users.id)
+     assignedAt         timestamp  (default: now())
+     resolvedAt         timestamp  (nullable)
+     resolvedBy         integer    (nullable, FK → users.id)
+     notes              text       (nullable)
+
+  c) Criar endpoints no backend:
+     GET  /api/queue              → lista leads com queueStatus = 'waiting'
+                                    ordenados por queueEnteredAt ASC
+     POST /api/queue/:contactId/assign  → atribui agente ao lead
+          body: { agentId }
+          ação: atualiza assignedAgentId, queueStatus = 'assigned',
+                assignedAt = now(), cria registro em agent_assignments
+     POST /api/queue/:contactId/resolve → marca como resolvido
+          ação: atualiza queueStatus = 'resolved',
+                atualiza resolvedAt em agent_assignments
+
+  d) Atualizar processIncomingWhatsAppMessage():
+     - Quando interruptCondition for atingida (transferência para humano):
+       atualizar queueStatus = 'waiting', queueEnteredAt = now()
+     - Quando successCondition for atingida:
+       atualizar queueStatus = 'resolved'
+
+  e) Atualizar o frontend:
+     - Na página /crm (Kanban), adicionar coluna ou badge mostrando
+       queueStatus do lead (aguardando, atribuído, resolvido)
+     - Criar aba ou seção "Fila de Atendimento" na página /inbox
+       mostrando leads com queueStatus = 'waiting' ordenados por tempo
+     - Botão "Assumir atendimento" que chama POST /api/queue/:id/assign
+       com o agente logado
+     - Botão "Resolver" que chama POST /api/queue/:id/resolve
+
+--- TAREFA 4.2 — SLA E ALERTAS DE RESPOSTA ---
+
+  a) Adicionar campos à tabela unified_contacts via migration Drizzle:
+     slaDeadline        timestamp  (nullable)
+     slaBreached        boolean    (default: false)
+
+  b) Adicionar campo global de SLA nas configurações:
+     Na tabela branding_config (já existe), adicionar:
+     defaultSlaMinutes  integer    (nullable, default: 60)
+
+  c) Lógica de SLA no backend:
+     - Quando lead entra na fila (queueStatus = 'waiting'):
+       calcular slaDeadline = now() + defaultSlaMinutes
+     - Criar job no jobQueue do tipo 'check_sla':
+       runAt = slaDeadline
+       payload: { contactId, agentId (se atribuído) }
+
+  d) Handler do job 'check_sla' na jobQueue:
+     - Verificar se queueStatus ainda é 'waiting' ou 'assigned'
+     - Se sim: marcar slaBreached = true no contato
+     - Logar o breach com contactId e timestamp
+     - (Notificação por WhatsApp para agente: implementar apenas se
+        sendMessage() estiver disponível e agente tiver número cadastrado)
+
+  e) Atualizar o frontend:
+     - Na fila de atendimento, exibir timer regressivo até slaDeadline
+     - Leads com slaBreached = true devem aparecer em vermelho
+     - Badge de alerta ⚠️ no lead com SLA vencido
+
+--- TAREFA 4.3 — MICROLEARNING AUTOMÁTICO ---
+
+  a) Criar nova tabela learning_tracks via migration Drizzle:
+     id             serial primary key
+     userId         integer    (FK → users.id)
+     stageOrIntent  text       (ex: 'qualificado', 'duvida', 'novo')
+     stepOrder      integer    (ordem da etapa na trilha)
+     delayHours     numeric(5,2) (horas de delay antes de enviar)
+     contentType    text       (valores: 'texto' | 'video' | 'link')
+     content        text       (mensagem, URL do vídeo ou link)
+     isActive       boolean    (default: true)
+
+  b) Criar endpoints no backend:
+     GET    /api/learning-tracks         → lista trilhas do usuário
+     POST   /api/learning-tracks         → cria nova trilha
+     PUT    /api/learning-tracks/:id     → atualiza trilha
+     DELETE /api/learning-tracks/:id     → remove trilha
+
+  c) Criar worker de microlearning em server/learningWorker.ts:
+     - Rodar a cada 5 minutos via setInterval
+     - Para cada contato ativo (lastContactAt nas últimas 48h):
+       verificar se há trilha ativa para o stageOrIntent atual
+       verificar se o step já foi enviado para esse contato
+       se não foi: criar job 'send_message' com
+         runAt = lastContactAt + delayHours
+         message = content da trilha
+     - Criar tabela learning_deliveries para controle de envios:
+       id, contactId, trackId, stepOrder, sentAt, status
+
+  d) Criar tabela learning_deliveries via migration Drizzle:
+     id          serial primary key
+     contactId   integer    (FK → unified_contacts.id)
+     trackId     integer    (FK → learning_tracks.id)
+     stepOrder   integer
+     sentAt      timestamp  (nullable)
+     status      text       (valores: 'pending' | 'sent' | 'failed')
+
+  e) Atualizar o frontend:
+     - Criar página /learning-tracks com CRUD das trilhas
+     - Formulário com campos: stageOrIntent (select), stepOrder
+       (automático), delayHours, contentType (select), content
+       (textarea), isActive (toggle)
+     - Botão "Adicionar etapa" para criar steps sequenciais
+     - Visualização das etapas em ordem com delay entre elas
+
+--- TAREFA 4.4 — SAÍDAS CONDICIONAIS ENTRE ASSISTENTES ---
+
+  a) Adicionar campo à tabela automation_flows via migration Drizzle:
+     conditionalExits   jsonb   (nullable, default: null)
+
+     Estrutura do campo conditionalExits:
+     [
+       {
+         "condition": "cliente_com_problema",
+         "label": "Problema no Pedido",
+         "targetFlowId": 5,
+         "triggerKeywords": ["problema", "errado", "cancelar"]
+       },
+       {
+         "condition": "suporte_tecnico",
+         "label": "Suporte Técnico",
+         "targetFlowId": 8,
+         "triggerKeywords": ["não funciona", "erro", "bug"]
+       },
+       {
+         "condition": "financeiro",
+         "label": "Financeiro",
+         "targetFlowId": 12,
+         "triggerKeywords": ["pagamento", "boleto", "reembolso"]
+       }
+     ]
+
+  b) Atualizar processIncomingWhatsAppMessage():
+     - Após verificar fluxo principal, verificar conditionalExits
+     - Para cada exit: checar se alguma triggerKeyword bate com
+       a mensagem recebida
+     - Se bater: trocar o fluxo ativo do contato para targetFlowId
+     - Criar job 'send_message' com a initialMessage do novo fluxo
+     - Salvar o fluxo ativo atual do contato em campo
+       activeFlowId na tabela unified_contacts
+
+  c) Adicionar campo à tabela unified_contacts via migration Drizzle:
+     activeFlowId   integer   (nullable, FK → automation_flows.id)
+
+  d) Atualizar o frontend /automation:
+     - Adicionar seção "Saídas Condicionais" no formulário do fluxo
+     - Botão "Adicionar saída" cria novo exit com campos:
+       label (texto), targetFlowId (select com fluxos existentes),
+       triggerKeywords (input de tags)
+     - Visualização das saídas como cards com seta indicando
+       o fluxo de destino
+
+=== ORDEM DE EXECUÇÃO ===
+
+1. Migration: adicionar campos em unified_contacts
+   (assignedAgentId, queueStatus, queueEnteredAt, assignedAt,
+    slaDeadline, slaBreached, activeFlowId)
+2. Migration: criar tabela agent_assignments
+3. Migration: criar tabela learning_tracks
+4. Migration: criar tabela learning_deliveries
+5. Migration: adicionar conditionalExits em automation_flows
+6. Migration: adicionar defaultSlaMinutes em branding_config
+7. Confirmar que todos os 49 contatos em produção estão íntegros
+8. Implementar endpoints /api/queue (tarefa 4.1c)
+9. Atualizar processIncomingWhatsAppMessage() com fila + SLA +
+   saídas condicionais (tarefas 4.1d, 4.2c, 4.4b)
+10. Adicionar handlers de jobs 'check_sla' na jobQueue (tarefa 4.2d)
+11. Criar server/learningWorker.ts (tarefa 4.3c)
+12. Implementar endpoints /api/learning-tracks (tarefa 4.3b)
+13. Atualizar frontend /inbox com fila de atendimento (tarefa 4.1e)
+14. Atualizar frontend /crm com badges de status (tarefa 4.1e)
+15. Atualizar frontend /automation com saídas condicionais (tarefa 4.4d)
+16. Criar página /learning-tracks no frontend (tarefa 4.3e)
+17. Testar fluxo completo: lead entra na fila → agente assume →
+    SLA conta → microlearning dispara → saída condicional redireciona
+
+=== RESTRIÇÕES IMPORTANTES ===
+
+- NÃO deletar ou renomear campos existentes no banco
+- NÃO alterar tabelas de contatos, conversas ou mensagens existentes
+- NÃO quebrar os 49 contatos em produção
+- NÃO alterar o que foi implementado nos Sprints 1, 2 e 3
+- Todos os novos campos devem ser NULLABLE ou ter DEFAULT seguro
+- learningWorker deve ser tolerante a falhas: erro em 1 contato
+  não pode travar o worker inteiro (usar try/catch por contato)
+- jobQueue já implementada no Sprint 3: apenas adicionar novos
+  handlers, NÃO reescrever a classe
+- NÃO implementar integrações externas (CRM, Zapier, Sheets)
+  isso é Sprint 5
+
+=== ENTREGA ESPERADA ===
+
+1. Mostrar todas as migrations geradas e aplicadas
+2. Confirmar integridade dos 49 contatos após migrations
+3. Mostrar endpoints /api/queue implementados
+4. Mostrar processIncomingWhatsAppMessage() atualizado
+5. Mostrar server/learningWorker.ts criado
+6. Mostrar página /learning-tracks no frontend
+7. Mostrar seção de saídas condicionais no formulário /automation
+8. Mostrar fila de atendimento na página /inbox
+9. Testar: lead aciona interruptCondition → entra na fila →
+   agente assume → SLA inicia → resolver o atendimento
+10. Testar: lead muda de stage → microlearning dispara após delay
+11. Testar: lead envia keyword de saída condicional →
+    fluxo muda para assistente de destino
+
+Não faça mais nada além do que está descrito acima.
+Este é o Sprint 4. O Sprint 5 (integrações externas e canais
+adicionais) será passado separadamente.
