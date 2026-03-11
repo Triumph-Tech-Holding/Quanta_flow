@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -369,6 +369,15 @@ export const automationFlows = pgTable("automation_flows", {
   triggerKeywords: text("trigger_keywords").notNull(),
   responseTemplate: text("response_template").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  systemPrompt: text("system_prompt"),
+  initialMessage: text("initial_message"),
+  temperature: real("temperature").default(0.4),
+  responseDelay: integer("response_delay").default(10),
+  inactivityTimeout: integer("inactivity_timeout").default(10),
+  successCondition: text("success_condition"),
+  interruptCondition: text("interrupt_condition"),
+  summaryEnabled: boolean("summary_enabled").default(false),
+  summaryFields: text("summary_fields"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -455,6 +464,15 @@ export const updateAutomationFlowSchema = z.object({
   triggerKeywords: z.string().optional(),
   responseTemplate: z.string().optional(),
   isActive: z.boolean().optional(),
+  systemPrompt: z.string().optional().nullable(),
+  initialMessage: z.string().optional().nullable(),
+  temperature: z.number().min(0).max(1).optional().nullable(),
+  responseDelay: z.number().int().min(0).optional().nullable(),
+  inactivityTimeout: z.number().int().min(0).optional().nullable(),
+  successCondition: z.string().optional().nullable(),
+  interruptCondition: z.string().optional().nullable(),
+  summaryEnabled: z.boolean().optional().nullable(),
+  summaryFields: z.string().optional().nullable(),
 });
 
 export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({
