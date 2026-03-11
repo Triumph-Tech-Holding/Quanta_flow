@@ -2,7 +2,7 @@ import { log } from "./index";
 import { getWhatsAppProvider } from "./services/whatsappProvider";
 import { storage } from "./storage";
 
-export type JobType = "send_message" | "check_inactivity";
+export type JobType = "send_message" | "check_inactivity" | "check_sla";
 export type JobStatus = "pending" | "running" | "done" | "failed" | "cancelled";
 
 interface SendMessagePayload {
@@ -20,10 +20,15 @@ interface CheckInactivityPayload {
   inactivityTimeout: number;
 }
 
+interface CheckSlaPayload {
+  contactId: string;
+  userId: string;
+}
+
 export interface Job {
   id: string;
   type: JobType;
-  payload: SendMessagePayload | CheckInactivityPayload;
+  payload: SendMessagePayload | CheckInactivityPayload | CheckSlaPayload;
   runAt: number;
   status: JobStatus;
   createdAt: number;
@@ -127,6 +132,16 @@ class JobQueue {
         return;
       }
       log(`JobQueue: check_inactivity — contact ${p.contactId} inactive after ${p.inactivityTimeout}min`, "jobqueue");
+    } else if (job.type === "check_sla") {
+      const p = job.payload as CheckSlaPayload;
+      const contact = await storage.getUnifiedContact(p.contactId);
+      if (!contact) return;
+      if (contact.queueStatus === "waiting" || contact.queueStatus === "assigned") {
+        await storage.markSlaBreached(p.contactId);
+        log(`JobQueue: check_sla — SLA BREACHED for contact ${p.contactId} (${contact.nome})`, "jobqueue");
+      } else {
+        log(`JobQueue: check_sla — contact ${p.contactId} already resolved, skipping`, "jobqueue");
+      }
     }
   }
 }

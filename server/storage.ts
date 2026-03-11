@@ -1,9 +1,10 @@
-import { eq, desc, and, or, ilike, asc, sql as sqlExpr } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, sql as sqlExpr, gte, isNotNull, lte, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, leads, apiConfigs, evolutionConfigs, conversations, messages,
   unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
   quickReplies, automationFlows, brandingConfig, userRoles, roles,
+  agentAssignments, learningTracks, learningDeliveries,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -14,7 +15,10 @@ import {
   type Channel, type InsertChannel,
   type QuickReply, type InsertQuickReply, type UpdateQuickReply,
   type AutomationFlow, type InsertAutomationFlow, type UpdateAutomationFlow,
-  type BrandingConfig, type InsertBrandingConfig, type UpdateBrandingConfig
+  type BrandingConfig, type InsertBrandingConfig, type UpdateBrandingConfig,
+  type AgentAssignment, type InsertAgentAssignment,
+  type LearningTrack, type InsertLearningTrack, type UpdateLearningTrack,
+  type LearningDelivery, type InsertLearningDelivery,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -557,6 +561,125 @@ export class DatabaseStorage implements IStorage {
     } catch {
       return undefined;
     }
+  }
+
+  // ==================== Queue Management ====================
+
+  async getQueueContacts(userId: string): Promise<UnifiedContact[]> {
+    return db.select().from(unifiedContacts)
+      .where(and(
+        eq(unifiedContacts.userId, userId),
+        inArray(unifiedContacts.queueStatus, ["waiting", "assigned"]),
+      ))
+      .orderBy(asc(unifiedContacts.queueEnteredAt));
+  }
+
+  async enterQueue(contactId: string, slaMinutes: number = 60): Promise<UnifiedContact | undefined> {
+    const now = new Date();
+    const slaDeadline = new Date(now.getTime() + slaMinutes * 60 * 1000);
+    const [updated] = await db.update(unifiedContacts)
+      .set({ queueStatus: "waiting", queueEnteredAt: now, slaDeadline, slaBreached: false, updatedAt: now })
+      .where(eq(unifiedContacts.id, contactId))
+      .returning();
+    return updated;
+  }
+
+  async assignContactToAgent(contactId: string, agentId: string): Promise<UnifiedContact | undefined> {
+    const now = new Date();
+    const [updated] = await db.update(unifiedContacts)
+      .set({ queueStatus: "assigned", assignedAt: now, assignedToUserId: agentId, updatedAt: now })
+      .where(eq(unifiedContacts.id, contactId))
+      .returning();
+    if (updated) {
+      await db.insert(agentAssignments).values({ contactId, agentId, assignedAt: now });
+    }
+    return updated;
+  }
+
+  async resolveContact(contactId: string, resolvedBy: string): Promise<UnifiedContact | undefined> {
+    const now = new Date();
+    const [updated] = await db.update(unifiedContacts)
+      .set({ queueStatus: "resolved", updatedAt: now })
+      .where(eq(unifiedContacts.id, contactId))
+      .returning();
+    if (updated) {
+      await db.update(agentAssignments)
+        .set({ resolvedAt: now, resolvedBy })
+        .where(and(
+          eq(agentAssignments.contactId, contactId),
+          sqlExpr`${agentAssignments.resolvedAt} IS NULL`,
+        ));
+    }
+    return updated;
+  }
+
+  async markSlaBreached(contactId: string): Promise<void> {
+    await db.update(unifiedContacts)
+      .set({ slaBreached: true, updatedAt: new Date() })
+      .where(eq(unifiedContacts.id, contactId));
+  }
+
+  // ==================== Learning Tracks ====================
+
+  async getLearningTracksByUser(userId: string): Promise<LearningTrack[]> {
+    return db.select().from(learningTracks)
+      .where(eq(learningTracks.userId, userId))
+      .orderBy(asc(learningTracks.stageOrIntent), asc(learningTracks.stepOrder));
+  }
+
+  async getLearningTracksByStageOrIntent(userId: string, stageOrIntent: string): Promise<LearningTrack[]> {
+    return db.select().from(learningTracks)
+      .where(and(
+        eq(learningTracks.userId, userId),
+        eq(learningTracks.stageOrIntent, stageOrIntent),
+        eq(learningTracks.isActive, true),
+      ))
+      .orderBy(asc(learningTracks.stepOrder));
+  }
+
+  async createLearningTrack(data: InsertLearningTrack): Promise<LearningTrack> {
+    const [track] = await db.insert(learningTracks).values(data).returning();
+    return track;
+  }
+
+  async updateLearningTrack(id: string, data: UpdateLearningTrack): Promise<LearningTrack | undefined> {
+    const [updated] = await db.update(learningTracks)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(learningTracks.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteLearningTrack(id: string): Promise<boolean> {
+    const result = await db.delete(learningTracks).where(eq(learningTracks.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getActiveLearningContacts(userId: string, sinceHours: number = 48): Promise<UnifiedContact[]> {
+    const cutoff = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+    return db.select().from(unifiedContacts)
+      .where(and(
+        eq(unifiedContacts.userId, userId),
+        isNotNull(unifiedContacts.lastContactAt),
+        gte(unifiedContacts.lastContactAt, cutoff),
+      ));
+  }
+
+  async getLearningDeliveriesForContact(contactId: string, trackId: string): Promise<LearningDelivery[]> {
+    return db.select().from(learningDeliveries)
+      .where(and(
+        eq(learningDeliveries.contactId, contactId),
+        eq(learningDeliveries.trackId, trackId),
+      ));
+  }
+
+  async createLearningDelivery(data: InsertLearningDelivery): Promise<LearningDelivery> {
+    const [delivery] = await db.insert(learningDeliveries).values(data).returning();
+    return delivery;
+  }
+
+  async updateLearningDelivery(id: string, data: Partial<LearningDelivery>): Promise<void> {
+    await db.update(learningDeliveries).set(data).where(eq(learningDeliveries.id, id));
   }
 }
 

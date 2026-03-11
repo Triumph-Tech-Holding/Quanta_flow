@@ -109,12 +109,94 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
         log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "msg-processor");
       }
 
-      // Automação com delay e steps
+      // === AUTOMAÇÃO ===
       try {
-        const automationFlow = await storage.findMatchingAutomationFlow(userId, messageContent);
+        // Buscar fluxo ativo do contato ou fluxo por keyword
+        let automationFlow = crmContact.activeFlowId
+          ? await storage.getAutomationFlow(crmContact.activeFlowId)
+          : null;
+
+        // Se não há fluxo ativo, buscar por keyword
+        if (!automationFlow || !automationFlow.isActive) {
+          automationFlow = await storage.findMatchingAutomationFlow(userId, messageContent);
+        }
+
         if (automationFlow && automationFlow.isActive) {
-          const delay = (automationFlow.responseDelay ?? 10) * 1000;
           const now = Date.now();
+          const msgLower = messageContent.toLowerCase();
+
+          // === 4.4: Verificar saídas condicionais ===
+          const conditionalExits = automationFlow.conditionalExits as Array<{
+            condition: string; label: string; targetFlowId: string; triggerKeywords: string[];
+          }> | null;
+
+          if (conditionalExits && conditionalExits.length > 0) {
+            for (const exit of conditionalExits) {
+              const matched = exit.triggerKeywords.some((kw) =>
+                msgLower.includes(kw.toLowerCase())
+              );
+              if (matched) {
+                const targetFlow = await storage.getAutomationFlow(exit.targetFlowId);
+                if (targetFlow && targetFlow.isActive) {
+                  await storage.updateUnifiedContact(crmContact.id, { activeFlowId: targetFlow.id });
+                  crmContact = { ...crmContact, activeFlowId: targetFlow.id };
+                  log(`Automation: conditional exit "${exit.label}" → flow ${targetFlow.id} for ${phone}`, "msg-processor");
+
+                  if (targetFlow.initialMessage) {
+                    const exitDelay = (targetFlow.responseDelay ?? 10) * 1000;
+                    jobQueue.add({
+                      type: "send_message",
+                      payload: { userId, phone, message: targetFlow.initialMessage, conversationId: conversation.id },
+                      runAt: now + exitDelay,
+                    });
+                  }
+                  automationFlow = targetFlow;
+                }
+                break;
+              }
+            }
+          }
+
+          // Atualizar activeFlowId se ainda não está definido
+          if (!crmContact.activeFlowId && automationFlow) {
+            await storage.updateUnifiedContact(crmContact.id, { activeFlowId: automationFlow.id });
+          }
+
+          const delay = (automationFlow.responseDelay ?? 10) * 1000;
+
+          // === 4.1d: Verificar interruptCondition → entrar na fila ===
+          if (automationFlow.interruptCondition) {
+            const interruptLower = automationFlow.interruptCondition.toLowerCase();
+            if (
+              msgLower.includes(interruptLower) ||
+              (intentResult && intentResult.intent === interruptLower)
+            ) {
+              const brandingCfg = await storage.getBrandingConfig(userId);
+              const slaMinutes = brandingCfg?.defaultSlaMinutes ?? 60;
+              const updated = await storage.enterQueue(crmContact.id, slaMinutes);
+              if (updated?.slaDeadline) {
+                const slaRunAt = new Date(updated.slaDeadline).getTime();
+                jobQueue.add({
+                  type: "check_sla",
+                  payload: { contactId: crmContact.id, userId },
+                  runAt: slaRunAt,
+                });
+              }
+              log(`Automation: contact ${crmContact.id} entered queue (interruptCondition matched)`, "msg-processor");
+              return;
+            }
+          }
+
+          // === 4.1d: Verificar successCondition → resolver ===
+          if (automationFlow.successCondition) {
+            const successLower = automationFlow.successCondition.toLowerCase();
+            if (msgLower.includes(successLower)) {
+              await storage.resolveContact(crmContact.id, userId);
+              await storage.updateUnifiedContact(crmContact.id, { activeFlowId: null });
+              log(`Automation: contact ${crmContact.id} resolved (successCondition matched)`, "msg-processor");
+              return;
+            }
+          }
 
           const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
 

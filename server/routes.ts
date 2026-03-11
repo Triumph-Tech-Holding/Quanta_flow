@@ -7,7 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -2003,6 +2003,85 @@ export async function registerRoutes(
   } else {
     log("Auto-refresh skipped: WEBHOOK_BASE_URL not set (development mode). Use 'Refresh Webhooks' button to update manually.", "zapi");
   }
+
+  // ==================== Queue Endpoints ====================
+
+  app.get("/api/queue", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const contacts = await storage.getQueueContacts(req.userId!);
+      res.json(contacts);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar fila" });
+    }
+  });
+
+  app.post("/api/queue/:contactId/assign", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const { agentId } = req.body;
+      const targetAgent = agentId || req.userId!;
+      const contact = await storage.assignContactToAgent(contactId, targetAgent);
+      if (!contact) return res.status(404).json({ message: "Contato não encontrado" });
+      res.json(contact);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao atribuir agente" });
+    }
+  });
+
+  app.post("/api/queue/:contactId/resolve", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const contact = await storage.resolveContact(contactId, req.userId!);
+      if (!contact) return res.status(404).json({ message: "Contato não encontrado" });
+      res.json(contact);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao resolver atendimento" });
+    }
+  });
+
+  // ==================== Learning Tracks Endpoints ====================
+
+  app.get("/api/learning-tracks", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const tracks = await storage.getLearningTracksByUser(req.userId!);
+      res.json(tracks);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar trilhas" });
+    }
+  });
+
+  app.post("/api/learning-tracks", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = insertLearningTrackSchema.safeParse({ ...req.body, userId: req.userId });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const track = await storage.createLearningTrack(parsed.data);
+      res.status(201).json(track);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao criar trilha" });
+    }
+  });
+
+  app.put("/api/learning-tracks/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = updateLearningTrackSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const track = await storage.updateLearningTrack(req.params.id, parsed.data);
+      if (!track) return res.status(404).json({ message: "Trilha não encontrada" });
+      res.json(track);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao atualizar trilha" });
+    }
+  });
+
+  app.delete("/api/learning-tracks/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const deleted = await storage.deleteLearningTrack(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Trilha não encontrada" });
+      res.json({ message: "Trilha removida" });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao remover trilha" });
+    }
+  });
 
   return httpServer;
 }

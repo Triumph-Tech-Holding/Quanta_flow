@@ -19,6 +19,7 @@ import AutomationPage from "@/pages/automation";
 import AdminBranding from "@/pages/admin-branding";
 import UserSettings from "@/pages/user-settings";
 import ForgotPassword from "@/pages/forgot-password";
+import LearningTracksPage from "@/pages/learning-tracks";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -108,6 +109,9 @@ function Router() {
       </Route>
       <Route path="/user-settings">
         <ProtectedRoute component={UserSettings} />
+      </Route>
+      <Route path="/learning-tracks">
+        <ProtectedRoute component={LearningTracksPage} />
       </Route>
       <Route component={NotFound} />
     </Switch>

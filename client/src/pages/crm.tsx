@@ -237,6 +237,21 @@ function ContactCard({
                 {contact.score}
               </Badge>
             )}
+            {(contact as any).queueStatus === "waiting" && (
+              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-queue-${contact.id}`}>
+                Aguardando
+              </Badge>
+            )}
+            {(contact as any).queueStatus === "assigned" && (
+              <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-queue-${contact.id}`}>
+                Atribuído
+              </Badge>
+            )}
+            {(contact as any).slaBreached && (
+              <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 border-red-300 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-sla-${contact.id}`}>
+                ⚠️ SLA
+              </Badge>
+            )}
           </div>
         </div>
       </CardContent>

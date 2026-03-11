@@ -8,6 +8,7 @@ import { users, roles, permissions, rolePermissions, userRoles } from "@shared/s
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
+import { startLearningWorker } from "./learningWorker";
 
 const RBAC_SEED = {
   roles: [
@@ -187,6 +188,7 @@ app.use((req, res, next) => {
   await ensureRBAC();
   await ensureAdminUser();
   jobQueue.start();
+  startLearningWorker();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

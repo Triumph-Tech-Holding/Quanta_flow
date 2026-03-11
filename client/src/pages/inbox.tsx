@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Inbox as InboxIcon, Settings, User, Phone, Mail, Thermometer, ChevronRight, X, MessageSquare, Zap, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Inbox as InboxIcon, Settings, User, Phone, Mail, Thermometer, ChevronRight, X, MessageSquare, Zap, Plus, Pencil, Trash2, Loader2, Clock, Users, CheckCircle, AlertTriangle, UserCheck } from "lucide-react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -528,6 +528,186 @@ function QuickRepliesManager() {
   );
 }
 
+interface QueueContact {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  queueStatus: string | null;
+  queueEnteredAt: string | null;
+  slaDeadline: string | null;
+  slaBreached: boolean | null;
+  assignedToUserId: string | null;
+}
+
+function SlaTimer({ deadline }: { deadline: string | null }) {
+  const [remaining, setRemaining] = useState("");
+
+  useEffect(() => {
+    if (!deadline) { setRemaining(""); return; }
+    const update = () => {
+      const diff = new Date(deadline).getTime() - Date.now();
+      if (diff <= 0) { setRemaining("Expirado"); return; }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${m}m ${s}s`);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [deadline]);
+
+  if (!deadline) return null;
+  const isExpired = remaining === "Expirado";
+  return (
+    <span className={`flex items-center gap-1 text-xs ${isExpired ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>
+      <Clock className="h-3 w-3" />
+      {remaining}
+    </span>
+  );
+}
+
+function QueuePanel() {
+  const { toast } = useToast();
+  const { data: queueContacts = [], isLoading, refetch } = useQuery<QueueContact[]>({
+    queryKey: ["/api/queue"],
+    refetchInterval: 30000,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const res = await apiRequest("POST", `/api/queue/${contactId}/assign`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/queue"] });
+      toast({ title: "Atendimento assumido!" });
+    },
+    onError: () => toast({ title: "Erro ao assumir atendimento", variant: "destructive" }),
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const res = await apiRequest("POST", `/api/queue/${contactId}/resolve`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/queue"] });
+      toast({ title: "Atendimento resolvido!" });
+    },
+    onError: () => toast({ title: "Erro ao resolver", variant: "destructive" }),
+  });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center h-40">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4" data-testid="queue-panel">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-semibold">Fila de Atendimento</h2>
+          <Badge variant="secondary">{queueContacts.length}</Badge>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-queue">
+          Atualizar
+        </Button>
+      </div>
+
+      {queueContacts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-32 text-center gap-2">
+          <CheckCircle className="h-8 w-8 text-green-500/40" />
+          <p className="text-sm text-muted-foreground">Nenhum lead aguardando atendimento</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {queueContacts.map((contact) => {
+            const isSlaBreached = contact.slaBreached;
+            const enteredAt = contact.queueEnteredAt ? new Date(contact.queueEnteredAt) : null;
+            const waitMinutes = enteredAt ? Math.floor((Date.now() - enteredAt.getTime()) / 60000) : 0;
+
+            return (
+              <Card
+                key={contact.id}
+                className={`${isSlaBreached ? "border-red-400 dark:border-red-700" : ""}`}
+                data-testid={`card-queue-contact-${contact.id}`}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-medium text-sm" data-testid={`text-queue-name-${contact.id}`}>
+                          {contact.nome}
+                        </span>
+                        {isSlaBreached && (
+                          <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 border-red-300">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            SLA Vencido
+                          </Badge>
+                        )}
+                        {contact.queueStatus === "assigned" && (
+                          <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-300">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Atribuído
+                          </Badge>
+                        )}
+                      </div>
+                      {contact.telefone && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {contact.telefone}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {enteredAt && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {waitMinutes < 60
+                              ? `${waitMinutes}min aguardando`
+                              : `${Math.floor(waitMinutes / 60)}h ${waitMinutes % 60}min aguardando`}
+                          </span>
+                        )}
+                        <SlaTimer deadline={contact.slaDeadline} />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      {contact.queueStatus === "waiting" && (
+                        <Button
+                          size="sm"
+                          onClick={() => assignMutation.mutate(contact.id)}
+                          disabled={assignMutation.isPending}
+                          data-testid={`button-assume-${contact.id}`}
+                          className="h-8 text-xs"
+                        >
+                          {assignMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserCheck className="h-3 w-3 mr-1" />}
+                          Assumir
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => resolveMutation.mutate(contact.id)}
+                        disabled={resolveMutation.isPending}
+                        data-testid={`button-resolve-${contact.id}`}
+                        className="h-8 text-xs"
+                      >
+                        {resolveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3 mr-1" />}
+                        Resolver
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InboxPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showLeadCard, setShowLeadCard] = useState(true);
@@ -580,6 +760,14 @@ export default function InboxPage() {
                     Respostas Rápidas
                   </TabsTrigger>
                   <TabsTrigger
+                    value="queue"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                    data-testid="tab-queue"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    Fila
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="settings"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
                     data-testid="tab-settings"
@@ -612,6 +800,12 @@ export default function InboxPage() {
 
               <TabsContent value="quick-replies" className="flex-1 m-0 p-6 overflow-auto">
                 <QuickRepliesManager />
+              </TabsContent>
+
+              <TabsContent value="queue" className="flex-1 m-0 p-6 overflow-auto">
+                <div className="max-w-2xl mx-auto">
+                  <QueuePanel />
+                </div>
               </TabsContent>
 
               <TabsContent value="settings" className="flex-1 m-0 p-6 overflow-auto">

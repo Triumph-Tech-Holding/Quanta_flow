@@ -18,14 +18,22 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import {
   Bot, Plus, Pencil, Trash2, Loader2, Zap, Tag, MessageSquare, Brain, Database,
   Thermometer, Clock, CheckCircle, XCircle, FileText, ListOrdered, ChevronRight,
-  Users, Wrench, ShoppingCart, GraduationCap, Sparkles,
+  Users, Wrench, ShoppingCart, GraduationCap, Sparkles, GitMerge, X as XIcon,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface FlowStep {
   order: number;
   message: string;
   delaySeconds: number;
+}
+
+interface ConditionalExit {
+  condition: string;
+  label: string;
+  targetFlowId: string;
+  triggerKeywords: string[];
 }
 
 interface AutomationFlow {
@@ -45,6 +53,7 @@ interface AutomationFlow {
   summaryEnabled: boolean | null;
   summaryFields: string | null;
   steps: FlowStep[] | null;
+  conditionalExits: ConditionalExit[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +72,7 @@ interface FlowFormState {
   summaryEnabled: boolean;
   summaryFields: string;
   steps: FlowStep[];
+  conditionalExits: ConditionalExit[];
 }
 
 const defaultForm: FlowFormState = {
@@ -79,6 +89,7 @@ const defaultForm: FlowFormState = {
   summaryEnabled: false,
   summaryFields: "",
   steps: [],
+  conditionalExits: [],
 };
 
 // ─── Templates de assistente ────────────────────────────────────────────────
@@ -202,7 +213,39 @@ export default function AutomationPage() {
     summaryEnabled: form.summaryEnabled,
     summaryFields: form.summaryFields || null,
     steps: form.steps.length > 0 ? form.steps : null,
+    conditionalExits: form.conditionalExits.length > 0 ? form.conditionalExits : null,
   });
+
+  function addExit() {
+    setForm((prev) => ({
+      ...prev,
+      conditionalExits: [
+        ...prev.conditionalExits,
+        { condition: "", label: "", targetFlowId: "", triggerKeywords: [] },
+      ],
+    }));
+  }
+
+  function removeExit(idx: number) {
+    setForm((prev) => ({
+      ...prev,
+      conditionalExits: prev.conditionalExits.filter((_, i) => i !== idx),
+    }));
+  }
+
+  function updateExit(idx: number, key: keyof ConditionalExit, value: string | string[]) {
+    setForm((prev) => ({
+      ...prev,
+      conditionalExits: prev.conditionalExits.map((e, i) =>
+        i === idx ? { ...e, [key]: value } : e
+      ),
+    }));
+  }
+
+  function updateExitKeywordInput(idx: number, rawInput: string) {
+    const keywords = rawInput.split(",").map((k) => k.trim()).filter(Boolean);
+    updateExit(idx, "triggerKeywords", keywords);
+  }
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -275,6 +318,7 @@ export default function AutomationPage() {
       summaryEnabled: flow.summaryEnabled ?? false,
       summaryFields: flow.summaryFields || "",
       steps: flow.steps || [],
+      conditionalExits: flow.conditionalExits || [],
     });
     setDialogOpen(true);
   }
@@ -826,6 +870,95 @@ export default function AutomationPage() {
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Adicionar Etapa
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* SEÇÃO 9 — Saídas Condicionais */}
+              <AccordionItem value="secao9">
+                <AccordionTrigger className="text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <GitMerge className="h-4 w-4 text-primary" />
+                    Seção 9 — Saídas Condicionais
+                    {form.conditionalExits.length > 0 && (
+                      <Badge className="ml-2 text-xs" variant="secondary">
+                        {form.conditionalExits.length} saída{form.conditionalExits.length > 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs text-muted-foreground">
+                      Configure transições para outros assistentes baseadas em keywords. Quando uma keyword é detectada, o contato é transferido para o fluxo de destino.
+                    </p>
+                    {form.conditionalExits.map((exit, idx) => (
+                      <div key={idx} className="border rounded-lg p-3 space-y-3 bg-muted/30">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-muted-foreground">Saída {idx + 1}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeExit(idx)}
+                            className="h-7 px-2 text-destructive hover:text-destructive"
+                            data-testid={`button-remove-exit-${idx}`}
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Rótulo da saída</Label>
+                          <Input
+                            value={exit.label}
+                            onChange={(e) => updateExit(idx, "label", e.target.value)}
+                            placeholder="Ex: Suporte Técnico, Financeiro..."
+                            data-testid={`input-exit-label-${idx}`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Fluxo de destino</Label>
+                          <Select
+                            value={exit.targetFlowId}
+                            onValueChange={(val) => updateExit(idx, "targetFlowId", val)}
+                          >
+                            <SelectTrigger data-testid={`select-exit-flow-${idx}`}>
+                              <SelectValue placeholder="Selecionar fluxo..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(flows || []).filter(f => f.id !== editingFlow?.id).map((f) => (
+                                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Keywords de gatilho (separadas por vírgula)</Label>
+                          <Input
+                            value={exit.triggerKeywords.join(", ")}
+                            onChange={(e) => updateExitKeywordInput(idx, e.target.value)}
+                            placeholder="Ex: suporte, ajuda, problema"
+                            data-testid={`input-exit-keywords-${idx}`}
+                          />
+                          {exit.triggerKeywords.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {exit.triggerKeywords.map((kw, ki) => (
+                                <Badge key={ki} variant="secondary" className="text-[10px]">{kw}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={addExit}
+                      className="w-full"
+                      data-testid="button-add-exit"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Saída Condicional
                     </Button>
                   </div>
                 </AccordionContent>

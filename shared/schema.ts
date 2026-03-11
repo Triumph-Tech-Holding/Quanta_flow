@@ -309,6 +309,12 @@ export const unifiedContacts = pgTable("unified_contacts", {
   score: integer("score").notNull().default(0),
   lastContactAt: timestamp("last_contact_at"),
   assignedToUserId: varchar("assigned_to_user_id", { length: 36 }).references(() => users.id),
+  queueStatus: varchar("queue_status", { length: 20 }),
+  queueEnteredAt: timestamp("queue_entered_at"),
+  assignedAt: timestamp("assigned_at"),
+  slaDeadline: timestamp("sla_deadline"),
+  slaBreached: boolean("sla_breached").default(false),
+  activeFlowId: varchar("active_flow_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -350,6 +356,43 @@ export const pipelineStages = pgTable("pipeline_stages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ==================== Agent Assignments ====================
+
+export const agentAssignments = pgTable("agent_assignments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  agentId: varchar("agent_id", { length: 36 }).notNull().references(() => users.id),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by", { length: 36 }).references(() => users.id),
+  notes: text("notes"),
+});
+
+// ==================== Learning Tracks & Deliveries ====================
+
+export const learningTracks = pgTable("learning_tracks", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  stageOrIntent: varchar("stage_or_intent", { length: 100 }).notNull(),
+  stepOrder: integer("step_order").notNull().default(0),
+  delayHours: real("delay_hours").notNull().default(0),
+  contentType: varchar("content_type", { length: 20 }).notNull().default("texto"),
+  content: text("content").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const learningDeliveries = pgTable("learning_deliveries", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  trackId: varchar("track_id", { length: 36 }).notNull().references(() => learningTracks.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  sentAt: timestamp("sent_at"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ==================== Quick Replies & Automation Flows ====================
 
 export const quickReplies = pgTable("quick_replies", {
@@ -379,6 +422,7 @@ export const automationFlows = pgTable("automation_flows", {
   summaryEnabled: boolean("summary_enabled").default(false),
   summaryFields: text("summary_fields"),
   steps: jsonb("steps").$type<Array<{ order: number; message: string; delaySeconds: number }>>(),
+  conditionalExits: jsonb("conditional_exits").$type<Array<{ condition: string; label: string; targetFlowId: string; triggerKeywords: string[] }>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -391,6 +435,7 @@ export const brandingConfig = pgTable("branding_config", {
   secondaryColor: varchar("secondary_color", { length: 20 }).default("#1B3A57"),
   logoUrl: text("logo_url"),
   faviconUrl: text("favicon_url"),
+  defaultSlaMinutes: integer("default_sla_minutes").default(60),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -417,6 +462,12 @@ export const updateUnifiedContactSchema = z.object({
   tags: z.string().optional().nullable(),
   score: z.number().optional(),
   assignedToUserId: z.string().optional().nullable(),
+  queueStatus: z.enum(["waiting", "assigned", "resolved"]).optional().nullable(),
+  queueEnteredAt: z.string().optional().nullable(),
+  assignedAt: z.string().optional().nullable(),
+  slaDeadline: z.string().optional().nullable(),
+  slaBreached: z.boolean().optional().nullable(),
+  activeFlowId: z.string().optional().nullable(),
 });
 
 export const insertContactIdentifierSchema = createInsertSchema(contactIdentifiers).omit({
@@ -479,6 +530,12 @@ export const updateAutomationFlowSchema = z.object({
     message: z.string(),
     delaySeconds: z.number().int().min(0),
   })).optional().nullable(),
+  conditionalExits: z.array(z.object({
+    condition: z.string(),
+    label: z.string(),
+    targetFlowId: z.string(),
+    triggerKeywords: z.array(z.string()),
+  })).optional().nullable(),
 });
 
 export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({
@@ -491,6 +548,28 @@ export const updateBrandingConfigSchema = z.object({
   secondaryColor: z.string().optional(),
   logoUrl: z.string().optional().nullable(),
   faviconUrl: z.string().optional().nullable(),
+  defaultSlaMinutes: z.number().int().min(1).optional().nullable(),
+});
+
+export const insertAgentAssignmentSchema = createInsertSchema(agentAssignments).omit({
+  id: true, assignedAt: true,
+});
+
+export const insertLearningTrackSchema = createInsertSchema(learningTracks).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateLearningTrackSchema = z.object({
+  stageOrIntent: z.string().optional(),
+  stepOrder: z.number().int().optional(),
+  delayHours: z.number().min(0).optional(),
+  contentType: z.enum(["texto", "video", "link"]).optional(),
+  content: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const insertLearningDeliverySchema = createInsertSchema(learningDeliveries).omit({
+  id: true, createdAt: true,
 });
 
 export type QuickReply = typeof quickReplies.$inferSelect;
@@ -502,3 +581,10 @@ export type UpdateAutomationFlow = z.infer<typeof updateAutomationFlowSchema>;
 export type BrandingConfig = typeof brandingConfig.$inferSelect;
 export type InsertBrandingConfig = z.infer<typeof insertBrandingConfigSchema>;
 export type UpdateBrandingConfig = z.infer<typeof updateBrandingConfigSchema>;
+export type AgentAssignment = typeof agentAssignments.$inferSelect;
+export type InsertAgentAssignment = z.infer<typeof insertAgentAssignmentSchema>;
+export type LearningTrack = typeof learningTracks.$inferSelect;
+export type InsertLearningTrack = z.infer<typeof insertLearningTrackSchema>;
+export type UpdateLearningTrack = z.infer<typeof updateLearningTrackSchema>;
+export type LearningDelivery = typeof learningDeliveries.$inferSelect;
+export type InsertLearningDelivery = z.infer<typeof insertLearningDeliverySchema>;

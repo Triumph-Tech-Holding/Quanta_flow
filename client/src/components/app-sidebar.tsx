@@ -13,6 +13,7 @@ import {
   Shield,
   ScrollText,
   Palette,
+  GraduationCap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -68,6 +69,13 @@ const modulesMenuItems = [
     url: "/automation",
     icon: Bot,
     module: 3,
+    enabled: true,
+  },
+  {
+    title: "Microlearning",
+    url: "/learning-tracks",
+    icon: GraduationCap,
+    module: 7,
     enabled: true,
   },
   {
