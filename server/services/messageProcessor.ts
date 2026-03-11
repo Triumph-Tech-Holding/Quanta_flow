@@ -1,6 +1,7 @@
 import { storage } from "../storage";
 import { emitMessageReceived } from "../socket";
 import { processMessageIntent } from "./intentService";
+import { getWhatsAppProvider } from "./whatsappProvider";
 import { log } from "../index";
 
 export interface IncomingMessageParams {
@@ -103,6 +104,34 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
           timestamp: new Date(),
         });
         log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "msg-processor");
+      }
+
+      // TAREFA 1: Conectar automação ao webhook
+      try {
+        const automationFlow = await storage.findMatchingAutomationFlow(userId, messageContent);
+        if (automationFlow && automationFlow.isActive) {
+          const provider = await getWhatsAppProvider(userId);
+          const responseText = automationFlow.responseTemplate;
+          
+          try {
+            const result = await provider.sendMessage(phone, responseText);
+            log(`[${provider}] Auto-response sent: ${result.messageId} to ${phone}`, "msg-processor");
+
+            // Salvar resposta automática como mensagem outgoing
+            await storage.createMessage({
+              conversationId: conversation.id,
+              userId,
+              messageId: `auto_${result.messageId}`,
+              direction: "outgoing",
+              content: responseText,
+              timestamp: new Date(),
+            });
+          } catch (sendErr) {
+            log(`Failed to send auto-response: ${sendErr instanceof Error ? sendErr.message : "unknown error"}`, "msg-processor");
+          }
+        }
+      } catch (automationErr) {
+        console.error("Automation flow processing error (non-blocking):", automationErr);
       }
     } catch (err) {
       console.error("CRM/Intent processing error (non-blocking):", err);
