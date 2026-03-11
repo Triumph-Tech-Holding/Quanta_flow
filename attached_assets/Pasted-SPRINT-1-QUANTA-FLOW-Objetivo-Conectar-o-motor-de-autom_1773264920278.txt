@@ -1,0 +1,115 @@
+SPRINT 1 — QUANTA FLOW
+Objetivo: Conectar o motor de automação ao webhook do WhatsApp para que 
+respostas automáticas sejam enviadas em tempo real.
+
+=== CONTEXTO DO SISTEMA ===
+
+Stack:
+- Backend: Node.js + Express + Drizzle ORM
+- Banco: PostgreSQL (produção)
+- WhatsApp: Z-API (principal) + Baileys (local)
+- IA: OpenAI gpt-4o-mini via Replit AI Integrations
+- Frontend: React + Vite + TypeScript + React Query
+- Deploy: Replit em produção (https://code-companion-31maurosergio.replit.app)
+
+=== O QUE JÁ EXISTE E FUNCIONA ===
+
+1. Webhook ativo em POST /api/webhooks/zapi — recebe mensagens reais
+2. Função processIncomingWhatsAppMessage() — processa mensagens recebidas
+3. Função findMatchingAutomationFlow(userId, message) — implementada em 
+   storage.ts — busca fluxo ativo cujas triggerKeywords batem com a mensagem
+4. Função sendMessage() — implementada e testada manualmente em ambos 
+   os provedores (Z-API e Baileys)
+5. Função detectIntent() — classifica intenção via OpenAI gpt-4o-mini, 
+   atualiza temperature + score + lastIntent no contato
+6. Tabela automation_flows com campos: name, triggerKeywords, 
+   responseTemplate, isActive
+
+=== O QUE ESTÁ QUEBRADO / DESCONECTADO ===
+
+PROBLEMA 1:
+findMatchingAutomationFlow() NÃO é chamada dentro de 
+processIncomingWhatsAppMessage(). A função existe mas está isolada — 
+nunca é executada automaticamente quando uma mensagem chega.
+
+PROBLEMA 2:
+detectIntent() NÃO é chamada automaticamente no webhook. Só roda quando 
+o usuário faz uma ação manual no CRM. A intenção deveria ser classificada 
+automaticamente a cada mensagem recebida.
+
+PROBLEMA 3:
+Mesmo que findMatchingAutomationFlow() encontre um fluxo com match, 
+o responseTemplate NÃO é enviado de volta ao contato. Falta chamar 
+sendMessage() com o resultado.
+
+=== TAREFAS EXATAS A EXECUTAR ===
+
+TAREFA 1 — Conectar automação ao webhook:
+Dentro da função processIncomingWhatsAppMessage(), após salvar a mensagem 
+no banco, adicionar o seguinte bloco:
+
+  a) Chamar findMatchingAutomationFlow(userId, messageText)
+  b) Se retornar um fluxo (match encontrado):
+     - Chamar sendMessage() com o responseTemplate do fluxo encontrado
+     - Enviar para o número do contato que enviou a mensagem
+     - Usar o mesmo provedor que recebeu (Z-API ou Baileys)
+  c) Se não retornar fluxo: não fazer nada (comportamento atual mantido)
+
+TAREFA 2 — Conectar IA ao fluxo automático:
+Dentro da mesma função processIncomingWhatsAppMessage(), após salvar 
+a mensagem, adicionar:
+
+  a) Chamar detectIntent() com o texto da mensagem recebida
+  b) Atualizar os campos do contato: temperature, score, lastIntent
+  c) Essa chamada deve ocorrer SEMPRE, independente de haver fluxo ou não
+  d) Se já existe essa chamada em algum lugar do webhook, verificar por 
+     que não está sendo executada e corrigir
+
+=== ORDEM DE EXECUÇÃO ===
+
+Dentro de processIncomingWhatsAppMessage(), a ordem deve ser:
+
+1. Filtrar grupos e notificações (já existe)
+2. Salvar mensagem em conversations + messages (já existe)
+3. [NOVO] Chamar detectIntent() → atualizar contato
+4. [NOVO] Chamar findMatchingAutomationFlow() → se match → sendMessage()
+5. Retornar 200 OK (já existe)
+
+=== COMPORTAMENTO ESPERADO APÓS A MUDANÇA ===
+
+Cenário de teste:
+1. Contato envia "quero saber mais" pelo WhatsApp
+2. Webhook recebe a mensagem
+3. detectIntent() classifica como "compra_quente" → atualiza score e 
+   temperature do contato no banco
+4. findMatchingAutomationFlow() encontra fluxo com triggerKeyword 
+   "quero saber" → retorna responseTemplate
+5. sendMessage() envia o responseTemplate de volta para o número do contato
+6. Contato recebe a resposta automática no WhatsApp
+
+=== RESTRIÇÕES IMPORTANTES ===
+
+- NÃO alterar o schema do banco neste sprint
+- NÃO criar novas tabelas neste sprint
+- NÃO implementar delay ou fila de jobs neste sprint (isso é Sprint 3)
+- NÃO modificar o frontend neste sprint
+- NÃO alterar a lógica de criação de contatos (já funciona)
+- Manter compatibilidade com os 49 contatos em produção
+- Testar em ambiente de desenvolvimento antes de aplicar em produção
+
+=== ENTREGA ESPERADA ===
+
+1. Identificar os arquivos exatos onde processIncomingWhatsAppMessage() 
+   está definida
+2. Mostrar o código atual da função
+3. Mostrar o código modificado com as 2 conexões implementadas
+4. Confirmar que sendMessage() aceita os parâmetros necessários 
+   (número, mensagem, provedor)
+5. Confirmar que detectIntent() aceita o texto da mensagem e retorna 
+   os campos a atualizar
+6. Aplicar as mudanças
+7. Testar enviando uma mensagem real pelo WhatsApp e confirmar que 
+   a resposta automática foi enviada
+
+Não faça mais nada além do que está descrito acima.
+Este é o Sprint 1. Sprints seguintes serão passados separadamente.
