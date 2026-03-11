@@ -4,7 +4,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/s
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ZApiConfig } from "@/components/inbox/ZApiConfig";
+import { WhatsAppConnectionPanel } from "@/components/inbox/WhatsAppConnectionPanel";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { ChatWindow } from "@/components/inbox/ChatWindow";
 import { useSocket } from "@/hooks/useSocket";
@@ -616,7 +616,7 @@ export default function InboxPage() {
 
               <TabsContent value="settings" className="flex-1 m-0 p-6 overflow-auto">
                 <div className="max-w-xl mx-auto">
-                  <ZApiConfig />
+                  <WhatsAppConnectionPanel />
                 </div>
               </TabsContent>
             </Tabs>
