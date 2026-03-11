@@ -14,6 +14,7 @@ import {
   Trash2,
   GripVertical,
   MessageCircle,
+  UserCircle,
   Instagram,
   Facebook,
   Linkedin,
@@ -94,6 +95,8 @@ interface UnifiedContact {
   createdAt: string;
   updatedAt: string;
   identifiers: ContactIdentifier[];
+  assignedToUserId: string | null;
+  assignedAgent?: { nome: string; email: string } | null;
 }
 
 const STAGES: { key: PipelineStage; label: string; color: string }[] = [
@@ -200,6 +203,13 @@ function ContactCard({
             </div>
           )}
         </div>
+
+        {contact.assignedToUserId && contact.assignedAgent && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`badge-agent-${contact.id}`}>
+            <UserCircle className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate">{contact.assignedAgent.nome}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1">

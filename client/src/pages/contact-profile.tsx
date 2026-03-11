@@ -109,6 +109,14 @@ interface ContactDetail {
   updatedAt: string;
   identifiers: ContactIdentifier[];
   recentMessages: OmnichannelMessage[];
+  assignedToUserId: string | null;
+}
+
+interface Agent {
+  id: string;
+  nome: string;
+  email: string;
+  tipoAtor: string;
 }
 
 const STAGES: { key: PipelineStage; label: string; color: string }[] = [
@@ -444,6 +452,24 @@ export default function ContactProfile() {
     },
   });
 
+  const agentsQuery = useQuery<Agent[]>({
+    queryKey: ["/api/users/agents"],
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async (assignedToUserId: string | null) => {
+      await apiRequest("PATCH", `/api/crm/contacts/${contactId}/assign`, { assignedToUserId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts", contactId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      toast({ title: "Agente atribuído com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atribuir agente", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("DELETE", `/api/crm/contacts/${contactId}`);
@@ -665,6 +691,27 @@ export default function ContactProfile() {
                               <SelectItem value="frio">Frio</SelectItem>
                               <SelectItem value="morno">Morno</SelectItem>
                               <SelectItem value="quente">Quente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Responsável</Label>
+                          <Select
+                            value={contact.assignedToUserId || "unassigned"}
+                            onValueChange={(v) => assignMutation.mutate(v === "unassigned" ? null : v)}
+                            disabled={assignMutation.isPending}
+                          >
+                            <SelectTrigger data-testid="select-profile-agent">
+                              <SelectValue placeholder="Sem responsável" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned">Sem responsável</SelectItem>
+                              {agentsQuery.data?.map(agent => (
+                                <SelectItem key={agent.id} value={agent.id}>
+                                  {agent.nome}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>

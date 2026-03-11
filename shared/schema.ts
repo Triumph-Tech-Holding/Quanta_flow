@@ -45,6 +45,8 @@ export const apiConfigs = pgTable("api_configs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const whatsappProviderEnum = pgEnum("whatsapp_provider", ["zapi", "baileys", "evolution", "none"]);
+
 export const evolutionConfigs = pgTable("evolution_configs", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
@@ -54,6 +56,7 @@ export const evolutionConfigs = pgTable("evolution_configs", {
   instanceId: varchar("instance_id", { length: 100 }),
   status: instanceStatusEnum("status").notNull().default("disconnected"),
   webhookUrl: text("webhook_url"),
+  activeProvider: whatsappProviderEnum("active_provider").default("zapi"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -305,6 +308,7 @@ export const unifiedContacts = pgTable("unified_contacts", {
   tags: text("tags"),
   score: integer("score").notNull().default(0),
   lastContactAt: timestamp("last_contact_at"),
+  assignedToUserId: varchar("assigned_to_user_id", { length: 36 }).references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -402,6 +406,7 @@ export const updateUnifiedContactSchema = z.object({
   notes: z.string().optional().nullable(),
   tags: z.string().optional().nullable(),
   score: z.number().optional(),
+  assignedToUserId: z.string().optional().nullable(),
 });
 
 export const insertContactIdentifierSchema = createInsertSchema(contactIdentifiers).omit({

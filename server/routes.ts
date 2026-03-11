@@ -18,6 +18,8 @@ import { db } from "./db";
 import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, permissions } from "@shared/schema";
 import { eq, desc, and, sql as sqlExpr } from "drizzle-orm";
 import { detectIntent, processMessageIntent } from "./services/intentService";
+import { getWhatsAppProvider, BaileysProvider, getBaileysInstance } from "./services/whatsappProvider";
+import { processIncomingWhatsAppMessage } from "./services/messageProcessor";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
 if (!process.env.SESSION_SECRET) {
@@ -738,6 +740,126 @@ export async function registerRoutes(
     }
   });
 
+  // ─── WhatsApp Provider Management ─────────────────────────────────────────
+
+  app.get("/api/whatsapp-provider", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const config = await storage.getEvolutionConfig(userId);
+      const activeProvider = config?.activeProvider || "none";
+      res.json({ activeProvider, connected: config?.status === "connected" });
+    } catch (error) {
+      console.error("Get provider error:", error);
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
+  app.post("/api/whatsapp-provider/switch", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const { provider } = req.body as { provider: "zapi" | "baileys" | "none" };
+      if (!["zapi", "baileys", "none"].includes(provider)) {
+        return res.status(400).json({ message: "Provider inválido" });
+      }
+      await storage.updateEvolutionConfig(userId, {
+        activeProvider: provider as any,
+        status: provider === "none" ? "disconnected" : undefined,
+      });
+      log(`Provider switched to ${provider} for user ${userId}`, "provider");
+      res.json({ activeProvider: provider });
+    } catch (error) {
+      console.error("Switch provider error:", error);
+      res.status(500).json({ message: "Erro ao trocar provedor" });
+    }
+  });
+
+  // ─── Baileys (WhatsApp Local) Management ───────────────────────────────────
+
+  app.post("/api/whatsapp-local/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      let config = await storage.getEvolutionConfig(userId);
+
+      if (!config) {
+        config = await storage.createEvolutionConfig({
+          userId,
+          evolutionUrl: "local://baileys",
+          globalToken: "baileys",
+          instanceName: `baileys_${userId.substring(0, 8)}`,
+          activeProvider: "baileys",
+        } as any);
+      } else {
+        await storage.updateEvolutionConfig(userId, { activeProvider: "baileys" as any });
+      }
+
+      const baileysProvider = new BaileysProvider(userId);
+      baileysProvider.connect().catch((err: unknown) => log(`Baileys bg connect error: ${err}`, "baileys"));
+
+      res.json({ message: "Baileys iniciando — aguarde o QR Code", provider: "baileys" });
+    } catch (error) {
+      console.error("Baileys connect error:", error);
+      res.status(500).json({ message: "Erro ao conectar WhatsApp Local" });
+    }
+  });
+
+  app.post("/api/whatsapp-local/disconnect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const baileysProvider = new BaileysProvider(userId);
+      await baileysProvider.disconnect();
+      res.json({ message: "WhatsApp Local desconectado" });
+    } catch (error) {
+      console.error("Baileys disconnect error:", error);
+      res.status(500).json({ message: "Erro ao desconectar" });
+    }
+  });
+
+  app.get("/api/whatsapp-local/qrcode", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const instance = getBaileysInstance(userId);
+      if (!instance) {
+        return res.json({ qrCode: null, connected: false, message: "Baileys não iniciado" });
+      }
+      res.json({
+        qrCode: instance.qrCode,
+        connected: instance.connected,
+        message: instance.connected ? "Conectado" : instance.qrCode ? "Aguardando scan" : "Inicializando",
+      });
+    } catch (error) {
+      console.error("Get QR code error:", error);
+      res.status(500).json({ message: "Erro ao buscar QR Code" });
+    }
+  });
+
+  // ─── Agent Assignment ──────────────────────────────────────────────────────
+
+  app.get("/api/users/agents", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const agents = await storage.getActiveAgents();
+      res.json(agents.map(a => ({ id: a.id, nome: a.nome, email: a.email, tipoAtor: a.tipoAtor })));
+    } catch (error) {
+      console.error("Get agents error:", error);
+      res.status(500).json({ message: "Erro ao buscar agentes" });
+    }
+  });
+
+  app.patch("/api/crm/contacts/:id/assign", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const contactId = req.params.id as string;
+      const { assignedToUserId } = req.body as { assignedToUserId: string | null };
+      const contact = await storage.getUnifiedContact(contactId);
+      if (!contact || contact.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      const updated = await storage.assignContactToUser(contactId, assignedToUserId || null);
+      res.json(updated);
+    } catch (error) {
+      console.error("Assign contact error:", error);
+      res.status(500).json({ message: "Erro ao atribuir contato" });
+    }
+  });
+
   app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const conversations = await storage.getConversationsByUser(req.user!.userId);
@@ -783,36 +905,30 @@ export async function registerRoutes(
 
       let messageId = `msg_${Date.now()}`;
 
-      // Check if it's Z-API or Evolution API
-      if (config.evolutionUrl.includes("z-api.io")) {
-        // Z-API send message - globalToken contains the Client-Token for authentication
+      try {
+        const provider = await getWhatsAppProvider(userId);
         const phone = conversation.contactPhone?.replace(/\D/g, "") || conversation.remoteJid.replace("@s.whatsapp.net", "");
-        const sendUrl = `${config.evolutionUrl}/send-text`;
-        
-        const response = await fetch(sendUrl, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Client-Token": config.globalToken,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: content,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Erro ao enviar mensagem via Z-API");
+        const result = await provider.sendMessage(phone, content);
+        messageId = result.messageId;
+        log(`Message sent to ${phone} via active provider: ${messageId}`, "provider");
+      } catch (sendErr) {
+        log(`Provider send failed, falling back: ${sendErr}`, "provider");
+        if (config.evolutionUrl.includes("z-api.io")) {
+          const phone = conversation.contactPhone?.replace(/\D/g, "") || conversation.remoteJid.replace("@s.whatsapp.net", "");
+          const sendUrl = `${config.evolutionUrl}/send-text`;
+          const response = await fetch(sendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Client-Token": config.globalToken },
+            body: JSON.stringify({ phone, message: content }),
+          });
+          if (!response.ok) throw new Error("Erro ao enviar mensagem via Z-API");
+          const result = await response.json() as { messageId?: string };
+          messageId = result.messageId || messageId;
+        } else {
+          const service = createEvolutionService(config.evolutionUrl, config.globalToken);
+          const result = await service.sendMessage(config.instanceName, conversation.remoteJid, content);
+          messageId = result.key.id;
         }
-
-        const result = await response.json();
-        messageId = result.messageId || messageId;
-        log(`Z-API message sent to ${phone}: ${messageId}`, "zapi");
-      } else {
-        // Evolution API send message
-        const service = createEvolutionService(config.evolutionUrl, config.globalToken);
-        const result = await service.sendMessage(config.instanceName, conversation.remoteJid, content);
-        messageId = result.key.id;
       }
 
       const message = await storage.createMessage({
@@ -1682,101 +1798,20 @@ export async function registerRoutes(
           messageContent = "[Localização]";
         }
 
-        const remoteJid = `${phone}@s.whatsapp.net`;
         const contactName = senderName || chatName || phone;
 
         const adminUser = await storage.getUserByEmail("admin@quantaflow.com");
         const userId = adminUser?.id;
 
         if (userId) {
-          let conversation = await storage.getConversationByRemoteJid(userId, remoteJid);
-
-          if (!conversation) {
-            conversation = await storage.createConversation({
-              userId,
-              remoteJid,
-              contactName,
-              contactPhone: phone,
-              lastMessage: messageContent,
-              lastMessageAt: new Date(),
-              unreadCount: "1",
-            });
-          } else {
-            const currentUnread = parseInt(conversation.unreadCount || "0");
-            await storage.updateConversation(conversation.id, {
-              lastMessage: messageContent,
-              lastMessageAt: new Date(),
-              unreadCount: String(currentUnread + 1),
-              contactName: contactName || conversation.contactName,
-            });
-          }
-
-          const newMessage = await storage.createMessage({
-            conversationId: conversation.id,
+          await processIncomingWhatsAppMessage({
             userId,
-            messageId: messageId || `zapi_${Date.now()}`,
-            direction: "incoming",
-            content: messageContent,
-            timestamp: new Date(),
+            phone,
+            contactName,
+            messageContent,
+            messageId: messageId,
+            provider: "zapi",
           });
-
-          log(`Z-API message saved: ${newMessage.id} from ${phone}`, "zapi-webhook");
-
-          emitMessageReceived(userId, {
-            message: newMessage,
-            conversation: await storage.getConversation(conversation.id),
-          });
-
-          if (messageContent && !["[Mensagem]", "[Imagem]", "[Sticker]", "[Contato]", "[Localização]"].includes(messageContent)) {
-            try {
-              let crmContact = await storage.findUnifiedContactByIdentifier(userId, "whatsapp", phone);
-              if (!crmContact) {
-                crmContact = await storage.findUnifiedContactByPhoneOrEmail(userId, phone);
-              }
-
-              if (!crmContact) {
-                crmContact = await storage.createUnifiedContact({
-                  userId,
-                  nome: contactName || phone,
-                  telefone: phone,
-                  pipelineStage: "novo",
-                  temperature: "frio",
-                  lastIntent: "indefinido",
-                });
-                await storage.createContactIdentifier({
-                  unifiedContactId: crmContact.id,
-                  channelType: "whatsapp",
-                  identifier: phone,
-                  displayName: contactName || phone,
-                });
-                log(`CRM: Auto-created contact ${crmContact.id} for ${phone}`, "zapi-webhook");
-              }
-
-              const intentResult = await processMessageIntent(
-                messageContent,
-                crmContact.id,
-                userId,
-                storage
-              );
-
-              if (intentResult) {
-                await storage.createOmnichannelMessage({
-                  unifiedContactId: crmContact.id,
-                  channelType: "whatsapp",
-                  direction: "incoming",
-                  content: messageContent,
-                  externalMessageId: messageId || `zapi_${Date.now()}`,
-                  detectedIntent: intentResult.intent,
-                  intentConfidence: String(intentResult.confidence),
-                  userId,
-                  timestamp: new Date(),
-                });
-                log(`CRM Intent: ${intentResult.intent} (${(intentResult.confidence * 100).toFixed(0)}%) - ${intentResult.reasoning}`, "zapi-webhook");
-              }
-            } catch (intentError) {
-              console.error("CRM/Intent processing error (non-blocking):", intentError);
-            }
-          }
         }
       }
 

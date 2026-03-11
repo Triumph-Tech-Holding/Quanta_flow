@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon, Wifi, WifiOff, QrCode, Smartphone } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -278,6 +278,57 @@ export default function SettingsPage() {
     "--sidebar-width-icon": "3rem",
   };
 
+  const { data: providerData, refetch: refetchProvider } = useQuery<{
+    activeProvider: string;
+    connected: boolean;
+  }>({ queryKey: ["/api/whatsapp-provider"] });
+
+  const { data: qrData, refetch: refetchQr } = useQuery<{
+    qrCode: string | null;
+    connected: boolean;
+    message: string;
+  }>({
+    queryKey: ["/api/whatsapp-local/qrcode"],
+    refetchInterval: providerData?.activeProvider === "baileys" && !qrData?.connected ? 3000 : false,
+    enabled: providerData?.activeProvider === "baileys",
+  });
+
+  const switchProviderMutation = useMutation({
+    mutationFn: (provider: string) =>
+      apiRequest("POST", "/api/whatsapp-provider/switch", { provider }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-provider"] });
+      toast({ title: "Provedor alterado com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao alterar provedor", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const connectBaileysMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/whatsapp-local/connect"),
+    onSuccess: () => {
+      refetchProvider();
+      refetchQr();
+      toast({ title: "WhatsApp Local iniciando — aguarde o QR Code" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao conectar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const disconnectBaileysMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/whatsapp-local/disconnect"),
+    onSuccess: () => {
+      refetchProvider();
+      refetchQr();
+      toast({ title: "WhatsApp Local desconectado" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao desconectar", description: error.message, variant: "destructive" });
+    },
+  });
+
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
       <div className="flex h-screen w-full">
@@ -315,6 +366,135 @@ export default function SettingsPage() {
             </Button>
           </div>
         </div>
+
+        {/* WhatsApp Provider Panel */}
+        <Card data-testid="card-whatsapp-provider">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5" />
+              Provedor WhatsApp
+            </CardTitle>
+            <CardDescription>
+              Selecione o provedor de conexão WhatsApp para sua conta
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Provedor ativo:</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    providerData?.connected
+                      ? "text-green-600 border-green-500"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {providerData?.connected ? (
+                    <Wifi className="h-3 w-3 mr-1" />
+                  ) : (
+                    <WifiOff className="h-3 w-3 mr-1" />
+                  )}
+                  {providerData?.activeProvider === "zapi"
+                    ? "Z-API"
+                    : providerData?.activeProvider === "baileys"
+                    ? "WhatsApp Local (Baileys)"
+                    : providerData?.activeProvider === "evolution"
+                    ? "Evolution API"
+                    : "Nenhum"}
+                </Badge>
+              </div>
+
+              <Select
+                value={providerData?.activeProvider || "none"}
+                onValueChange={(val) => switchProviderMutation.mutate(val)}
+                disabled={switchProviderMutation.isPending}
+              >
+                <SelectTrigger className="w-52" data-testid="select-provider">
+                  <SelectValue placeholder="Selecionar provedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="zapi">Z-API (Nuvem)</SelectItem>
+                  <SelectItem value="evolution">Evolution API</SelectItem>
+                  <SelectItem value="baileys">WhatsApp Local (Baileys)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {providerData?.activeProvider === "baileys" && (
+              <div className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="font-medium text-sm">WhatsApp Local (Baileys)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Conexão direta sem API externa. Escaneie o QR Code para conectar.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {!qrData?.connected ? (
+                      <Button
+                        onClick={() => connectBaileysMutation.mutate()}
+                        disabled={connectBaileysMutation.isPending}
+                        size="sm"
+                        data-testid="button-baileys-connect"
+                      >
+                        {connectBaileysMutation.isPending ? (
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <QrCode className="h-4 w-4 mr-1" />
+                        )}
+                        Gerar QR Code
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="destructive"
+                        onClick={() => disconnectBaileysMutation.mutate()}
+                        disabled={disconnectBaileysMutation.isPending}
+                        size="sm"
+                        data-testid="button-baileys-disconnect"
+                      >
+                        Desconectar
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchQr()}
+                      data-testid="button-baileys-refresh-qr"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {qrData?.connected ? (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-medium">WhatsApp Local conectado!</span>
+                  </div>
+                ) : qrData?.qrCode ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      Abra o WhatsApp no celular → Aparelhos conectados → Conectar aparelho
+                    </p>
+                    <img
+                      src={qrData.qrCode}
+                      alt="QR Code WhatsApp"
+                      className="w-48 h-48 border rounded-lg"
+                      data-testid="img-baileys-qrcode"
+                    />
+                    <p className="text-xs text-muted-foreground">{qrData.message}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Clique em "Gerar QR Code" para iniciar a conexão
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
           <TabsList data-testid="tabs-categories">

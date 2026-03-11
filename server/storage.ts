@@ -1,9 +1,9 @@
-import { eq, desc, and, or, ilike } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, sql as sqlExpr } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, leads, apiConfigs, evolutionConfigs, conversations, messages,
   unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
-  quickReplies, automationFlows, brandingConfig,
+  quickReplies, automationFlows, brandingConfig, userRoles, roles,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -84,6 +84,10 @@ export interface IStorage {
   // Branding
   getBrandingConfig(userId: string): Promise<BrandingConfig | undefined>;
   upsertBrandingConfig(userId: string, data: UpdateBrandingConfig): Promise<BrandingConfig>;
+  // Agent Assignment
+  getActiveAgents(): Promise<User[]>;
+  assignContactToUser(contactId: string, assignedToUserId: string | null): Promise<UnifiedContact | undefined>;
+  autoAssignContact(ownerUserId: string, contactId: string): Promise<UnifiedContact | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -497,6 +501,61 @@ export class DatabaseStorage implements IStorage {
         .values({ userId, ...data })
         .returning();
       return created;
+    }
+  }
+
+  // ==================== Agent Assignment ====================
+
+  async getActiveAgents(): Promise<User[]> {
+    return db.select().from(users)
+      .where(eq(users.status, "active"))
+      .orderBy(asc(users.nome));
+  }
+
+  async assignContactToUser(contactId: string, assignedToUserId: string | null): Promise<UnifiedContact | undefined> {
+    const [updated] = await db.update(unifiedContacts)
+      .set({ assignedToUserId, updatedAt: new Date() })
+      .where(eq(unifiedContacts.id, contactId))
+      .returning();
+    return updated;
+  }
+
+  async autoAssignContact(ownerUserId: string, contactId: string): Promise<UnifiedContact | undefined> {
+    try {
+      const agents = await this.getActiveAgents();
+      if (!agents.length) return undefined;
+
+      const countRows = await db
+        .select({
+          userId: unifiedContacts.assignedToUserId,
+          count: sqlExpr<number>`count(*)::int`,
+        })
+        .from(unifiedContacts)
+        .where(and(
+          eq(unifiedContacts.userId, ownerUserId),
+        ))
+        .groupBy(unifiedContacts.assignedToUserId);
+
+      const assignedCounts = new Map<string, number>();
+      for (const row of countRows) {
+        if (row.userId) assignedCounts.set(row.userId, row.count);
+      }
+
+      let minCount = Infinity;
+      let chosenAgent: User | null = null;
+
+      for (const agent of agents) {
+        const count = assignedCounts.get(agent.id) || 0;
+        if (count < minCount) {
+          minCount = count;
+          chosenAgent = agent;
+        }
+      }
+
+      if (!chosenAgent) return undefined;
+      return this.assignContactToUser(contactId, chosenAgent.id);
+    } catch {
+      return undefined;
     }
   }
 }
