@@ -824,6 +824,7 @@ export async function registerRoutes(
       res.json({
         qrCode: instance.qrCode,
         connected: instance.connected,
+        phoneNumber: instance.phoneNumber || null,
         message: instance.connected ? "Conectado" : instance.qrCode ? "Aguardando scan" : "Inicializando",
       });
     } catch (error) {
@@ -899,7 +900,12 @@ export async function registerRoutes(
       }
 
       const config = await storage.getEvolutionConfig(userId);
-      if (!config || config.status !== "connected") {
+      if (!config) {
+        return res.status(400).json({ message: "WhatsApp não configurado" });
+      }
+      const baileysInst = getBaileysInstance(userId);
+      const baileysOk = baileysInst?.connected === true;
+      if (config.status !== "connected" && !baileysOk) {
         return res.status(400).json({ message: "WhatsApp não conectado" });
       }
 

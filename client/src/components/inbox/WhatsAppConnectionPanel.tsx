@@ -38,6 +38,7 @@ interface QrStatus {
   qrCode: string | null;
   connected: boolean;
   message: string;
+  phoneNumber?: string | null;
 }
 
 function ZApiSection() {
@@ -276,6 +277,12 @@ function BaileysSection() {
             <Wifi className="h-5 w-5" />
             <span className="font-medium">WhatsApp Local conectado!</span>
           </div>
+          {qrData?.phoneNumber && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">
+              <Smartphone className="h-4 w-4 shrink-0" />
+              <span>Número: <strong className="text-foreground">{qrData.phoneNumber}</strong></span>
+            </div>
+          )}
           <Button
             variant="destructive"
             size="sm"

@@ -132,6 +132,7 @@ interface BaileysInstance {
   qrCode: string | null;
   connected: boolean;
   userId: string;
+  phoneNumber: string | null;
 }
 
 const baileysInstances = new Map<string, BaileysInstance>();
@@ -146,6 +147,7 @@ export class BaileysProvider implements IWhatsAppProvider {
         qrCode: null,
         connected: false,
         userId,
+        phoneNumber: null,
       });
     }
     this.instance = baileysInstances.get(userId)!;
@@ -192,11 +194,15 @@ export class BaileysProvider implements IWhatsAppProvider {
           log("Baileys connected!", "baileys");
           this.instance.connected = true;
           this.instance.qrCode = null;
+          const rawId = sock.user?.id || "";
+          const phone = rawId.split(":")[0].split("@")[0];
+          this.instance.phoneNumber = phone || null;
+          log(`Baileys phone number: ${this.instance.phoneNumber}`, "baileys");
           await storage.updateEvolutionConfig(this.userId, {
             status: "connected",
             activeProvider: "baileys",
           });
-          emitInstanceConnected(this.userId, { status: "connected", provider: "baileys" });
+          emitInstanceConnected(this.userId, { status: "connected", provider: "baileys", phoneNumber: this.instance.phoneNumber });
         }
 
         if (connection === "close") {
@@ -288,6 +294,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       connected: this.instance.connected,
       provider: "baileys",
       qrCode: this.instance.qrCode,
+      phoneNumber: this.instance.phoneNumber,
     };
   }
 
