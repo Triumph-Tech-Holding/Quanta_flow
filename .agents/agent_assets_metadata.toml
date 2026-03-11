@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "_XbfMV7h-RSMC8EAtsCQV"
+uri = "file://relatorio-quanta-flow.pdf"
+type = "pdf"
+title = "Relatório de Status — Quanta Flow (Março 2026)"
