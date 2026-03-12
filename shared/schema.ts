@@ -719,7 +719,7 @@ export const updateAiAgentSchema = z.object({
   description: z.string().optional().nullable(),
   avatarUrl: z.string().optional().nullable(),
   model: z.enum(["gpt-4o", "gpt-4o-mini"]).optional(),
-  temperature: z.number().min(0).max(2).optional(),
+  temperature: z.number().min(0).max(1).optional(),
   tone: z.enum(["formal", "amigavel", "direto", "consultivo", "empatico"]).optional(),
   language: z.enum(["pt-BR", "en-US", "es-ES"]).optional(),
   specialty: z.enum(["vendas", "suporte", "sac", "cobranca", "onboarding", "generico"]).optional(),

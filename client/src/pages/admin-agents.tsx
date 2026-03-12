@@ -64,6 +64,15 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   generico: `Você é um assistente virtual inteligente. Responda perguntas, forneça informações e ajude os clientes da melhor forma possível. Seja educado, objetivo e útil.`,
 };
 
+const TOOL_OPTIONS = [
+  { value: "intent_detection", label: "Detecção de Intenção" },
+  { value: "lead_scoring", label: "Lead Scoring" },
+  { value: "product_search", label: "Busca de Produtos" },
+  { value: "faq_search", label: "Busca FAQ" },
+  { value: "appointment_booking", label: "Agendamento" },
+  { value: "order_status", label: "Status de Pedido" },
+];
+
 interface AgentFormData {
   name: string;
   description: string;
@@ -77,6 +86,9 @@ interface AgentFormData {
   maxTokens: number;
   isActive: boolean;
   avatarUrl: string;
+  tools: string[];
+  escalationKeywords: string;
+  escalationMessage: string;
 }
 
 const defaultForm: AgentFormData = {
@@ -92,6 +104,9 @@ const defaultForm: AgentFormData = {
   maxTokens: 500,
   isActive: true,
   avatarUrl: "",
+  tools: [],
+  escalationKeywords: "",
+  escalationMessage: "",
 };
 
 interface ChatMessage {
@@ -167,6 +182,7 @@ export default function AdminAgents() {
 
   function openEdit(agent: AiAgent) {
     setEditingAgent(agent);
+    const esc = agent.escalationRules as { keywords: string[]; message: string } | null;
     setForm({
       name: agent.name,
       description: agent.description || "",
@@ -180,6 +196,9 @@ export default function AdminAgents() {
       maxTokens: agent.maxTokens || 500,
       isActive: agent.isActive,
       avatarUrl: agent.avatarUrl || "",
+      tools: (agent.tools as string[]) || [],
+      escalationKeywords: esc?.keywords?.join(", ") || "",
+      escalationMessage: esc?.message || "",
     });
     setDialogOpen(true);
   }
@@ -191,15 +210,31 @@ export default function AdminAgents() {
     setChatDialogOpen(true);
   }
 
+  function buildPayload(f: AgentFormData) {
+    const payload: Record<string, unknown> = { ...f };
+    delete payload.escalationKeywords;
+    delete payload.escalationMessage;
+    if (f.escalationKeywords.trim()) {
+      payload.escalationRules = {
+        keywords: f.escalationKeywords.split(",").map((k) => k.trim()).filter(Boolean),
+        message: f.escalationMessage || "Transferindo para atendente humano...",
+      };
+    } else {
+      payload.escalationRules = null;
+    }
+    return payload;
+  }
+
   function handleSubmit() {
     if (!form.name || !form.systemPrompt) {
       toast({ title: "Preencha nome e prompt do sistema", variant: "destructive" });
       return;
     }
+    const payload = buildPayload(form);
     if (editingAgent) {
-      updateMutation.mutate({ id: editingAgent.id, data: form });
+      updateMutation.mutate({ id: editingAgent.id, data: payload as any });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload as any);
     }
   }
 
@@ -238,6 +273,7 @@ export default function AdminAgents() {
 
   function duplicateAgent(agent: AiAgent) {
     setEditingAgent(null);
+    const esc = agent.escalationRules as { keywords: string[]; message: string } | null;
     setForm({
       name: `${agent.name} (Cópia)`,
       description: agent.description || "",
@@ -251,6 +287,9 @@ export default function AdminAgents() {
       maxTokens: agent.maxTokens || 500,
       isActive: false,
       avatarUrl: "",
+      tools: (agent.tools as string[]) || [],
+      escalationKeywords: esc?.keywords?.join(", ") || "",
+      escalationMessage: esc?.message || "",
     });
     setDialogOpen(true);
   }
@@ -490,7 +529,7 @@ export default function AdminAgents() {
                       value={[form.temperature]}
                       onValueChange={([v]) => setForm((f) => ({ ...f, temperature: v }))}
                       min={0}
-                      max={2}
+                      max={1}
                       step={0.1}
                       data-testid="slider-temperature"
                     />
@@ -527,13 +566,95 @@ export default function AdminAgents() {
                   </div>
                   <Separator />
                   <div className="space-y-2">
-                    <Label>URL do Avatar</Label>
+                    <Label>Ferramentas Habilitadas</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {TOOL_OPTIONS.map((tool) => (
+                        <label key={tool.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.tools.includes(tool.value)}
+                            onChange={(e) => {
+                              setForm((f) => ({
+                                ...f,
+                                tools: e.target.checked
+                                  ? [...f.tools, tool.value]
+                                  : f.tools.filter((t) => t !== tool.value),
+                              }));
+                            }}
+                            className="rounded border-input"
+                            data-testid={`checkbox-tool-${tool.value}`}
+                          />
+                          {tool.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label>Regras de Escalação</Label>
                     <Input
-                      value={form.avatarUrl}
-                      onChange={(e) => setForm((f) => ({ ...f, avatarUrl: e.target.value }))}
-                      placeholder="https://..."
-                      data-testid="input-avatar-url"
+                      value={form.escalationKeywords}
+                      onChange={(e) => setForm((f) => ({ ...f, escalationKeywords: e.target.value }))}
+                      placeholder="humano, atendente, gerente (separados por vírgula)"
+                      data-testid="input-escalation-keywords"
                     />
+                    <Input
+                      value={form.escalationMessage}
+                      onChange={(e) => setForm((f) => ({ ...f, escalationMessage: e.target.value }))}
+                      placeholder="Mensagem ao escalar (ex: Transferindo para atendente...)"
+                      data-testid="input-escalation-message"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Quando o cliente mencionar essas palavras, o agente será interrompido e um humano será acionado.
+                    </p>
+                  </div>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label>Avatar do Agente</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={form.avatarUrl}
+                        onChange={(e) => setForm((f) => ({ ...f, avatarUrl: e.target.value }))}
+                        placeholder="https://..."
+                        className="flex-1"
+                        data-testid="input-avatar-url"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            toast({ title: "Gerando avatar..." });
+                            const res = await apiRequest("POST", "/api/admin/agents/generate-avatar", {
+                              name: form.name,
+                              specialty: form.specialty,
+                              tone: form.tone,
+                            });
+                            const data = await res.json();
+                            if (data.url) {
+                              setForm((f) => ({ ...f, avatarUrl: data.url }));
+                              toast({ title: "Avatar gerado com sucesso!" });
+                            }
+                          } catch {
+                            toast({ title: "Erro ao gerar avatar", variant: "destructive" });
+                          }
+                        }}
+                        disabled={!form.name}
+                        data-testid="button-generate-avatar"
+                      >
+                        <Sparkles className="h-4 w-4 mr-1" />
+                        Gerar Avatar
+                      </Button>
+                    </div>
+                    {form.avatarUrl && (
+                      <div className="flex justify-center mt-2">
+                        <Avatar className="h-16 w-16">
+                          <AvatarImage src={form.avatarUrl} alt="Preview" />
+                          <AvatarFallback><Bot className="h-8 w-8" /></AvatarFallback>
+                        </Avatar>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
               </ScrollArea>

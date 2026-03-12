@@ -259,7 +259,7 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
           }
 
           const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
-          const flowAgentId = (automationFlow as any).agentId as string | null;
+          const flowAgentId = automationFlow.agentId;
 
           if (flowAgentId) {
             try {
