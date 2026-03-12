@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quanta Flow - Relatórios Completos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+        }
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        .page-break {
+            page-break-after: always;
+            margin-bottom: 2cm;
+        }
+        h1 {
+            color: #00A86B;
+            border-bottom: 3px solid #00A86B;
+            padding-bottom: 0.5em;
+            margin: 1em 0 0.5em 0;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #1B3A57;
+            margin: 1.5em 0 0.5em 0;
+            font-size: 1.8em;
+            border-left: 4px solid #00A86B;
+            padding-left: 0.5em;
+        }
+        h3 {
+            color: #1B3A57;
+            margin: 1em 0 0.3em 0;
+            font-size: 1.3em;
+        }
+        h4 {
+            color: #555;
+            margin: 0.8em 0 0.3em 0;
+            font-size: 1.1em;
+        }
+        .subtitle {
+            font-size: 1.1em;
+            color: #666;
+            margin: 0.5em 0 1em 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th {
+            background: #00A86B;
+            color: white;
+            padding: 0.8em;
+            text-align: left;
+        }
+        td {
+            padding: 0.6em;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1em;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+            border-left: 4px solid #00A86B;
+        }
+        ul, ol {
+            margin: 0.5em 0 0.5em 2em;
+        }
+        li {
+            margin-bottom: 0.3em;
+        }
+        .badge {
+            display: inline-block;
+            background: #00A86B;
+            color: white;
+            padding: 0.2em 0.6em;
+            border-radius: 3px;
+            font-size: 0.9em;
+            margin: 0.2em;
+        }
+        .badge.completed {
+            background: #00A86B;
+        }
+        .badge.future {
+            background: #FF9500;
+        }
+        .header-info {
+            background: #f0f0f0;
+            padding: 1em;
+            border-radius: 5px;
+            margin-bottom: 1em;
+        }
+        hr {
+            border: none;
+            border-top: 2px dashed #00A86B;
+            margin: 2em 0;
+        }
+        .toc {
+            background: #f9f9f9;
+            padding: 1em;
+            border-radius: 5px;
+            margin: 1em 0;
+        }
+        .toc a {
+            color: #00A86B;
+            text-decoration: none;
+        }
+        .timestamp {
+            text-align: right;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 2em;
+            padding-top: 1em;
+            border-top: 1px solid #ddd;
+        }
+        .module-box {
+            background: #f9f9f9;
+            border-left: 4px solid #00A86B;
+            padding: 1em;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- CAPA -->
+    <div style="text-align: center; padding: 5em 0;">
+        <h1 style="font-size: 3em; border: none;">QUANTA FLOW</h1>
+        <p style="font-size: 1.5em; color: #00A86B; margin: 0.5em 0;">Plataforma Omnichannel de CRM e Automação de Vendas</p>
+        <p style="color: #666; margin: 2em 0; font-size: 1.1em;">
+            <strong>Versão:</strong> 5.0.0<br>
+            <strong>Status:</strong> Produção<br>
+            <strong>Data:</strong> Março de 2026<br>
+            <strong>Slogan:</strong> "Venda no automático."
+        </p>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- ÍNDICE -->
+    <h2>Índice</h2>
+    <div class="toc">
+        <ol style="margin-left: 2em;">
+            <li><a href="#visao-geral">Visão Geral</a></li>
+            <li><a href="#modulos">17 Módulos Implementados</a></li>
+            <li><a href="#stack">Stack Tecnológico</a></li>
+            <li><a href="#arquitetura">Arquitetura do Sistema</a></li>
+            <li><a href="#schema">Database Schema</a></li>
+            <li><a href="#api">API Endpoints (80+)</a></li>
+            <li><a href="#fluxos">Fluxos de Dados</a></li>
+            <li><a href="#futuro">Funcionalidades Futuras</a></li>
+            <li><a href="#roadmap">Roadmap</a></li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- VISÃO GERAL -->
+    <h2 id="visao-geral">📊 Visão Geral</h2>
+    
+    <div class="header-info">
+        <strong>Quanta Flow</strong> é uma plataforma SaaS de automação de vendas que centraliza comunicação omnichannel, detecta intenção de compra via IA, automatiza respostas, gerencia fila de atendimento com SLA em tempo real, e integra com sistemas externos.
+    </div>
+
+    <h3>Capacidades Principais</h3>
+    <ul>
+        <li>✅ Centraliza comunicação de múltiplos canais (WhatsApp, Telegram, Instagram, E-mail)</li>
+        <li>✅ Detecta intenção de compra via IA (OpenAI GPT-4)</li>
+        <li>✅ Automatiza respostas e fluxos de vendas</li>
+        <li>✅ Gerencia fila de atendimento com SLA em tempo real</li>
+        <li>✅ Integra com sistemas externos (Google Sheets, Zapier, webhooks)</li>
+        <li>✅ Oferece análise completa de performance</li>
+        <li>✅ Suporta múltiplos usuários com RBAC granular</li>
+    </ul>
+
+    <h3>Números do Projeto</h3>
+    <table>
+        <tr>
+            <th>Métrica</th>
+            <th>Valor</th>
+        </tr>
+        <tr>
+            <td>Total de módulos implementados</td>
+            <td>17</td>
+        </tr>
+        <tr>
+            <td>Sprints completados</td>
+            <td>5</td>
+        </tr>
+        <tr>
+            <td>Endpoints API</td>
+            <td>80+</td>
+        </tr>
+        <tr>
+            <td>Tabelas de banco</td>
+            <td>20+</td>
+        </tr>
+        <tr>
+            <td>Canais suportados</td>
+            <td>4</td>
+        </tr>
+        <tr>
+            <td>Linhas de código (backend)</td>
+            <td>~3500</td>
+        </tr>
+        <tr>
+            <td>Linhas de código (frontend)</td>
+            <td>~4200</td>
+        </tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="stack">Stack Tecnológico</h2>
+    <table>
+        <tr>
+            <th>Camada</th>
+            <th>Tecnologia</th>
+        </tr>
+        <tr>
+            <td><strong>Frontend</strong></td>
+            <td>React 18 + Vite + TypeScript + Tailwind CSS + Shadcn UI</td>
+        </tr>
+        <tr>
+            <td><strong>Backend</strong></td>
+            <td>Node.js + Express.js + TypeScript</td>
+        </tr>
+        <tr>
+            <td><strong>Banco de Dados</strong></td>
+            <td>PostgreSQL + Drizzle ORM</td>
+        </tr>
+        <tr>
+            <td><strong>Autenticação</strong></td>
+            <td>JWT + bcrypt</td>
+        </tr>
+        <tr>
+            <td><strong>Real-time</strong></td>
+            <td>Socket.io WebSocket</td>
+        </tr>
+        <tr>
+            <td><strong>IA</strong></td>
+            <td>OpenAI API (gpt-4o-mini)</td>
+        </tr>
+        <tr>
+            <td><strong>CI/CD</strong></td>
+            <td>GitHub Actions</td>
+        </tr>
+        <tr>
+            <td><strong>Hosting</strong></td>
+            <td>Replit</td>
+        </tr>
+        <tr>
+            <td><strong>Email</strong></td>
+            <td>Nodemailer (SMTP)</td>
+        </tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="modulos">🎯 17 Módulos Implementados (Sprints 1-5)</h2>
+
+    <div class="module-box">
+        <h3>1. Dashboard ✅</h3>
+        <p><strong>O que faz:</strong></p>
+        <ul>
+            <li>Visão geral dos KPIs do sistema</li>
+            <li>Total de contatos, distribuição por temperatura</li>
+            <li>Contagem de leads por pipeline stage</li>
+            <li>Score médio, contatos recentes e hot leads</li>
+            <li>Distribuição de intenções detectadas pela IA</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>2. Inbox ✅</h3>
+        <p><strong>O que faz:</strong></p>
+        <ul>
+            <li>Central unificada de mensagens de 4 canais</li>
+            <li>Visualização em tempo real (Socket.io)</li>
+            <li>Fila de Atendimento com SLA timer regressivo</li>
+            <li>Respostas Rápidas (CRUD)</li>
+            <li>Botões "Assumir" e "Resolver" para agentes</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>3. CRM ✅</h3>
+        <p><strong>O que faz:</strong></p>
+        <ul>
+            <li>Kanban visual por pipeline stage</li>
+            <li>Filtros (temperatura, intenção)</li>
+            <li>Perfil detalhado do contato</li>
+            <li>Omnichannel message timeline</li>
+            <li>IA intent summary e assignment</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>4. Automação ✅</h3>
+        <p><strong>9 Seções:</strong> Básico, Resposta, Sistema, Avançado, Inatividade, Condições, Multi-step, Resumo, Saídas Condicionais</p>
+        <ul>
+            <li>Fluxos por keyword trigger</li>
+            <li>Response templates com delay</li>
+            <li>IA intent detection</li>
+            <li>Conditional exits (transferência entre fluxos)</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>5. Microlearning ✅</h3>
+        <p>Conteúdo automático por stage/intenção, delivery tracking, LearningWorker background (5min)</p>
+    </div>
+
+    <div class="module-box">
+        <h3>6-10. Integrações Multi-Canal ✅ (Sprint 5)</h3>
+        <ul>
+            <li>Webhooks Outbound (HMAC-SHA256)</li>
+            <li>Google Sheets OAuth2 + Auto-append</li>
+            <li>Telegram Bot Integration</li>
+            <li>Instagram Meta Messaging API</li>
+            <li>Email SMTP (Nodemailer)</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>11-15. Admin & Configuração ✅</h3>
+        <ul>
+            <li>User Management (CRUD)</li>
+            <li>Branding (colors, logo, SLA padrão)</li>
+            <li>Audit Logs (rastreamento completo)</li>
+            <li>Autenticação (JWT + bcrypt)</li>
+            <li>Health Check (/api/health)</li>
+        </ul>
+    </div>
+
+    <div class="module-box">
+        <h3>16-17. DevOps ✅</h3>
+        <ul>
+            <li>GitHub Actions (deploy automático)</li>
+            <li>PR checks (TypeScript, build)</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2 id="arquitetura">🏗️ Arquitetura do Sistema</h2>
+
+    <pre style="font-size: 0.9em;">
+┌─────────────────────────────────────────────────────────┐
+│          CLIENTE (FRONTEND)                            │
+│  React + Vite + TypeScript | Shadcn UI + Tailwind CSS │
+└─────────────────────────────────────────────────────────┘
+                        ↕
+        ┌────────────────────────────────────┐
+        │  REST API + WebSocket (Socket.io) │
+        │      Express.js + Middleware      │
+        └────────────────────────────────────┘
+                        ↕
+┌──────────────────────────────────────────────────┐
+│         BACKEND SERVICES                        │
+├──────────────────────────────────────────────────┤
+│ • Authentication (JWT + bcrypt)                │
+│ • Message Processing (Multi-canal)            │
+│ • Intent Detection (OpenAI)                    │
+│ • Automation Engine (Flows, Conditions)        │
+│ • Queue Management (SLA Tracking)              │
+│ • Learning Worker (5min interval)              │
+│ • Job Queue (Async - 5s interval)             │
+│ • Webhook Dispatcher (HMAC signed)            │
+│ • Google Sheets Sync (OAuth2)                  │
+│ • RBAC (Role-Based Access Control)            │
+└──────────────────────────────────────────────────┘
+                        ↕
+┌──────────────────────────────────────────────────┐
+│        POSTGRESQL DATABASE                      │
+│ (Users, Leads, Messages, Conversations, etc)   │
+└──────────────────────────────────────────────────┘
+                        ↕
+┌──────────────────────────────────────────────────┐
+│       EXTERNAL INTEGRATIONS                     │
+├──────────────────────────────────────────────────┤
+│ • Z-API (WhatsApp)                             │
+│ • Telegram Bot API                              │
+│ • Meta Graph API (Instagram)                    │
+│ • Google Sheets API v4                          │
+│ • OpenAI API                                    │
+│ • SMTP (E-mail)                                │
+│ • Webhooks HTTP                                │
+└──────────────────────────────────────────────────┘
+    </pre>
+
+    <div class="page-break"></div>
+
+    <h2 id="schema">🗄️ Database Schema (20+ Tabelas)</h2>
+
+    <h3>Tabelas Principais</h3>
+    <table>
+        <tr>
+            <th>Tabela</th>
+            <th>Propósito</th>
+        </tr>
+        <tr>
+            <td><strong>users</strong></td>
+            <td>Usuários do sistema com roles, autenticação</td>
+        </tr>
+        <tr>
+            <td><strong>unified_contacts</strong></td>
+            <td>CRM central com stage, temperature, score, queue status</td>
+        </tr>
+        <tr>
+            <td><strong>conversations</strong></td>
+            <td>Chats por canal (WhatsApp, Telegram, etc)</td>
+        </tr>
+        <tr>
+            <td><strong>messages</strong></td>
+            <td>Histórico de mensagens com media</td>
+        </tr>
+        <tr>
+            <td><strong>automation_flows</strong></td>
+            <td>9 seções de config, multi-step, conditional exits</td>
+        </tr>
+        <tr>
+            <td><strong>omnichannelMessages</strong></td>
+            <td>IA intent tracking por canal</td>
+        </tr>
+        <tr>
+            <td><strong>outbound_webhooks</strong></td>
+            <td>5 event types, HMAC signing, status</td>
+        </tr>
+        <tr>
+            <td><strong>sheet_integrations</strong></td>
+            <td>Google Sheets OAuth2, column mapping</td>
+        </tr>
+        <tr>
+            <td><strong>email_configs</strong></td>
+            <td>SMTP configuration (encrypted)</td>
+        </tr>
+        <tr>
+            <td><strong>learning_tracks</strong></td>
+            <td>Microlearning CRUD</td>
+        </tr>
+        <tr>
+            <td><strong>audit_logs</strong></td>
+            <td>Rastreamento de todas as ações</td>
+        </tr>
+        <tr>
+            <td><strong>roles, permissions</strong></td>
+            <td>RBAC: 3 roles, 18 permissions</td>
+        </tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="api">📡 API Endpoints (80+)</h2>
+
+    <h3>Categorias de Endpoints</h3>
+    <table>
+        <tr>
+            <th>Categoria</th>
+            <th>Endpoints</th>
+            <th>Exemplo</th>
+        </tr>
+        <tr>
+            <td>Authentication</td>
+            <td>5</td>
+            <td>POST /api/auth/login</td>
+        </tr>
+        <tr>
+            <td>CRM Leads</td>
+            <td>8</td>
+            <td>GET /api/crm/contacts</td>
+        </tr>
+        <tr>
+            <td>Inbox</td>
+            <td>8</td>
+            <td>GET /api/conversations</td>
+        </tr>
+        <tr>
+            <td>Queue</td>
+            <td>4</td>
+            <td>POST /api/queue/:id/assign</td>
+        </tr>
+        <tr>
+            <td>Automation</td>
+            <td>6</td>
+            <td>POST /api/automation-flows</td>
+        </tr>
+        <tr>
+            <td>Learning</td>
+            <td>4</td>
+            <td>GET /api/learning-tracks</td>
+        </tr>
+        <tr>
+            <td>Webhooks (Sprint 5)</td>
+            <td>5</td>
+            <td>POST /api/webhooks/outbound</td>
+        </tr>
+        <tr>
+            <td>Google Sheets (Sprint 5)</td>
+            <td>6</td>
+            <td>POST /api/integrations/sheets</td>
+        </tr>
+        <tr>
+            <td>Email (Sprint 5)</td>
+            <td>3</td>
+            <td>POST /api/settings/email/test</td>
+        </tr>
+        <tr>
+            <td>Webhooks Entrada (Sprint 5)</td>
+            <td>5</td>
+            <td>POST /api/webhooks/telegram</td>
+        </tr>
+        <tr>
+            <td>WhatsApp</td>
+            <td>10+</td>
+            <td>POST /api/whatsapp/send</td>
+        </tr>
+        <tr>
+            <td>Configurações</td>
+            <td>8</td>
+            <td>GET /api/settings</td>
+        </tr>
+        <tr>
+            <td>Admin</td>
+            <td>8</td>
+            <td>GET /api/admin/users</td>
+        </tr>
+        <tr>
+            <td>Health</td>
+            <td>1</td>
+            <td>GET /api/health</td>
+        </tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="fluxos">⚙️ Fluxos de Dados Principais</h2>
+
+    <h3>Fluxo 1: Mensagem WhatsApp → Automação → Resposta</h3>
+    <pre>
+1. Z-API/Baileys recebe msg no WhatsApp
+   ↓
+2. Webhook POST para /api/whatsapp/webhook
+   ↓
+3. processIncomingMessage() processa
+   - Salva em conversations + messages
+   - Cria/atualiza unified_contact
+   ↓
+4. processMessageIntent() chama OpenAI
+   - Detecta intenção (compra_quente, duvida, etc)
+   ↓
+5. messageProcessor() busca automationFlow
+   - Por keyword trigger ou activeFlowId
+   ↓
+6. Se interruptCondition → Entra na fila com SLA
+   ↓
+7. JobQueue processa jobs a cada 5s
+   - Envia via sendChannelMessage()
+    </pre>
+
+    <h3>Fluxo 2: Lead entra na fila → SLA tracking</h3>
+    <pre>
+1. interruptCondition acionada
+   ↓
+2. storage.enterQueue(contactId, slaMinutes)
+   - queueStatus = 'waiting'
+   - slaDeadline = now + (slaMinutes * 60)
+   ↓
+3. Frontend mostra timer regressivo
+   ↓
+4. Agent clica "Assumir" ou "Resolver"
+   ↓
+5. queueStatus atualizado em tempo real
+    </pre>
+
+    <h3>Fluxo 3: Lead qualificado → Google Sheets append</h3>
+    <pre>
+1. Lead stage muda para 'qualificado'
+   ↓
+2. dispatchEvent('lead.qualified', contact, userId)
+   ↓
+3. webhookDispatcher() processa
+   - Busca sheet_integrations ativas
+   ↓
+4. Google Sheets API v4 append row
+    </pre>
+
+    <div class="page-break"></div>
+
+    <h2 id="futuro">🚀 Funcionalidades Futuras (Planejadas)</h2>
+
+    <div class="module-box">
+        <h3>A. Social / Ads</h3>
+        <p><strong>Objetivo:</strong> Integração com plataformas de publicidade social</p>
+        <ul>
+            <li><strong>Facebook Ads:</strong> Capturar leads de campanhas FB/Instagram</li>
+            <li><strong>LinkedIn Ads:</strong> Sincronizar leads qualificados</li>
+            <li><strong>Google Ads:</strong> Rastrear conversões de campanhas</li>
+            <li><strong>TikTok Ads:</strong> Coleta de leads de vídeos promocionais</li>
+            <li><strong>Dashboard ROI:</strong> ROI por canal, custo por lead, conversão</li>
+            <li><strong>Lead Attribution:</strong> Rastreia origem do lead</li>
+            <li><strong>Retargeting Automático:</strong> Re-engajar leads frios via anúncios</li>
+        </ul>
+        <p><strong>Benefício:</strong> Fechar loop: anúncio → lead → conversa → venda</p>
+    </div>
+
+    <div class="module-box">
+        <h3>B. IA Brain</h3>
+        <p><strong>Objetivo:</strong> Motor de IA avançado para insights e recomendações</p>
+        <ul>
+            <li><strong>Análise Preditiva:</strong> Qual lead tem maior chance de conversão?</li>
+            <li><strong>NLP Avançado:</strong> Análise de sentimento, urgência, confiança</li>
+            <li><strong>Recomendação Ações:</strong> "Envie esse lead para o fluxo X"</li>
+            <li><strong>Scoring Dinâmico:</strong> Score baseado em comportamento</li>
+            <li><strong>Pattern Recognition:</strong> Palavras-chave que indicam alta conversão</li>
+            <li><strong>Chatbot IA:</strong> Resolver automaticamente tickets simples</li>
+            <li><strong>Treino Customizado:</strong> Fine-tune com dados da empresa</li>
+        </ul>
+        <p><strong>Tecnologia:</strong> OpenAI GPT-4, embeddings, fine-tuning, vector DB</p>
+        <p><strong>Benefício:</strong> Automação inteligente reduz trabalho manual em 70%+</p>
+    </div>
+
+    <div class="module-box">
+        <h3>C. Tribos</h3>
+        <p><strong>Objetivo:</strong> Comunidades e network management para agentes/resellers</p>
+        <ul>
+            <li><strong>Team Management:</strong> Formar equipes de vendas com hierarquia</li>
+            <li><strong>Leaderboard:</strong> Ranking de performance (% conversão, ARR)</li>
+            <li><strong>Distribuição de Leads:</strong> Round-robin ou skill-based</li>
+            <li><strong>Gamification:</strong> Pontos, badges, recompensas</li>
+            <li><strong>Knowledge Base:</strong> Dicas e best practices entre agentes</li>
+            <li><strong>Chat Interno:</strong> Comunicação entre membros</li>
+            <li><strong>Commission Engine:</strong> Cálculo automático de bônus</li>
+            <li><strong>Analytics:</strong> Métricas individual e de equipe</li>
+        </ul>
+        <p><strong>Benefício:</strong> Motivação + organização = produtividade máxima</p>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2 id="roadmap">📅 Roadmap Futuro</h2>
+
+    <table>
+        <tr>
+            <th>Sprint</th>
+            <th>Funcionalidade</th>
+            <th>Status</th>
+        </tr>
+        <tr>
+            <td>1-5</td>
+            <td>Core CRM + Automação</td>
+            <td><span class="badge completed">✅ Completo</span></td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>Social Ads</td>
+            <td><span class="badge future">🚀 Next</span></td>
+        </tr>
+        <tr>
+            <td>7</td>
+            <td>IA Brain avançada</td>
+            <td><span class="badge future">📅 Planejado</span></td>
+        </tr>
+        <tr>
+            <td>8</td>
+            <td>Tribos</td>
+            <td><span class="badge future">📅 Planejado</span></td>
+        </tr>
+        <tr>
+            <td>9</td>
+            <td>Mobile app (React Native)</td>
+            <td><span class="badge future">📅 Planejado</span></td>
+        </tr>
+        <tr>
+            <td>10</td>
+            <td>Self-hosted (Docker)</td>
+            <td><span class="badge future">📅 Planejado</span></td>
+        </tr>
+    </table>
+
+    <h2>🔒 Segurança</h2>
+    <ul>
+        <li>✅ JWT com 24h expiration</li>
+        <li>✅ bcrypt password hashing (10 salt rounds)</li>
+        <li>✅ HMAC-SHA256 para webhooks</li>
+        <li>✅ AES-256-CBC para credenciais sensíveis</li>
+        <li>✅ RBAC (3 roles, 18 permissions)</li>
+        <li>✅ SQL injection prevention (Drizzle ORM)</li>
+        <li>✅ XSS prevention (React + TypeScript)</li>
+    </ul>
+
+    <h2>📈 Performance & Escalabilidade</h2>
+    <ul>
+        <li>✅ React Query caching</li>
+        <li>✅ JobQueue async (5s interval)</li>
+        <li>✅ LearningWorker background (5min)</li>
+        <li>✅ Database indexing via Drizzle</li>
+        <li>🚀 Redis cache (futuro)</li>
+        <li>🚀 Elasticsearch (futuro)</li>
+    </ul>
+
+    <div class="timestamp">
+        <strong>Quanta Flow v5.0.0</strong><br>
+        Documento gerado: Março 2026<br>
+        Status: Produção Completo - 17 Módulos<br>
+        <em>Para converter para PDF: Abra este arquivo no navegador e use Print → Save as PDF</em>
+    </div>
+
+</body>
+</html>
