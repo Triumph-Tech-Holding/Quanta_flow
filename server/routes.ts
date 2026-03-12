@@ -1741,7 +1741,7 @@ Return ONLY the JSON array, no markdown.`,
       }
       res.json({ blocks });
     } catch (err) {
-      log.error("[POST /api/admin/flows/generate]", err);
+      console.error("[POST /api/admin/flows/generate]", err);
       res.status(500).json({ message: "Erro ao gerar fluxo com IA" });
     }
   });
@@ -1771,7 +1771,7 @@ Return ONLY the JSON array, no markdown.`,
         res.send(buffer);
       }
     } catch (err) {
-      log.error("[POST /api/flows/tts]", err);
+      console.error("[POST /api/flows/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
     }
   });
@@ -1814,7 +1814,7 @@ Return ONLY the JSON array, no markdown.`,
       const imageUrl = imageResponse.data[0]?.url || null;
       res.json({ imageUrl });
     } catch (err) {
-      log.error("[POST /api/flows/image-gen]", err);
+      console.error("[POST /api/flows/image-gen]", err);
       res.status(500).json({ message: "Erro ao gerar imagem" });
     }
   });
@@ -2643,7 +2643,7 @@ Return ONLY the JSON array, no markdown.`,
       const versions = await storage.getDocumentationVersions(req.user.userId);
       res.json(versions);
     } catch (err) {
-      log.error("[GET /api/documentation/versions]", err);
+      console.error("[GET /api/documentation/versions]", err);
       res.status(500).json({ message: "Erro ao buscar versões" });
     }
   });
@@ -2655,7 +2655,7 @@ Return ONLY the JSON array, no markdown.`,
       if (!version) return res.status(404).json({ message: "Versão não encontrada" });
       res.json(version);
     } catch (err) {
-      log.error("[GET /api/documentation/versions/:id]", err);
+      console.error("[GET /api/documentation/versions/:id]", err);
       res.status(500).json({ message: "Erro ao buscar versão" });
     }
   });
@@ -2672,7 +2672,7 @@ Return ONLY the JSON array, no markdown.`,
       res.json(doc);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
-      log.error("[POST /api/documentation/versions]", err);
+      console.error("[POST /api/documentation/versions]", err);
       res.status(500).json({ message: "Erro ao criar documentação" });
     }
   });
@@ -2691,7 +2691,7 @@ Return ONLY the JSON array, no markdown.`,
       await logAudit(req.user.userId, "DELETE", "documentation_versions", id, JSON.stringify(doc), null);
       res.json({ ok: true });
     } catch (err) {
-      log.error("[DELETE /api/documentation/versions/:id]", err);
+      console.error("[DELETE /api/documentation/versions/:id]", err);
       res.status(500).json({ message: "Erro ao deletar documentação" });
     }
   });
@@ -2709,7 +2709,7 @@ Return ONLY the JSON array, no markdown.`,
       const agents = await storage.getAiAgentsByUser(req.user.userId);
       res.json(agents);
     } catch (err) {
-      log.error("[GET /api/admin/agents]", err);
+      console.error("[GET /api/admin/agents]", err);
       res.status(500).json({ message: "Erro ao buscar agentes" });
     }
   });
@@ -2721,7 +2721,7 @@ Return ONLY the JSON array, no markdown.`,
       if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
       res.json(agent);
     } catch (err) {
-      log.error("[GET /api/admin/agents/:id]", err);
+      console.error("[GET /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao buscar agente" });
     }
   });
@@ -2734,7 +2734,7 @@ Return ONLY the JSON array, no markdown.`,
       res.status(201).json(agent);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
-      log.error("[POST /api/admin/agents]", err);
+      console.error("[POST /api/admin/agents]", err);
       res.status(500).json({ message: "Erro ao criar agente" });
     }
   });
@@ -2749,7 +2749,7 @@ Return ONLY the JSON array, no markdown.`,
       res.json(agent);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
-      log.error("[PUT /api/admin/agents/:id]", err);
+      console.error("[PUT /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar agente" });
     }
   });
@@ -2763,7 +2763,7 @@ Return ONLY the JSON array, no markdown.`,
       if (!deleted) return res.status(404).json({ message: "Falha ao deletar" });
       res.json({ ok: true });
     } catch (err) {
-      log.error("[DELETE /api/admin/agents/:id]", err);
+      console.error("[DELETE /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao deletar agente" });
     }
   });
@@ -2803,7 +2803,7 @@ Return ONLY the JSON array, no markdown.`,
       const reply = response.choices[0]?.message?.content || "";
       res.json({ reply, usage: response.usage });
     } catch (err) {
-      log.error("[POST /api/admin/agents/:id/chat]", err);
+      console.error("[POST /api/admin/agents/:id/chat]", err);
       res.status(500).json({ message: "Erro no chat do agente" });
     }
   });
@@ -2826,7 +2826,7 @@ Return ONLY the JSON array, no markdown.`,
       res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
       res.send(buffer);
     } catch (err) {
-      log.error("[POST /api/agents/:id/tts]", err);
+      console.error("[POST /api/agents/:id/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
     }
   };
@@ -2851,7 +2851,7 @@ Return ONLY the JSON array, no markdown.`,
       if (!url) return res.status(500).json({ message: "Falha ao gerar avatar" });
       res.json({ url });
     } catch (err) {
-      log.error("[POST /api/admin/agents/generate-avatar]", err);
+      console.error("[POST /api/admin/agents/generate-avatar]", err);
       res.status(500).json({ message: "Erro ao gerar avatar" });
     }
   });
