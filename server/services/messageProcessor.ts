@@ -279,6 +279,27 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
                   max_tokens: aiAgent.maxTokens ?? 500,
                 });
                 const agentReply = agentResponse.choices[0]?.message?.content || automationFlow.responseTemplate;
+
+                const escRules = aiAgent.escalationRules as { keywords: string[]; message: string } | null;
+                if (escRules && escRules.keywords && escRules.keywords.length > 0) {
+                  const msgLowerEsc = messageContent.toLowerCase();
+                  const escalationTriggered = escRules.keywords.some((kw) => msgLowerEsc.includes(kw.toLowerCase()));
+                  if (escalationTriggered && crmContact) {
+                    const escalationMsg = escRules.message || "Transferindo para um atendente humano...";
+                    jobQueue.add({
+                      type: "send_message",
+                      payload: { userId, phone, message: escalationMsg, conversationId: conversation.id, channel, channelMetadata },
+                      runAt: now + delay,
+                    });
+                    const brandingCfg = await storage.getBrandingConfig(userId);
+                    const slaMinutes = brandingCfg?.defaultSlaMinutes ?? 60;
+                    await storage.enterQueue(crmContact.id, slaMinutes);
+                    await storage.updateUnifiedContact(crmContact.id, { activeFlowId: null });
+                    log(`Automation: AI Agent "${aiAgent.name}" escalated to human for ${phone} (keyword match)`, "msg-processor");
+                    return;
+                  }
+                }
+
                 jobQueue.add({
                   type: "send_message",
                   payload: { userId, phone, message: agentReply, conversationId: conversation.id, channel, channelMetadata },

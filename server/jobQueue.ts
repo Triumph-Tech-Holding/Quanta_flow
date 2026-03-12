@@ -150,7 +150,22 @@ class JobQueue {
           input: p.text.slice(0, 4096),
         });
         const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
-        log(`JobQueue: send_audio — generated ${audioBuffer.length} bytes for ${p.phone} with voice ${voice}`, "jobqueue");
+
+        const fs = await import("fs");
+        const path = await import("path");
+        const os = await import("os");
+        const audioPath = path.default.join(os.default.tmpdir(), `tts_${Date.now()}.mp3`);
+        fs.default.writeFileSync(audioPath, audioBuffer);
+
+        const provider = await getWhatsAppProvider(p.userId);
+        if (provider && typeof (provider as any).sendAudio === "function") {
+          await (provider as any).sendAudio(p.phone, audioPath);
+          log(`JobQueue: send_audio — delivered audio to ${p.phone} via provider`, "jobqueue");
+        } else {
+          log(`JobQueue: send_audio — generated ${audioBuffer.length} bytes for ${p.phone} (provider lacks audio support, file: ${audioPath})`, "jobqueue");
+        }
+
+        try { fs.default.unlinkSync(audioPath); } catch {}
       } catch (audioErr) {
         log(`JobQueue: send_audio — TTS error: ${audioErr instanceof Error ? audioErr.message : String(audioErr)}`, "jobqueue");
       }
