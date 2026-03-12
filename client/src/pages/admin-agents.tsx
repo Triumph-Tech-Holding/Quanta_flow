@@ -65,12 +65,12 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 };
 
 const TOOL_OPTIONS = [
-  { value: "intent_detection", label: "Detecção de Intenção" },
-  { value: "lead_scoring", label: "Lead Scoring" },
-  { value: "product_search", label: "Busca de Produtos" },
-  { value: "faq_search", label: "Busca FAQ" },
-  { value: "appointment_booking", label: "Agendamento" },
-  { value: "order_status", label: "Status de Pedido" },
+  { value: "consultar_leads", label: "Consultar leads no CRM" },
+  { value: "agendar_followup", label: "Agendar follow-up" },
+  { value: "escalar_humano", label: "Escalar para humano" },
+  { value: "buscar_produtos", label: "Buscar produtos/serviços" },
+  { value: "consultar_faq", label: "Consultar base de conhecimento" },
+  { value: "verificar_pedido", label: "Verificar status de pedido" },
 ];
 
 interface AgentFormData {

@@ -1,14 +1,23 @@
 import { log } from "./index";
 import { getWhatsAppProvider } from "./services/whatsappProvider";
 import { storage } from "./storage";
+import OpenAI from "openai";
 
-export type JobType = "send_message" | "check_inactivity" | "check_sla";
+export type JobType = "send_message" | "send_audio" | "check_inactivity" | "check_sla";
 export type JobStatus = "pending" | "running" | "done" | "failed" | "cancelled";
 
 interface SendMessagePayload {
   userId: string;
   phone: string;
   message: string;
+  conversationId: string;
+}
+
+interface SendAudioPayload {
+  userId: string;
+  phone: string;
+  text: string;
+  agentId: string;
   conversationId: string;
 }
 
@@ -28,7 +37,7 @@ interface CheckSlaPayload {
 export interface Job {
   id: string;
   type: JobType;
-  payload: SendMessagePayload | CheckInactivityPayload | CheckSlaPayload;
+  payload: SendMessagePayload | SendAudioPayload | CheckInactivityPayload | CheckSlaPayload;
   runAt: number;
   status: JobStatus;
   createdAt: number;
@@ -122,6 +131,29 @@ class JobQueue {
         lastMessageAt: new Date(),
       });
       log(`JobQueue: send_message → ${p.phone} (${result.messageId})`, "jobqueue");
+    } else if (job.type === "send_audio") {
+      const p = job.payload as SendAudioPayload;
+      try {
+        const agent = await storage.getAiAgent(p.agentId);
+        if (!agent) {
+          log(`JobQueue: send_audio — agent ${p.agentId} not found, skipping`, "jobqueue");
+          return;
+        }
+        const ttsOpenai = new OpenAI({
+          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        });
+        const voice = (agent.ttsVoice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova";
+        const ttsResponse = await ttsOpenai.audio.speech.create({
+          model: "tts-1",
+          voice,
+          input: p.text.slice(0, 4096),
+        });
+        const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+        log(`JobQueue: send_audio — generated ${audioBuffer.length} bytes for ${p.phone} with voice ${voice}`, "jobqueue");
+      } catch (audioErr) {
+        log(`JobQueue: send_audio — TTS error: ${audioErr instanceof Error ? audioErr.message : String(audioErr)}`, "jobqueue");
+      }
     } else if (job.type === "check_inactivity") {
       const p = job.payload as CheckInactivityPayload;
       const conversation = await storage.getConversation(p.conversationId);

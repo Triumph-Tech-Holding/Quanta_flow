@@ -284,6 +284,13 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
                   payload: { userId, phone, message: agentReply, conversationId: conversation.id, channel, channelMetadata },
                   runAt: now + delay,
                 });
+                if (aiAgent.ttsVoice) {
+                  jobQueue.add({
+                    type: "send_audio",
+                    payload: { userId, phone, text: agentReply, agentId: aiAgent.id, conversationId: conversation.id },
+                    runAt: now + delay + 2000,
+                  });
+                }
                 log(`Automation: AI Agent "${aiAgent.name}" generated response for ${phone}`, "msg-processor");
               } else {
                 jobQueue.add({
