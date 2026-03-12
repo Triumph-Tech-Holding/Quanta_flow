@@ -31,7 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Download, Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2, Eye } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const createDocSchema = z.object({
   version: z.string().min(1, "Versão obrigatória"),
@@ -52,9 +53,47 @@ interface DocumentationVersion {
   updatedAt: string;
 }
 
+const UserGuide = () => (
+  <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+    <CardHeader>
+      <CardTitle className="text-blue-900 dark:text-blue-100">📖 Guia do Usuário</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-4 text-sm text-blue-800 dark:text-blue-200">
+      <div>
+        <h3 className="font-semibold mb-2">🔍 Visualizar Documentação</h3>
+        <p>Clique no botão "Visualizar" ao lado de qualquer versão para ler a documentação completa no navegador, sem precisar baixar.</p>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">📥 Baixar Documentação</h3>
+        <p>Use o botão "Download" para salvar a documentação em formato Markdown (.md) no seu computador.</p>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">➕ Criar Nova Versão</h3>
+        <p>Clique em "Nova Versão" para adicionar uma nova versão da documentação quando há mudanças no sistema. Cada versão fica registrada com data de criação.</p>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">🗑️ Deletar Versão</h3>
+        <p>Use o botão vermelho "Deletar" para remover versões antigas que não são mais necessárias.</p>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-2">📋 Funcionalidades Principais</h3>
+        <ul className="list-disc list-inside space-y-1 ml-2">
+          <li><strong>Inbox:</strong> Centro de mensagens unificado com WhatsApp, Telegram, Instagram e Email</li>
+          <li><strong>CRM:</strong> Gerenciamento de leads com pipeline Kanban e detecção de IA</li>
+          <li><strong>Automação:</strong> Fluxos multi-etapa com acionadores e condições</li>
+          <li><strong>Microlearning:</strong> Entrega automática de conteúdo por estágio de lead</li>
+          <li><strong>Webhooks:</strong> Integração com Zapier, HubSpot e sistemas externos</li>
+          <li><strong>Google Sheets:</strong> Sincronização automática de leads em planilhas</li>
+        </ul>
+      </div>
+    </CardContent>
+  </Card>
+);
+
 export default function AdminDocumentation() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentationVersion | null>(null);
 
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
@@ -114,7 +153,7 @@ export default function AdminDocumentation() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">📚 Documentação</h1>
-          <p className="text-muted-foreground mt-2">Gerencie versões da documentação do sistema</p>
+          <p className="text-muted-foreground mt-2">Gerencie versões da documentação e visualize online</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -188,6 +227,15 @@ export default function AdminDocumentation() {
         </Dialog>
       </div>
 
+      <UserGuide />
+
+      <Tabs defaultValue="versions" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="versions">Versões</TabsTrigger>
+          <TabsTrigger value="info">Informações</TabsTrigger>
+        </TabsList>
+        <TabsContent value="versions" className="space-y-4 mt-4">
+
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">
           Carregando versões...
@@ -218,6 +266,31 @@ export default function AdminDocumentation() {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    <Dialog open={viewOpen && selectedDoc?.id === doc.id} onOpenChange={setViewOpen}>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => { setSelectedDoc(doc); setViewOpen(true); }}
+                        className="gap-2"
+                        data-testid={`view-doc-${doc.id}`}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Visualizar
+                      </Button>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>{selectedDoc?.title}</DialogTitle>
+                          <DialogDescription>
+                            Versão {selectedDoc?.version} • {new Date(selectedDoc?.createdAt || '').toLocaleString('pt-BR')}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="prose dark:prose-invert max-w-full text-sm">
+                          <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-xs whitespace-pre-wrap break-words">
+                            {selectedDoc?.content}
+                          </pre>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     <Button
                       variant="outline"
                       size="sm"
@@ -249,6 +322,41 @@ export default function AdminDocumentation() {
           ))}
         </div>
       )}
+        </TabsContent>
+        <TabsContent value="info" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sobre o Sistema de Documentação</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div>
+                <h3 className="font-semibold mb-2">🎯 Objetivo</h3>
+                <p className="text-muted-foreground">Manter um histórico organizado de todas as versões da documentação técnica da plataforma Quanta Flow, facilitando o rastreamento de mudanças e acesso rápido às informações.</p>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">📦 O que está documentado</h3>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>Arquitetura do sistema completa</li>
+                  <li>Schema do banco de dados com 20+ tabelas</li>
+                  <li>80+ endpoints da API REST</li>
+                  <li>Integração com 4 canais de comunicação</li>
+                  <li>Fluxos de automação e microlearning</li>
+                  <li>Webhooks e integrações externas</li>
+                  <li>Setup, deployment e CI/CD</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">🚀 Stack Tecnológico</h3>
+                <p className="text-muted-foreground">Frontend: React 18 + Vite + TypeScript | Backend: Node.js + Express | Database: PostgreSQL + Drizzle ORM | Auth: JWT + bcrypt | Real-time: Socket.io | IA: OpenAI GPT-4o-mini</p>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">📝 Versionamento</h3>
+                <p className="text-muted-foreground">Cada versão documenta o estado da plataforma em um momento específico. Use "Nova Versão" quando há atualizações significativas no sistema.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
