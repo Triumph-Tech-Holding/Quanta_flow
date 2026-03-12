@@ -424,6 +424,7 @@ export const automationFlows = pgTable("automation_flows", {
   summaryFields: text("summary_fields"),
   steps: jsonb("steps").$type<Array<{ order: number; message: string; delaySeconds: number }>>(),
   conditionalExits: jsonb("conditional_exits").$type<Array<{ condition: string; label: string; targetFlowId: string; triggerKeywords: string[] }>>(),
+  agentId: varchar("agent_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -537,6 +538,7 @@ export const updateAutomationFlowSchema = z.object({
     targetFlowId: z.string(),
     triggerKeywords: z.array(z.string()),
   })).optional().nullable(),
+  agentId: z.string().optional().nullable(),
 });
 
 export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({
@@ -684,6 +686,57 @@ export type UpdateSheetIntegration = z.infer<typeof updateSheetIntegrationSchema
 export type EmailConfig = typeof emailConfigs.$inferSelect;
 export type InsertEmailConfig = z.infer<typeof insertEmailConfigSchema>;
 export type UpdateEmailConfig = z.infer<typeof updateEmailConfigSchema>;
+
+// ==================== AI Agents ====================
+
+export const aiAgents = pgTable("ai_agents", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  avatarUrl: text("avatar_url"),
+  model: varchar("model", { length: 50 }).notNull().default("gpt-4o-mini"),
+  temperature: real("temperature").notNull().default(0.7),
+  tone: varchar("tone", { length: 50 }).notNull().default("amigavel"),
+  language: varchar("language", { length: 20 }).notNull().default("pt-BR"),
+  specialty: varchar("specialty", { length: 50 }).notNull().default("generico"),
+  systemPrompt: text("system_prompt").notNull(),
+  ttsVoice: varchar("tts_voice", { length: 30 }).default("nova"),
+  tools: jsonb("tools").$type<string[]>().default([]),
+  escalationRules: jsonb("escalation_rules").$type<{ keywords: string[]; message: string }>(),
+  maxTokens: integer("max_tokens").default(500),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAiAgentSchema = createInsertSchema(aiAgents).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateAiAgentSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  model: z.enum(["gpt-4o", "gpt-4o-mini"]).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  tone: z.enum(["formal", "amigavel", "direto", "consultivo", "empatico"]).optional(),
+  language: z.enum(["pt-BR", "en-US", "es-ES"]).optional(),
+  specialty: z.enum(["vendas", "suporte", "sac", "cobranca", "onboarding", "generico"]).optional(),
+  systemPrompt: z.string().min(1).optional(),
+  ttsVoice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional(),
+  tools: z.array(z.string()).optional(),
+  escalationRules: z.object({
+    keywords: z.array(z.string()),
+    message: z.string(),
+  }).optional().nullable(),
+  maxTokens: z.number().int().min(50).max(4000).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type AiAgent = typeof aiAgents.$inferSelect;
+export type InsertAiAgent = z.infer<typeof insertAiAgentSchema>;
+export type UpdateAiAgent = z.infer<typeof updateAiAgentSchema>;
 
 // ==================== Documentation Versions ====================
 

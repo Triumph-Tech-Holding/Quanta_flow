@@ -24,6 +24,8 @@ import {
   type SheetIntegration, type InsertSheetIntegration, type UpdateSheetIntegration,
   type EmailConfig, type InsertEmailConfig, type UpdateEmailConfig,
   type DocumentationVersion, type InsertDocumentationVersion,
+  type AiAgent, type InsertAiAgent, type UpdateAiAgent,
+  aiAgents,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -102,6 +104,12 @@ export interface IStorage {
   getDocumentationVersion(id: string): Promise<DocumentationVersion | undefined>;
   createDocumentationVersion(data: InsertDocumentationVersion): Promise<DocumentationVersion>;
   deleteDocumentationVersion(id: string): Promise<boolean>;
+  // AI Agents
+  getAiAgentsByUser(userId: string): Promise<AiAgent[]>;
+  getAiAgent(id: string): Promise<AiAgent | undefined>;
+  createAiAgent(data: InsertAiAgent): Promise<AiAgent>;
+  updateAiAgent(id: string, data: UpdateAiAgent): Promise<AiAgent | undefined>;
+  deleteAiAgent(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -806,6 +814,38 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocumentationVersion(id: string): Promise<boolean> {
     const result = await db.delete(documentationVersions).where(eq(documentationVersions.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== AI Agents ====================
+
+  async getAiAgentsByUser(userId: string): Promise<AiAgent[]> {
+    return db.select().from(aiAgents)
+      .where(eq(aiAgents.userId, userId))
+      .orderBy(desc(aiAgents.updatedAt));
+  }
+
+  async getAiAgent(id: string): Promise<AiAgent | undefined> {
+    const [agent] = await db.select().from(aiAgents)
+      .where(eq(aiAgents.id, id)).limit(1);
+    return agent;
+  }
+
+  async createAiAgent(data: InsertAiAgent): Promise<AiAgent> {
+    const [agent] = await db.insert(aiAgents).values(data).returning();
+    return agent;
+  }
+
+  async updateAiAgent(id: string, data: UpdateAiAgent): Promise<AiAgent | undefined> {
+    const [agent] = await db.update(aiAgents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(aiAgents.id, id))
+      .returning();
+    return agent;
+  }
+
+  async deleteAiAgent(id: string): Promise<boolean> {
+    const result = await db.delete(aiAgents).where(eq(aiAgents.id, id)).returning();
     return result.length > 0;
   }
 }

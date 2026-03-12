@@ -154,6 +154,12 @@ const adminMenuItems = [
     icon: BookOpen,
     permission: "edit_settings",
   },
+  {
+    title: "Agentes IA",
+    url: "/admin/agents",
+    icon: Brain,
+    permission: "edit_settings",
+  },
 ];
 
 function getInitials(name: string) {

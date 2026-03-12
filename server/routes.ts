@@ -7,7 +7,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema } from "@shared/schema";
+import OpenAI from "openai";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -2407,6 +2408,167 @@ export async function registerRoutes(
     } catch (err) {
       log.error("[DELETE /api/documentation/versions/:id]", err);
       res.status(500).json({ message: "Erro ao deletar documentação" });
+    }
+  });
+
+  // ==================== AI Agents ====================
+
+  const agentOpenai = new OpenAI({
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  });
+
+  app.get("/api/admin/agents", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const agents = await storage.getAiAgentsByUser(req.user.userId);
+      res.json(agents);
+    } catch (err) {
+      log.error("[GET /api/admin/agents]", err);
+      res.status(500).json({ message: "Erro ao buscar agentes" });
+    }
+  });
+
+  app.get("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const agent = await storage.getAiAgent(req.params.id);
+      if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
+      res.json(agent);
+    } catch (err) {
+      log.error("[GET /api/admin/agents/:id]", err);
+      res.status(500).json({ message: "Erro ao buscar agente" });
+    }
+  });
+
+  app.post("/api/admin/agents", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const data = insertAiAgentSchema.parse({ ...req.body, userId: req.user.userId });
+      const agent = await storage.createAiAgent(data);
+      res.status(201).json(agent);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      log.error("[POST /api/admin/agents]", err);
+      res.status(500).json({ message: "Erro ao criar agente" });
+    }
+  });
+
+  app.put("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getAiAgent(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
+      const data = updateAiAgentSchema.parse(req.body);
+      const agent = await storage.updateAiAgent(req.params.id, data);
+      res.json(agent);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      log.error("[PUT /api/admin/agents/:id]", err);
+      res.status(500).json({ message: "Erro ao atualizar agente" });
+    }
+  });
+
+  app.delete("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getAiAgent(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
+      const deleted = await storage.deleteAiAgent(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Falha ao deletar" });
+      res.json({ ok: true });
+    } catch (err) {
+      log.error("[DELETE /api/admin/agents/:id]", err);
+      res.status(500).json({ message: "Erro ao deletar agente" });
+    }
+  });
+
+  app.post("/api/admin/agents/:id/chat", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const agent = await storage.getAiAgent(req.params.id);
+      if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
+
+      const { message, history } = req.body;
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ message: "Campo 'message' é obrigatório" });
+      }
+
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: agent.systemPrompt },
+      ];
+
+      if (Array.isArray(history)) {
+        for (const h of history.slice(-10)) {
+          if (h.role === "user" || h.role === "assistant") {
+            messages.push({ role: h.role, content: String(h.content) });
+          }
+        }
+      }
+
+      messages.push({ role: "user", content: message });
+
+      const response = await agentOpenai.chat.completions.create({
+        model: agent.model || "gpt-4o-mini",
+        messages,
+        temperature: agent.temperature ?? 0.7,
+        max_tokens: agent.maxTokens ?? 500,
+      });
+
+      const reply = response.choices[0]?.message?.content || "";
+      res.json({ reply, usage: response.usage });
+    } catch (err) {
+      log.error("[POST /api/admin/agents/:id/chat]", err);
+      res.status(500).json({ message: "Erro no chat do agente" });
+    }
+  });
+
+  app.post("/api/admin/agents/:id/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const agent = await storage.getAiAgent(req.params.id);
+      if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
+
+      const { text } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ message: "Campo 'text' é obrigatório" });
+      }
+
+      const ttsResponse = await agentOpenai.audio.speech.create({
+        model: "tts-1",
+        voice: (agent.ttsVoice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
+        input: text.slice(0, 4096),
+      });
+
+      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
+      res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
+      res.send(buffer);
+    } catch (err) {
+      log.error("[POST /api/admin/agents/:id/tts]", err);
+      res.status(500).json({ message: "Erro ao gerar áudio TTS" });
+    }
+  });
+
+  app.post("/api/admin/agents/generate-avatar", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { name, specialty, tone } = req.body;
+      const prompt = `Professional AI assistant avatar icon, clean minimalist design, solid color background, friendly robot face or abstract AI symbol representing a ${specialty || "generic"} specialist with ${tone || "friendly"} personality named "${name || "AI Agent"}". Modern flat design style, suitable for business use.`;
+
+      const imageResponse = await agentOpenai.images.generate({
+        model: "dall-e-3",
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      });
+
+      const url = imageResponse.data?.[0]?.url;
+      if (!url) return res.status(500).json({ message: "Falha ao gerar avatar" });
+      res.json({ url });
+    } catch (err) {
+      log.error("[POST /api/admin/agents/generate-avatar]", err);
+      res.status(500).json({ message: "Erro ao gerar avatar" });
     }
   });
 

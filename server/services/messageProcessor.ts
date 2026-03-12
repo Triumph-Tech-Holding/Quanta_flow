@@ -10,6 +10,7 @@ import { sendEmail } from "./emailService";
 import { db } from "../db";
 import { emailConfigs } from "../../shared/schema";
 import { eq } from "drizzle-orm";
+import OpenAI from "openai";
 
 export type MessageChannel = "whatsapp" | "telegram" | "instagram" | "email";
 
@@ -258,8 +259,48 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
           }
 
           const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
+          const flowAgentId = (automationFlow as any).agentId as string | null;
 
-          if (steps && steps.length > 0) {
+          if (flowAgentId) {
+            try {
+              const aiAgent = await storage.getAiAgent(flowAgentId);
+              if (aiAgent && aiAgent.isActive) {
+                const agentOpenai = new OpenAI({
+                  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+                  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+                });
+                const agentResponse = await agentOpenai.chat.completions.create({
+                  model: aiAgent.model || "gpt-4o-mini",
+                  messages: [
+                    { role: "system", content: aiAgent.systemPrompt },
+                    { role: "user", content: messageContent },
+                  ],
+                  temperature: aiAgent.temperature ?? 0.7,
+                  max_tokens: aiAgent.maxTokens ?? 500,
+                });
+                const agentReply = agentResponse.choices[0]?.message?.content || automationFlow.responseTemplate;
+                jobQueue.add({
+                  type: "send_message",
+                  payload: { userId, phone, message: agentReply, conversationId: conversation.id, channel, channelMetadata },
+                  runAt: now + delay,
+                });
+                log(`Automation: AI Agent "${aiAgent.name}" generated response for ${phone}`, "msg-processor");
+              } else {
+                jobQueue.add({
+                  type: "send_message",
+                  payload: { userId, phone, message: automationFlow.responseTemplate, conversationId: conversation.id, channel, channelMetadata },
+                  runAt: now + delay,
+                });
+              }
+            } catch (agentErr) {
+              console.error("AI Agent response error, falling back to template:", agentErr);
+              jobQueue.add({
+                type: "send_message",
+                payload: { userId, phone, message: automationFlow.responseTemplate, conversationId: conversation.id, channel, channelMetadata },
+                runAt: now + delay,
+              });
+            }
+          } else if (steps && steps.length > 0) {
             const sorted = [...steps].sort((a, b) => a.order - b.order);
             for (const step of sorted) {
               const runAt = now + (step.delaySeconds * 1000);

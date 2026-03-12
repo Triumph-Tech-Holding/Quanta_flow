@@ -38,10 +38,11 @@ Not specified.
 - **Multi-channel Support**: Unified processIncomingMessage() supports WhatsApp, Telegram, Instagram, and Email channels. Dedicated service files for each.
 - **CI/CD**: GitHub Actions workflows for deploy (on push to main) and PR checks.
 - **Health Check**: GET /api/health endpoint with DB connectivity status.
+- **AI Agent Factory (Fábrica de Agentes IA)**: Create and manage AI expert agents with configurable model, temperature, tone, specialty, systemPrompt, TTS voice, and max tokens. Chat preview for testing agents. Integration with automation flows via `agentId` field — when a flow has an agent, incoming messages generate AI-powered responses instead of template responses. Endpoints: GET/POST/PUT/DELETE `/api/admin/agents`, POST `/api/admin/agents/:id/chat`, POST `/api/admin/agents/:id/tts`, POST `/api/admin/agents/generate-avatar`.
 
 ### System Design Choices
 - **Modular Structure**: Clear separation of client, server, and shared codebases.
-- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations (with channel field), messages, settings, roles, permissions, audit logs, unified_contacts (with queueStatus/SLA/activeFlowId), agent_assignments, learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations, email_configs.
+- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations (with channel field), messages, settings, roles, permissions, audit logs, unified_contacts (with queueStatus/SLA/activeFlowId), agent_assignments, learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations, email_configs, ai_agents, documentation_versions. The `automation_flows` table includes an `agent_id` column referencing `ai_agents`.
 - **API Endpoints**: Structured API for authentication, lead management, WhatsApp integration, admin settings, user management, role management, audit logs, AI services, queue management, learning tracks, outbound webhooks, sheet integrations, email config, Telegram/Instagram webhooks, health check.
 - **WhatsApp Provider Management**: Flexible system to switch between different WhatsApp providers (Z-API, Baileys, Evolution).
 - **Agent Assignment**: Functionality for listing agents, assigning contacts, and automated round-robin assignment.
