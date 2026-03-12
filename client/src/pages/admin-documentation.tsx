@@ -32,7 +32,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Download, Plus, Trash2 } from "lucide-react";
-import fs from "fs";
 
 const createDocSchema = z.object({
   version: z.string().min(1, "Versão obrigatória"),
@@ -73,10 +72,9 @@ export default function AdminDocumentation() {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateDocForm) => {
-      const content = localStorage.getItem("doc-content") || "# Documentation\n\nPor ser adicionado...";
       return apiRequest("POST", "/api/documentation/versions", {
         ...data,
-        content,
+        content: "# Documentação Quanta Flow\n\nConteúdo será adicionado aqui.",
         format: "markdown",
       });
     },
