@@ -7,7 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, unifiedContacts } from "@shared/schema";
 import OpenAI from "openai";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
@@ -16,7 +16,7 @@ import { configService } from "./services/configService";
 import { checkPermission, checkRole, getUserRolesAndPermissions } from "./middleware/rbacMiddleware";
 import { log } from "./index";
 import { db } from "./db";
-import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, permissions, flowTemplates } from "@shared/schema";
+import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, permissions, flowTemplates, campaigns as campaignsTable } from "@shared/schema";
 import { eq, desc, and, sql as sqlExpr } from "drizzle-orm";
 import { detectIntent, processMessageIntent } from "./services/intentService";
 import { getWhatsAppProvider, BaileysProvider, getBaileysInstance } from "./services/whatsappProvider";
@@ -2853,6 +2853,247 @@ Return ONLY the JSON array, no markdown.`,
     } catch (err) {
       console.error("[POST /api/admin/agents/generate-avatar]", err);
       res.status(500).json({ message: "Erro ao gerar avatar" });
+    }
+  });
+
+  // ==================== Campaigns ====================
+
+  app.get("/api/admin/campaigns", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const list = await storage.getCampaignsByUser(req.user.userId);
+      res.json(list);
+    } catch (err) {
+      console.error("[GET /api/admin/campaigns]", err);
+      res.status(500).json({ message: "Erro ao listar campanhas" });
+    }
+  });
+
+  app.get("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      res.json(campaign);
+    } catch (err) {
+      console.error("[GET /api/admin/campaigns/:id]", err);
+      res.status(500).json({ message: "Erro ao buscar campanha" });
+    }
+  });
+
+  app.post("/api/admin/campaigns", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const parsed = insertCampaignSchema.parse({ ...req.body, userId: req.user.userId });
+      const campaign = await storage.createCampaign(parsed);
+      res.status(201).json(campaign);
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns]", err);
+      res.status(400).json({ message: "Erro ao criar campanha", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.patch("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getCampaign(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      const parsed = updateCampaignSchema.parse(req.body);
+      const campaign = await storage.updateCampaign(req.params.id, parsed);
+      res.json(campaign);
+    } catch (err) {
+      console.error("[PATCH /api/admin/campaigns/:id]", err);
+      res.status(400).json({ message: "Erro ao atualizar campanha", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.delete("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getCampaign(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      await storage.deleteCampaign(req.params.id);
+      res.json({ message: "Campanha excluída" });
+    } catch (err) {
+      console.error("[DELETE /api/admin/campaigns/:id]", err);
+      res.status(500).json({ message: "Erro ao excluir campanha" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/:id/start", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      if (!["draft", "paused"].includes(campaign.status)) {
+        return res.status(400).json({ message: `Campanha com status '${campaign.status}' não pode ser iniciada` });
+      }
+
+      const existingDeliveries = await storage.getCampaignDeliveries(campaign.id);
+      const existingContactIds = new Set(existingDeliveries.map(d => d.contactId));
+
+      let contacts = await storage.getUnifiedContactsByUser(req.user.userId);
+      if (campaign.segmentFilter) {
+        const filter = campaign.segmentFilter as any;
+        if (filter.type === "temperature" && filter.value) {
+          contacts = contacts.filter(c => c.temperature === filter.value);
+        } else if (filter.type === "stage" && filter.value) {
+          contacts = contacts.filter(c => c.stage === filter.value);
+        } else if (filter.type === "channel" && filter.value) {
+          contacts = contacts.filter(c => c.channelType === filter.value);
+        }
+      }
+
+      let newDeliveries = 0;
+      for (const contact of contacts) {
+        if (existingContactIds.has(contact.id)) continue;
+        const channel = (campaign.channels && campaign.channels.length > 0) ? campaign.channels[0] : "whatsapp";
+        await storage.createCampaignDelivery({ campaignId: campaign.id, contactId: contact.id, channel });
+        newDeliveries++;
+      }
+
+      const totalContacts = existingDeliveries.length + newDeliveries;
+      await db.update(campaignsTable)
+        .set({ status: "running", totalContacts, startedAt: new Date(), updatedAt: new Date() })
+        .where(eq(campaignsTable.id, campaign.id));
+
+      res.json({ ...(await storage.getCampaign(campaign.id)), totalContacts });
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns/:id/start]", err);
+      res.status(500).json({ message: "Erro ao iniciar campanha" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/:id/pause", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      if (campaign.status !== "running") return res.status(400).json({ message: "Campanha não está em execução" });
+      const updated = await storage.updateCampaign(campaign.id, { status: "paused" });
+      res.json(updated);
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns/:id/pause]", err);
+      res.status(500).json({ message: "Erro ao pausar campanha" });
+    }
+  });
+
+  app.get("/api/admin/campaigns/:id/metrics", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      const metrics = await storage.getCampaignMetrics(campaign.id);
+      res.json({ campaign, metrics });
+    } catch (err) {
+      console.error("[GET /api/admin/campaigns/:id/metrics]", err);
+      res.status(500).json({ message: "Erro ao buscar métricas" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/preview-segment", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { segmentFilter } = req.body;
+      let contacts = await storage.getUnifiedContactsByUser(req.user.userId);
+      if (segmentFilter) {
+        if (segmentFilter.type === "temperature" && segmentFilter.value) {
+          contacts = contacts.filter(c => c.temperature === segmentFilter.value);
+        } else if (segmentFilter.type === "stage" && segmentFilter.value) {
+          contacts = contacts.filter(c => c.stage === segmentFilter.value);
+        } else if (segmentFilter.type === "channel" && segmentFilter.value) {
+          contacts = contacts.filter(c => c.channelType === segmentFilter.value);
+        }
+      }
+      res.json({ count: contacts.length, sample: contacts.slice(0, 5).map(c => ({ id: c.id, name: c.name, phone: c.phone })) });
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns/preview-segment]", err);
+      res.status(500).json({ message: "Erro ao pré-visualizar segmento" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/generate-copy", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { objective, tone, channel, productInfo } = req.body;
+      const prompt = `Você é um copywriter profissional brasileiro. Gere 3 variações de mensagem de campanha de marketing para ${channel || "WhatsApp"}.
+
+Objetivo: ${objective || "Venda"}
+Tom: ${tone || "amigável"}
+${productInfo ? `Informações do produto/serviço: ${productInfo}` : ""}
+
+Use variáveis {nome} para personalização. Mantenha cada mensagem com no máximo 300 caracteres. Retorne como JSON array: [{"content": "mensagem 1"}, {"content": "mensagem 2"}, {"content": "mensagem 3"}]`;
+
+      const completion = await agentOpenai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const text = completion.choices[0]?.message?.content || "[]";
+      let suggestions;
+      try {
+        const parsed = JSON.parse(text);
+        suggestions = parsed.suggestions || parsed.messages || parsed;
+        if (!Array.isArray(suggestions)) suggestions = [suggestions];
+      } catch {
+        suggestions = [{ content: text }];
+      }
+      res.json({ suggestions });
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns/generate-copy]", err);
+      res.status(500).json({ message: "Erro ao gerar copy" });
+    }
+  });
+
+  // ==================== Message Templates ====================
+
+  app.get("/api/admin/templates", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const list = await storage.getMessageTemplatesByUser(req.user.userId);
+      res.json(list);
+    } catch (err) {
+      console.error("[GET /api/admin/templates]", err);
+      res.status(500).json({ message: "Erro ao listar templates" });
+    }
+  });
+
+  app.post("/api/admin/templates", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const parsed = insertMessageTemplateSchema.parse({ ...req.body, userId: req.user.userId });
+      const template = await storage.createMessageTemplate(parsed);
+      res.status(201).json(template);
+    } catch (err) {
+      console.error("[POST /api/admin/templates]", err);
+      res.status(400).json({ message: "Erro ao criar template", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.patch("/api/admin/templates/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getMessageTemplate(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Template não encontrado" });
+      const parsed = updateMessageTemplateSchema.parse(req.body);
+      const template = await storage.updateMessageTemplate(req.params.id, parsed);
+      res.json(template);
+    } catch (err) {
+      console.error("[PATCH /api/admin/templates/:id]", err);
+      res.status(400).json({ message: "Erro ao atualizar template", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.delete("/api/admin/templates/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const existing = await storage.getMessageTemplate(req.params.id);
+      if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Template não encontrado" });
+      await storage.deleteMessageTemplate(req.params.id);
+      res.json({ message: "Template excluído" });
+    } catch (err) {
+      console.error("[DELETE /api/admin/templates/:id]", err);
+      res.status(500).json({ message: "Erro ao excluir template" });
     }
   });
 

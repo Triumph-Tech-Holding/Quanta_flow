@@ -39,16 +39,18 @@ Not specified.
 - **CI/CD**: GitHub Actions workflows for deploy (on push to main) and PR checks.
 - **Health Check**: GET /api/health endpoint with DB connectivity status.
 - **AI Agent Factory (Fábrica de Agentes IA)**: Create and manage AI expert agents with configurable model, temperature, tone, specialty, systemPrompt, TTS voice, and max tokens. Chat preview for testing agents. Integration with automation flows via `agentId` field — when a flow has an agent, incoming messages generate AI-powered responses instead of template responses. Endpoints: GET/POST/PUT/DELETE `/api/admin/agents`, POST `/api/admin/agents/:id/chat`, POST `/api/admin/agents/:id/tts`, POST `/api/admin/agents/generate-avatar`.
+- **Campaigns & Sequences (Campanhas Omnichannel)**: Mass messaging campaigns with segment-based targeting (temperature, stage, channel), drip sequences with configurable delays, AI copy generation via GPT-4o-mini, rate limiting, allowed hours control. 4-step wizard for campaign creation. Campaign metrics dashboard with send/delivery/reply/conversion rates. Message template library with categories. CampaignWorker background process (60s interval) processes pending deliveries. Reply tracking in messageProcessor auto-updates campaign metrics. Endpoints: CRUD `/api/admin/campaigns`, POST `start/pause`, GET `metrics`, POST `preview-segment`, POST `generate-copy`, CRUD `/api/admin/templates`.
 
 ### System Design Choices
 - **Modular Structure**: Clear separation of client, server, and shared codebases.
-- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations (with channel field), messages, settings, roles, permissions, audit logs, unified_contacts (with queueStatus/SLA/activeFlowId), agent_assignments, learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations, email_configs, ai_agents, documentation_versions. The `automation_flows` table includes an `agent_id` column referencing `ai_agents`.
+- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations (with channel field), messages, settings, roles, permissions, audit logs, unified_contacts (with queueStatus/SLA/activeFlowId), agent_assignments, learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations, email_configs, ai_agents, documentation_versions, campaigns, campaign_deliveries, message_templates. The `automation_flows` table includes an `agent_id` column referencing `ai_agents`.
 - **API Endpoints**: Structured API for authentication, lead management, WhatsApp integration, admin settings, user management, role management, audit logs, AI services, queue management, learning tracks, outbound webhooks, sheet integrations, email config, Telegram/Instagram webhooks, health check.
 - **WhatsApp Provider Management**: Flexible system to switch between different WhatsApp providers (Z-API, Baileys, Evolution).
 - **Agent Assignment**: Functionality for listing agents, assigning contacts, and automated round-robin assignment.
 - **Real-time Data Sync**: Socket.io for instant updates on new messages, instance connections, and configuration changes.
 - **JobQueue**: In-memory job queue processing send_message, check_inactivity, and check_sla jobs every 5 seconds.
 - **LearningWorker**: Background worker processing microlearning delivery every 5 minutes.
+- **CampaignWorker**: Background worker processing campaign deliveries every 60 seconds, respecting rate limits and allowed hours.
 - **WebhookDispatcher**: Async webhook dispatcher with HMAC signing and 5s timeout per call.
 
 ## External Dependencies

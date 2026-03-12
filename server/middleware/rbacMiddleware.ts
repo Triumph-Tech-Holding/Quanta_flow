@@ -119,7 +119,7 @@ export function checkPermission(requiredPermission: string) {
   };
 }
 
-export function checkRole(requiredRole: string) {
+export function checkRole(requiredRole: string | string[]) {
   return async (req: RBACRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ message: "Não autenticado" });
@@ -127,8 +127,9 @@ export function checkRole(requiredRole: string) {
 
     try {
       const { roles: userRoleNames } = await getUserRolesAndPermissions(req.user.userId);
+      const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
 
-      if (userRoleNames.includes(requiredRole)) {
+      if (requiredRoles.some(r => userRoleNames.includes(r))) {
         req.user.roles = userRoleNames;
         return next();
       }
@@ -139,7 +140,7 @@ export function checkRole(requiredRole: string) {
         return next();
       }
 
-      await logUnauthorizedAccess(req, `role:${requiredRole}`);
+      await logUnauthorizedAccess(req, `role:${requiredRoles.join(",")}`);
       return res.status(403).json({
         message: "Acesso negado. Role insuficiente.",
         required: requiredRole,

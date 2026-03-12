@@ -19,6 +19,7 @@ import {
   Radio,
   BookOpen,
   Zap,
+  Megaphone,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -165,6 +166,12 @@ const adminMenuItems = [
     title: "Flow Builder",
     url: "/admin/flows",
     icon: Zap,
+    permission: "edit_settings",
+  },
+  {
+    title: "Campanhas",
+    url: "/admin/campaigns",
+    icon: Megaphone,
     permission: "edit_settings",
   },
 ];

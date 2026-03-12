@@ -26,6 +26,10 @@ import {
   type DocumentationVersion, type InsertDocumentationVersion,
   type AiAgent, type InsertAiAgent, type UpdateAiAgent,
   aiAgents,
+  campaigns, campaignDeliveries, messageTemplates,
+  type Campaign, type InsertCampaign, type UpdateCampaign,
+  type CampaignDelivery,
+  type MessageTemplate, type InsertMessageTemplate, type UpdateMessageTemplate,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -110,6 +114,24 @@ export interface IStorage {
   createAiAgent(data: InsertAiAgent): Promise<AiAgent>;
   updateAiAgent(id: string, data: UpdateAiAgent): Promise<AiAgent | undefined>;
   deleteAiAgent(id: string): Promise<boolean>;
+  // Campaigns
+  getCampaignsByUser(userId: string): Promise<Campaign[]>;
+  getCampaign(id: string): Promise<Campaign | undefined>;
+  createCampaign(data: InsertCampaign): Promise<Campaign>;
+  updateCampaign(id: string, data: UpdateCampaign): Promise<Campaign | undefined>;
+  deleteCampaign(id: string): Promise<boolean>;
+  getCampaignDeliveries(campaignId: string): Promise<CampaignDelivery[]>;
+  createCampaignDelivery(data: { campaignId: string; contactId: string; channel: string }): Promise<CampaignDelivery>;
+  updateCampaignDelivery(id: string, data: Partial<CampaignDelivery>): Promise<CampaignDelivery | undefined>;
+  getPendingDeliveries(campaignId: string, limit: number): Promise<CampaignDelivery[]>;
+  getCampaignMetrics(campaignId: string): Promise<{ total: number; sent: number; delivered: number; replied: number; converted: number; failed: number }>;
+  findPendingDeliveryByContact(contactId: string): Promise<CampaignDelivery | undefined>;
+  // Message Templates
+  getMessageTemplatesByUser(userId: string): Promise<MessageTemplate[]>;
+  getMessageTemplate(id: string): Promise<MessageTemplate | undefined>;
+  createMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate>;
+  updateMessageTemplate(id: string, data: UpdateMessageTemplate): Promise<MessageTemplate | undefined>;
+  deleteMessageTemplate(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -846,6 +868,121 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAiAgent(id: string): Promise<boolean> {
     const result = await db.delete(aiAgents).where(eq(aiAgents.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== Campaigns ====================
+
+  async getCampaignsByUser(userId: string): Promise<Campaign[]> {
+    return db.select().from(campaigns)
+      .where(eq(campaigns.userId, userId))
+      .orderBy(desc(campaigns.updatedAt));
+  }
+
+  async getCampaign(id: string): Promise<Campaign | undefined> {
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
+    return c;
+  }
+
+  async createCampaign(data: InsertCampaign): Promise<Campaign> {
+    const [c] = await db.insert(campaigns).values(data).returning();
+    return c;
+  }
+
+  async updateCampaign(id: string, data: UpdateCampaign): Promise<Campaign | undefined> {
+    const [c] = await db.update(campaigns)
+      .set({ ...data, updatedAt: new Date() } as any)
+      .where(eq(campaigns.id, id))
+      .returning();
+    return c;
+  }
+
+  async deleteCampaign(id: string): Promise<boolean> {
+    const result = await db.delete(campaigns).where(eq(campaigns.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getCampaignDeliveries(campaignId: string): Promise<CampaignDelivery[]> {
+    return db.select().from(campaignDeliveries)
+      .where(eq(campaignDeliveries.campaignId, campaignId))
+      .orderBy(desc(campaignDeliveries.createdAt));
+  }
+
+  async createCampaignDelivery(data: { campaignId: string; contactId: string; channel: string }): Promise<CampaignDelivery> {
+    const [d] = await db.insert(campaignDeliveries).values(data).returning();
+    return d;
+  }
+
+  async updateCampaignDelivery(id: string, data: Partial<CampaignDelivery>): Promise<CampaignDelivery | undefined> {
+    const [d] = await db.update(campaignDeliveries)
+      .set(data)
+      .where(eq(campaignDeliveries.id, id))
+      .returning();
+    return d;
+  }
+
+  async getPendingDeliveries(campaignId: string, limit: number): Promise<CampaignDelivery[]> {
+    return db.select().from(campaignDeliveries)
+      .where(and(
+        eq(campaignDeliveries.campaignId, campaignId),
+        eq(campaignDeliveries.status, "pending"),
+      ))
+      .orderBy(asc(campaignDeliveries.createdAt))
+      .limit(limit);
+  }
+
+  async getCampaignMetrics(campaignId: string): Promise<{ total: number; sent: number; delivered: number; replied: number; converted: number; failed: number }> {
+    const deliveries = await db.select().from(campaignDeliveries)
+      .where(eq(campaignDeliveries.campaignId, campaignId));
+    return {
+      total: deliveries.length,
+      sent: deliveries.filter(d => d.status !== "pending").length,
+      delivered: deliveries.filter(d => ["delivered", "read", "replied", "converted"].includes(d.status)).length,
+      replied: deliveries.filter(d => ["replied", "converted"].includes(d.status)).length,
+      converted: deliveries.filter(d => d.status === "converted").length,
+      failed: deliveries.filter(d => d.status === "failed").length,
+    };
+  }
+
+  async findPendingDeliveryByContact(contactId: string): Promise<CampaignDelivery | undefined> {
+    const [d] = await db.select().from(campaignDeliveries)
+      .where(and(
+        eq(campaignDeliveries.contactId, contactId),
+        inArray(campaignDeliveries.status, ["pending", "sent", "delivered", "read"]),
+      ))
+      .orderBy(desc(campaignDeliveries.createdAt))
+      .limit(1);
+    return d;
+  }
+
+  // ==================== Message Templates ====================
+
+  async getMessageTemplatesByUser(userId: string): Promise<MessageTemplate[]> {
+    return db.select().from(messageTemplates)
+      .where(eq(messageTemplates.userId, userId))
+      .orderBy(desc(messageTemplates.updatedAt));
+  }
+
+  async getMessageTemplate(id: string): Promise<MessageTemplate | undefined> {
+    const [t] = await db.select().from(messageTemplates).where(eq(messageTemplates.id, id)).limit(1);
+    return t;
+  }
+
+  async createMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate> {
+    const [t] = await db.insert(messageTemplates).values(data).returning();
+    return t;
+  }
+
+  async updateMessageTemplate(id: string, data: UpdateMessageTemplate): Promise<MessageTemplate | undefined> {
+    const [t] = await db.update(messageTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(messageTemplates.id, id))
+      .returning();
+    return t;
+  }
+
+  async deleteMessageTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(messageTemplates).where(eq(messageTemplates.id, id)).returning();
     return result.length > 0;
   }
 }

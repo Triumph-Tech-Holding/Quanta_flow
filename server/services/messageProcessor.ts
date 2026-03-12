@@ -8,8 +8,8 @@ import { sendTelegramMessage } from "./telegramService";
 import { sendInstagramMessage } from "./instagramService";
 import { sendEmail } from "./emailService";
 import { db } from "../db";
-import { emailConfigs } from "../../shared/schema";
-import { eq } from "drizzle-orm";
+import { emailConfigs, campaigns as campaignsTable } from "../../shared/schema";
+import { eq, sql as sqlExpr } from "drizzle-orm";
 import OpenAI from "openai";
 
 export type MessageChannel = "whatsapp" | "telegram" | "instagram" | "email";
@@ -368,6 +368,21 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
       }
 
       jobQueue.cancelByContactAndType(crmContact.id, "check_inactivity");
+
+      try {
+        const pendingDelivery = await storage.findPendingDeliveryByContact(crmContact.id);
+        if (pendingDelivery) {
+          await storage.updateCampaignDelivery(pendingDelivery.id, {
+            status: "replied",
+            repliedAt: new Date(),
+          });
+          await db.update(campaignsTable)
+            .set({ repliedCount: sqlExpr`COALESCE(${campaignsTable.repliedCount}, 0) + 1` })
+            .where(eq(campaignsTable.id, pendingDelivery.campaignId));
+        }
+      } catch (trackErr) {
+        console.error("[Campaign Reply Tracking]", trackErr);
+      }
 
       const intentResult = await processMessageIntent(messageContent, crmContact.id, userId, storage);
 

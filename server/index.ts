@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
 import { startLearningWorker } from "./learningWorker";
+import { startCampaignWorker } from "./campaignWorker";
 
 const RBAC_SEED = {
   roles: [
@@ -275,6 +276,7 @@ app.use((req, res, next) => {
   await seedFlowTemplates();
   jobQueue.start();
   startLearningWorker();
+  startCampaignWorker();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

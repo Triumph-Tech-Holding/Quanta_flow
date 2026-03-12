@@ -828,3 +828,129 @@ export const insertDocumentationVersionSchema = createInsertSchema(documentation
 
 export type DocumentationVersion = typeof documentationVersions.$inferSelect;
 export type InsertDocumentationVersion = z.infer<typeof insertDocumentationVersionSchema>;
+
+// ==================== Campaigns & Sequences ====================
+
+export const campaignStatusEnum = pgEnum("campaign_status", ["draft", "scheduled", "running", "paused", "completed"]);
+export const campaignContentTypeEnum = pgEnum("campaign_content_type", ["single", "sequence", "agent"]);
+export const deliveryStatusEnum = pgEnum("delivery_status", ["pending", "sent", "delivered", "read", "replied", "converted", "failed"]);
+
+export const campaigns = pgTable("campaigns", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  status: campaignStatusEnum("status").notNull().default("draft"),
+  segmentFilter: jsonb("segment_filter").$type<{
+    type: "all" | "temperature" | "stage" | "tag" | "channel";
+    value?: string;
+  }>(),
+  channels: text("channels").array().notNull().default(sql`ARRAY['whatsapp']::text[]`),
+  contentType: campaignContentTypeEnum("content_type").notNull().default("single"),
+  messages: jsonb("messages").$type<Array<{
+    order: number;
+    content: string;
+    delayMinutes?: number;
+    channel?: string;
+  }>>().notNull().default(sql`'[]'::jsonb`),
+  agentId: varchar("agent_id", { length: 36 }),
+  scheduledAt: timestamp("scheduled_at"),
+  rateLimit: integer("rate_limit").default(100),
+  allowedHours: jsonb("allowed_hours").$type<{
+    days: number[];
+    startHour: number;
+    endHour: number;
+  }>(),
+  totalContacts: integer("total_contacts").default(0),
+  sentCount: integer("sent_count").default(0),
+  deliveredCount: integer("delivered_count").default(0),
+  repliedCount: integer("replied_count").default(0),
+  convertedCount: integer("converted_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const campaignDeliveries = pgTable("campaign_deliveries", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id", { length: 36 }).notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  channel: varchar("channel", { length: 20 }).notNull().default("whatsapp"),
+  status: deliveryStatusEnum("status").notNull().default("pending"),
+  messageIndex: integer("message_index").default(0),
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  repliedAt: timestamp("replied_at"),
+  convertedAt: timestamp("converted_at"),
+  failedAt: timestamp("failed_at"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const messageTemplates = pgTable("message_templates", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull().default("geral"),
+  channel: varchar("channel", { length: 20 }).default("whatsapp"),
+  content: text("content").notNull(),
+  variables: text("variables").array(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+  id: true, createdAt: true, updatedAt: true, sentCount: true, deliveredCount: true,
+  repliedCount: true, convertedCount: true, failedCount: true, startedAt: true, completedAt: true, totalContacts: true,
+});
+
+export const updateCampaignSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  status: z.enum(["draft", "scheduled", "running", "paused", "completed"]).optional(),
+  segmentFilter: z.object({
+    type: z.enum(["all", "temperature", "stage", "tag", "channel"]),
+    value: z.string().optional(),
+  }).optional().nullable(),
+  channels: z.array(z.string()).optional(),
+  contentType: z.enum(["single", "sequence", "agent"]).optional(),
+  messages: z.array(z.object({
+    order: z.number(),
+    content: z.string(),
+    delayMinutes: z.number().optional(),
+    channel: z.string().optional(),
+  })).optional(),
+  agentId: z.string().optional().nullable(),
+  scheduledAt: z.string().optional().nullable(),
+  rateLimit: z.number().int().min(1).optional(),
+  allowedHours: z.object({
+    days: z.array(z.number()),
+    startHour: z.number(),
+    endHour: z.number(),
+  }).optional().nullable(),
+});
+
+export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateMessageTemplateSchema = z.object({
+  name: z.string().min(1).optional(),
+  category: z.string().optional(),
+  channel: z.string().optional(),
+  content: z.string().optional(),
+  variables: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type UpdateCampaign = z.infer<typeof updateCampaignSchema>;
+export type CampaignDelivery = typeof campaignDeliveries.$inferSelect;
+export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
+export type UpdateMessageTemplate = z.infer<typeof updateMessageTemplateSchema>;
