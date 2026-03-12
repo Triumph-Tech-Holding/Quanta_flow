@@ -129,114 +129,30 @@ async function executeFlowBlocks(
       }
       case "audio_tts": {
         const text = interpolateVars(cfg.message || "", ctx.crmContact);
-        try {
-          const { generateFlowTts } = await import("./ttsService");
-          const voice = (cfg.voice as string) || "nova";
-          const audioBuffer = await generateFlowTts(text, voice);
-          const fs = await import("fs");
-          const path = await import("path");
-          const os = await import("os");
-          const audioPath = path.default.join(os.default.tmpdir(), `flow_tts_${Date.now()}.mp3`);
-          fs.default.writeFileSync(audioPath, audioBuffer);
-
-          if (ctx.channel === "whatsapp") {
-            const { getWhatsAppProvider } = await import("./whatsappProvider");
-            const provider = await getWhatsAppProvider(ctx.userId);
-            if (provider.sendAudio) {
-              await provider.sendAudio(ctx.phone, audioPath);
-              log(`Block executor: audio_tts — delivered audio via WhatsApp to ${ctx.phone}`, "msg-processor");
-            } else {
-              jobQueue.add({
-                type: "send_message",
-                payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-                runAt: ctx.now + ctx.delay + stepDelay,
-              });
-            }
-          } else if (ctx.channel === "telegram") {
-            const botToken = (ctx.channelMetadata?.botToken as string) || "";
-            if (botToken) {
-              const formData = new FormData();
-              const audioBlob = new Blob([fs.default.readFileSync(audioPath)], { type: "audio/mpeg" });
-              formData.append("chat_id", ctx.phone);
-              formData.append("audio", audioBlob, "audio.mp3");
-              await fetch(`https://api.telegram.org/bot${botToken}/sendAudio`, {
-                method: "POST",
-                body: formData,
-              }).catch(() => {});
-              log(`Block executor: audio_tts — delivered audio via Telegram to ${ctx.phone}`, "msg-processor");
-            }
-          } else {
-            jobQueue.add({
-              type: "send_message",
-              payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-              runAt: ctx.now + ctx.delay + stepDelay,
-            });
-          }
-          try { fs.default.unlinkSync(audioPath); } catch {}
-        } catch (err) {
-          log(`Block executor: audio_tts error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");
-          jobQueue.add({
-            type: "send_message",
-            payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-            runAt: ctx.now + ctx.delay + stepDelay,
-          });
-        }
+        const voice = (cfg.voice as string) || "nova";
+        jobQueue.add({
+          type: "send_flow_audio",
+          payload: {
+            userId: ctx.userId, phone: ctx.phone, text, voice,
+            conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata,
+          },
+          runAt: ctx.now + ctx.delay + stepDelay,
+        });
+        log(`Block executor: audio_tts — scheduled TTS for ${ctx.phone} (delay: ${stepDelay}ms)`, "msg-processor");
         currentBlockId = block.nextBlockId || null;
         break;
       }
       case "image_ai": {
-        try {
-          const imgOpenai = new OpenAI({
-            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-          });
-          const imageResponse = await imgOpenai.images.generate({
-            model: "dall-e-3",
-            prompt: ((cfg.prompt as string) || "abstract art").slice(0, 1000),
-            n: 1,
-            size: "1024x1024",
-          });
-          const imageUrl = imageResponse.data[0]?.url;
-          if (imageUrl) {
-            if (ctx.channel === "whatsapp") {
-              const { getWhatsAppProvider } = await import("./whatsappProvider");
-              const provider = await getWhatsAppProvider(ctx.userId);
-              if (provider.sendImage) {
-                await provider.sendImage(ctx.phone, imageUrl, (cfg.prompt as string) || "");
-                log(`Block executor: image_ai — sent image via provider to ${ctx.phone}`, "msg-processor");
-              } else {
-                jobQueue.add({
-                  type: "send_message",
-                  payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-                  runAt: ctx.now + ctx.delay + stepDelay,
-                });
-              }
-            } else if (ctx.channel === "telegram") {
-              const botToken = (ctx.channelMetadata?.botToken as string) || "";
-              if (botToken) {
-                await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ chat_id: ctx.phone, photo: imageUrl, caption: (cfg.prompt as string) || "" }),
-                }).catch(() => {});
-              }
-              log(`Block executor: image_ai — sent image via Telegram to ${ctx.phone}`, "msg-processor");
-            } else {
-              jobQueue.add({
-                type: "send_message",
-                payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-                runAt: ctx.now + ctx.delay + stepDelay,
-              });
-            }
-          }
-        } catch (err) {
-          log(`Block executor: image_ai error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");
-          jobQueue.add({
-            type: "send_message",
-            payload: { userId: ctx.userId, phone: ctx.phone, message: `🖼️ [Imagem: ${cfg.prompt || "imagem"}]`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-            runAt: ctx.now + ctx.delay + stepDelay,
-          });
-        }
+        const prompt = (cfg.prompt as string) || "abstract art";
+        jobQueue.add({
+          type: "send_flow_image",
+          payload: {
+            userId: ctx.userId, phone: ctx.phone, prompt,
+            conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata,
+          },
+          runAt: ctx.now + ctx.delay + stepDelay,
+        });
+        log(`Block executor: image_ai — scheduled image gen for ${ctx.phone} (delay: ${stepDelay}ms)`, "msg-processor");
         currentBlockId = block.nextBlockId || null;
         break;
       }

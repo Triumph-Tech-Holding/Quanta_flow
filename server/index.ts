@@ -4,7 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocket } from "./socket";
 import { db } from "./db";
-import { users, roles, permissions, rolePermissions, userRoles } from "@shared/schema";
+import { users, roles, permissions, rolePermissions, userRoles, flowTemplates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
@@ -126,6 +126,91 @@ async function ensureAdminUser() {
   }
 }
 
+const FLOW_TEMPLATE_SEEDS = [
+  {
+    id: "tpl_welcome",
+    name: "Boas-vindas",
+    description: "Fluxo de boas-vindas para novos contatos",
+    category: "onboarding",
+    blocks: [
+      { id: "b1", type: "text", label: "Saudação", config: { message: "Olá {nome}! 👋 Seja bem-vindo(a)! Como posso te ajudar hoje?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+      { id: "b2", type: "delay", label: "Aguardar resposta", config: { delaySeconds: 60, delayUnit: "seconds" }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+      { id: "b3", type: "text", label: "Follow-up", config: { message: "Estou aqui se precisar de algo! 😊" }, position: { x: 250, y: 350 }, nextBlockId: null },
+    ],
+  },
+  {
+    id: "tpl_qualification",
+    name: "Qualificação de Vendas",
+    description: "Qualifica leads automaticamente e encaminha quentes para humano",
+    category: "vendas",
+    blocks: [
+      { id: "b1", type: "text", label: "Pergunta inicial", config: { message: "Olá {nome}! Obrigado pelo interesse. Pode me contar mais sobre o que você precisa?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+      { id: "b2", type: "ai_agent", label: "IA Qualifica", config: {}, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+      { id: "b3", type: "condition", label: "Lead Quente?", config: { conditionType: "temperature", conditionValue: "quente" }, position: { x: 250, y: 350 }, conditionTrueId: "b4", conditionFalseId: "b5" },
+      { id: "b4", type: "queue_entry", label: "Fila VIP", config: { slaMinutes: 15 }, position: { x: 500, y: 500 }, nextBlockId: null },
+      { id: "b5", type: "update_lead", label: "Marcar Morno", config: { leadTemperature: "morno" }, position: { x: 0, y: 500 }, nextBlockId: "b6" },
+      { id: "b6", type: "text", label: "Nutrição", config: { message: "Vou te enviar mais informações sobre nossos serviços! 📋" }, position: { x: 0, y: 650 }, nextBlockId: null },
+    ],
+  },
+  {
+    id: "tpl_support",
+    name: "Suporte com IA",
+    description: "Atendimento com IA e escalação para humano quando necessário",
+    category: "suporte",
+    blocks: [
+      { id: "b1", type: "text", label: "Boas-vindas", config: { message: "Olá {nome}! Sou o assistente virtual. Como posso ajudar?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+      { id: "b2", type: "ai_agent", label: "IA Responde", config: {}, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+      { id: "b3", type: "condition", label: "Resolvido?", config: { conditionType: "intent", conditionValue: "satisfied" }, position: { x: 250, y: 350 }, conditionTrueId: "b4", conditionFalseId: "b5" },
+      { id: "b4", type: "resolve", label: "Finalizar", config: {}, position: { x: 500, y: 500 }, nextBlockId: null },
+      { id: "b5", type: "queue_entry", label: "Humano", config: { slaMinutes: 30 }, position: { x: 0, y: 500 }, nextBlockId: null },
+    ],
+  },
+  {
+    id: "tpl_nurturing",
+    name: "Nutrição de Leads",
+    description: "Sequência de mensagens para engajar leads ao longo do tempo",
+    category: "marketing",
+    blocks: [
+      { id: "b1", type: "text", label: "Msg 1", config: { message: "Olá {nome}! Temos novidades incríveis pra você 🚀" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+      { id: "b2", type: "delay", label: "Espera 1 dia", config: { delaySeconds: 86400, delayUnit: "seconds" }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+      { id: "b3", type: "text", label: "Msg 2", config: { message: "Sabia que nossos clientes aumentaram as vendas em 40%? 📈" }, position: { x: 250, y: 350 }, nextBlockId: "b4" },
+      { id: "b4", type: "delay", label: "Espera 2 dias", config: { delaySeconds: 172800, delayUnit: "seconds" }, position: { x: 250, y: 500 }, nextBlockId: "b5" },
+      { id: "b5", type: "text", label: "CTA", config: { message: "Quer conversar com um especialista? Responda SIM! 🎯" }, position: { x: 250, y: 650 }, nextBlockId: "b6" },
+      { id: "b6", type: "condition", label: "Respondeu SIM?", config: { conditionType: "keyword", conditionValue: "sim,quero,interesse" }, position: { x: 250, y: 800 }, conditionTrueId: "b7", conditionFalseId: null },
+      { id: "b7", type: "queue_entry", label: "Agendar", config: { slaMinutes: 30 }, position: { x: 500, y: 950 }, nextBlockId: null },
+    ],
+  },
+  {
+    id: "tpl_multimedia",
+    name: "Apresentação Multimídia",
+    description: "Fluxo com áudio e imagem gerados por IA",
+    category: "marketing",
+    blocks: [
+      { id: "b1", type: "text", label: "Saudação", config: { message: "Olá {nome}! Preparamos algo especial pra você! 🎁" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+      { id: "b2", type: "audio_tts", label: "Áudio boas-vindas", config: { message: "Olá! Seja muito bem-vindo à nossa empresa. Estamos muito felizes em ter você aqui!", voice: "nova" }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+      { id: "b3", type: "delay", label: "Pausa", config: { delaySeconds: 5, delayUnit: "seconds" }, position: { x: 250, y: 350 }, nextBlockId: "b4" },
+      { id: "b4", type: "image_ai", label: "Imagem produto", config: { prompt: "Modern product showcase, professional photography, clean white background" }, position: { x: 250, y: 500 }, nextBlockId: "b5" },
+      { id: "b5", type: "text", label: "CTA", config: { message: "Gostou? Responda para saber mais! 💬" }, position: { x: 250, y: 650 }, nextBlockId: null },
+    ],
+  },
+];
+
+async function seedFlowTemplates() {
+  try {
+    const existing = await db.select({ id: flowTemplates.id }).from(flowTemplates);
+    const existingIds = new Set(existing.map((t) => t.id));
+
+    for (const tpl of FLOW_TEMPLATE_SEEDS) {
+      if (!existingIds.has(tpl.id)) {
+        await db.insert(flowTemplates).values(tpl);
+      }
+    }
+    log(`Flow templates seed OK (${FLOW_TEMPLATE_SEEDS.length} templates)`, "seed");
+  } catch (err) {
+    console.error("Error seeding flow templates:", err);
+  }
+}
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -187,6 +272,7 @@ app.use((req, res, next) => {
 (async () => {
   await ensureRBAC();
   await ensureAdminUser();
+  await seedFlowTemplates();
   jobQueue.start();
   startLearningWorker();
   await registerRoutes(httpServer, app);

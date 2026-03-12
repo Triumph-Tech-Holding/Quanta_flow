@@ -463,6 +463,15 @@ export const automationFlows = pgTable("automation_flows", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const flowTemplates = pgTable("flow_templates", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  blocks: jsonb("blocks").$type<FlowBlock[]>().notNull(),
+  category: varchar("category", { length: 100 }).default("general"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const brandingConfig = pgTable("branding_config", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),

@@ -3,7 +3,7 @@ import { getWhatsAppProvider } from "./services/whatsappProvider";
 import { storage } from "./storage";
 
 
-export type JobType = "send_message" | "send_audio" | "check_inactivity" | "check_sla";
+export type JobType = "send_message" | "send_audio" | "send_flow_audio" | "send_flow_image" | "check_inactivity" | "check_sla";
 export type JobStatus = "pending" | "running" | "done" | "failed" | "cancelled";
 
 interface SendMessagePayload {
@@ -11,6 +11,8 @@ interface SendMessagePayload {
   phone: string;
   message: string;
   conversationId: string;
+  channel?: string;
+  channelMetadata?: Record<string, unknown>;
 }
 
 interface SendAudioPayload {
@@ -19,6 +21,25 @@ interface SendAudioPayload {
   text: string;
   agentId: string;
   conversationId: string;
+}
+
+interface SendFlowAudioPayload {
+  userId: string;
+  phone: string;
+  text: string;
+  voice: string;
+  conversationId: string;
+  channel: string;
+  channelMetadata: Record<string, unknown>;
+}
+
+interface SendFlowImagePayload {
+  userId: string;
+  phone: string;
+  prompt: string;
+  conversationId: string;
+  channel: string;
+  channelMetadata: Record<string, unknown>;
 }
 
 interface CheckInactivityPayload {
@@ -37,7 +58,7 @@ interface CheckSlaPayload {
 export interface Job {
   id: string;
   type: JobType;
-  payload: SendMessagePayload | SendAudioPayload | CheckInactivityPayload | CheckSlaPayload;
+  payload: SendMessagePayload | SendAudioPayload | SendFlowAudioPayload | SendFlowImagePayload | CheckInactivityPayload | CheckSlaPayload;
   runAt: number;
   status: JobStatus;
   createdAt: number;
@@ -158,6 +179,99 @@ class JobQueue {
         try { fs.default.unlinkSync(audioPath); } catch {}
       } catch (audioErr) {
         log(`JobQueue: send_audio — TTS error: ${audioErr instanceof Error ? audioErr.message : String(audioErr)}`, "jobqueue");
+      }
+    } else if (job.type === "send_flow_audio") {
+      const p = job.payload as SendFlowAudioPayload;
+      try {
+        const { generateFlowTts } = await import("./services/ttsService");
+        const audioBuffer = await generateFlowTts(p.text, p.voice);
+        const fs = await import("fs");
+        const pathMod = await import("path");
+        const os = await import("os");
+        const audioPath = pathMod.default.join(os.default.tmpdir(), `flow_tts_${Date.now()}.mp3`);
+        fs.default.writeFileSync(audioPath, audioBuffer);
+
+        if (p.channel === "whatsapp") {
+          const provider = await getWhatsAppProvider(p.userId);
+          if (provider.sendAudio) {
+            await provider.sendAudio(p.phone, audioPath);
+            log(`JobQueue: send_flow_audio — delivered audio via WhatsApp to ${p.phone}`, "jobqueue");
+          } else {
+            await provider.sendMessage(p.phone, `🔊 ${p.text}`);
+            log(`JobQueue: send_flow_audio — fallback text to ${p.phone}`, "jobqueue");
+          }
+        } else if (p.channel === "telegram") {
+          const botToken = (p.channelMetadata?.botToken as string) || "";
+          if (botToken) {
+            const { Blob } = await import("buffer");
+            const audioData = fs.default.readFileSync(audioPath);
+            const formData = new FormData();
+            formData.append("chat_id", p.phone);
+            formData.append("audio", new Blob([audioData], { type: "audio/mpeg" }), "audio.mp3");
+            await fetch(`https://api.telegram.org/bot${botToken}/sendAudio`, { method: "POST", body: formData });
+            log(`JobQueue: send_flow_audio — delivered audio via Telegram to ${p.phone}`, "jobqueue");
+          }
+        }
+        try { fs.default.unlinkSync(audioPath); } catch {}
+
+        await storage.createMessage({
+          conversationId: p.conversationId,
+          userId: p.userId,
+          messageId: `flow_audio_${Date.now()}`,
+          direction: "outgoing",
+          content: `🔊 ${p.text}`,
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        log(`JobQueue: send_flow_audio error — ${err instanceof Error ? err.message : String(err)}`, "jobqueue");
+      }
+    } else if (job.type === "send_flow_image") {
+      const p = job.payload as SendFlowImagePayload;
+      try {
+        const OpenAI = (await import("openai")).default;
+        const imgOpenai = new OpenAI({
+          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        });
+        const imageResponse = await imgOpenai.images.generate({
+          model: "dall-e-3",
+          prompt: p.prompt.slice(0, 1000),
+          n: 1,
+          size: "1024x1024",
+        });
+        const imageUrl = imageResponse.data[0]?.url;
+        if (imageUrl) {
+          if (p.channel === "whatsapp") {
+            const provider = await getWhatsAppProvider(p.userId);
+            if (provider.sendImage) {
+              await provider.sendImage(p.phone, imageUrl, p.prompt);
+              log(`JobQueue: send_flow_image — delivered image via WhatsApp to ${p.phone}`, "jobqueue");
+            } else {
+              await provider.sendMessage(p.phone, imageUrl);
+              log(`JobQueue: send_flow_image — sent image URL to ${p.phone}`, "jobqueue");
+            }
+          } else if (p.channel === "telegram") {
+            const botToken = (p.channelMetadata?.botToken as string) || "";
+            if (botToken) {
+              await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: p.phone, photo: imageUrl, caption: p.prompt }),
+              });
+              log(`JobQueue: send_flow_image — delivered image via Telegram to ${p.phone}`, "jobqueue");
+            }
+          }
+          await storage.createMessage({
+            conversationId: p.conversationId,
+            userId: p.userId,
+            messageId: `flow_img_${Date.now()}`,
+            direction: "outgoing",
+            content: `🖼️ ${p.prompt}`,
+            timestamp: new Date(),
+          });
+        }
+      } catch (err) {
+        log(`JobQueue: send_flow_image error — ${err instanceof Error ? err.message : String(err)}`, "jobqueue");
       }
     } else if (job.type === "check_inactivity") {
       const p = job.payload as CheckInactivityPayload;
