@@ -137,21 +137,64 @@ class JobQueue {
   private async execute(job: Job): Promise<void> {
     if (job.type === "send_message") {
       const p = job.payload as SendMessagePayload;
-      const provider = await getWhatsAppProvider(p.userId);
-      const result = await provider.sendMessage(p.phone, p.message);
-      await storage.createMessage({
-        conversationId: p.conversationId,
-        userId: p.userId,
-        messageId: `auto_${result.messageId}`,
-        direction: "outgoing",
-        content: p.message,
-        timestamp: new Date(),
-      });
-      await storage.updateConversation(p.conversationId, {
-        lastMessage: p.message,
-        lastMessageAt: new Date(),
-      });
-      log(`JobQueue: send_message → ${p.phone} (${result.messageId})`, "jobqueue");
+      const channel = p.channel || "whatsapp";
+
+      if (channel === "telegram") {
+        try {
+          const { sendTelegramMessage } = await import("./services/telegramService");
+          const { configService } = await import("./services/configService");
+          const botToken = await configService.getSetting("TELEGRAM_BOT_TOKEN");
+          if (botToken) {
+            await sendTelegramMessage(p.phone, p.message, botToken);
+            log(`JobQueue: send_message(telegram) → ${p.phone}`, "jobqueue");
+          } else {
+            log(`JobQueue: send_message(telegram) — no bot token configured`, "jobqueue");
+          }
+        } catch (err) {
+          log(`JobQueue: send_message(telegram) failed: ${err instanceof Error ? err.message : String(err)}`, "jobqueue");
+        }
+      } else if (channel === "email") {
+        try {
+          const { sendEmail } = await import("./services/emailService");
+          const { configService } = await import("./services/configService");
+          const smtpHost = await configService.getSetting("SMTP_HOST");
+          const smtpPort = await configService.getSetting("SMTP_PORT");
+          const smtpUser = await configService.getSetting("SMTP_USER");
+          const smtpPass = await configService.getSetting("SMTP_PASS");
+          if (smtpHost && smtpUser && smtpPass) {
+            await sendEmail(p.phone, "Campanha", p.message, {
+              smtpHost,
+              smtpPort: parseInt(smtpPort || "587"),
+              smtpUser,
+              smtpPass,
+            });
+            log(`JobQueue: send_message(email) → ${p.phone}`, "jobqueue");
+          } else {
+            log(`JobQueue: send_message(email) — SMTP not configured`, "jobqueue");
+          }
+        } catch (err) {
+          log(`JobQueue: send_message(email) failed: ${err instanceof Error ? err.message : String(err)}`, "jobqueue");
+        }
+      } else {
+        const provider = await getWhatsAppProvider(p.userId);
+        const result = await provider.sendMessage(p.phone, p.message);
+        log(`JobQueue: send_message(whatsapp) → ${p.phone} (${result.messageId})`, "jobqueue");
+      }
+
+      if (p.conversationId) {
+        await storage.createMessage({
+          conversationId: p.conversationId,
+          userId: p.userId,
+          messageId: `auto_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          direction: "outgoing",
+          content: p.message,
+          timestamp: new Date(),
+        });
+        await storage.updateConversation(p.conversationId, {
+          lastMessage: p.message,
+          lastMessageAt: new Date(),
+        });
+      }
     } else if (job.type === "send_audio") {
       const p = job.payload as SendAudioPayload;
       try {

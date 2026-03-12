@@ -27,6 +27,32 @@ async function activateScheduledCampaigns() {
     ));
 
   for (const campaign of scheduled) {
+    const existingDeliveries = await storage.getCampaignDeliveries(campaign.id);
+    if (existingDeliveries.length === 0) {
+      let contacts = await storage.getUnifiedContactsByUser(campaign.userId);
+      if (campaign.segmentFilter) {
+        const filter = campaign.segmentFilter as { type: string; value?: string };
+        if (filter.type === "temperature" && filter.value) {
+          contacts = contacts.filter(c => c.temperature === filter.value);
+        } else if (filter.type === "stage" && filter.value) {
+          contacts = contacts.filter(c => c.pipelineStage === filter.value);
+        } else if (filter.type === "tag" && filter.value) {
+          contacts = contacts.filter(c => c.tags && c.tags.toLowerCase().includes(filter.value!.toLowerCase()));
+        }
+      }
+      const channels = (campaign.channels && campaign.channels.length > 0) ? campaign.channels : ["whatsapp"];
+      let deliveryCount = 0;
+      for (const contact of contacts) {
+        for (const channel of channels) {
+          await storage.createCampaignDelivery({ campaignId: campaign.id, contactId: contact.id, channel });
+          deliveryCount++;
+        }
+      }
+      await db.update(campaignsTable)
+        .set({ totalContacts: deliveryCount })
+        .where(eq(campaignsTable.id, campaign.id));
+    }
+
     await db.update(campaignsTable)
       .set({ status: "running", startedAt: now, updatedAt: now })
       .where(eq(campaignsTable.id, campaign.id));

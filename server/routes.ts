@@ -2925,7 +2925,7 @@ Return ONLY the JSON array, no markdown.`,
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const campaign = await storage.getCampaign(req.params.id);
       if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
-      if (!["draft", "paused"].includes(campaign.status)) {
+      if (!["draft", "paused", "scheduled"].includes(campaign.status)) {
         return res.status(400).json({ message: `Campanha com status '${campaign.status}' não pode ser iniciada` });
       }
 

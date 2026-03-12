@@ -244,6 +244,7 @@ export default function AdminCampaigns() {
   }
 
   function handleCreateCampaign() {
+    const isScheduled = formData.scheduleType === "scheduled" && formData.scheduledAt;
     createMutation.mutate({
       name: formData.name,
       description: formData.description || null,
@@ -253,7 +254,8 @@ export default function AdminCampaigns() {
       messages: formData.messages,
       rateLimit: formData.rateLimit,
       allowedHours: formData.allowedHours,
-      scheduledAt: formData.scheduleType === "scheduled" && formData.scheduledAt ? formData.scheduledAt : null,
+      scheduledAt: isScheduled ? formData.scheduledAt : null,
+      status: isScheduled ? "scheduled" : "draft",
     });
   }
 
