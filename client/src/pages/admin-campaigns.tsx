@@ -180,7 +180,7 @@ export default function AdminCampaigns() {
       if (data.suggestions && data.suggestions.length > 0) {
         setFormData(prev => ({
           ...prev,
-          messages: data.suggestions.map((s: any, i: number) => ({
+          messages: data.suggestions.map((s: { content: string }, i: number) => ({
             order: i,
             content: s.content || "",
             delayMinutes: i > 0 ? 60 : 0,
@@ -503,20 +503,36 @@ export default function AdminCampaigns() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Canal</Label>
-                      <Select
-                        value={formData.channels[0]}
-                        onValueChange={(v) => setFormData(prev => ({ ...prev, channels: [v] }))}
-                      >
-                        <SelectTrigger data-testid="select-channel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          <SelectItem value="telegram">Telegram</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Canais de envio</Label>
+                      <div className="flex gap-2 mt-1">
+                        {[
+                          { value: "whatsapp", label: "WhatsApp" },
+                          { value: "telegram", label: "Telegram" },
+                          { value: "email", label: "Email" },
+                        ].map((ch) => (
+                          <Button
+                            key={ch.value}
+                            type="button"
+                            variant={formData.channels.includes(ch.value) ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              setFormData(prev => {
+                                const has = prev.channels.includes(ch.value);
+                                const newChannels = has
+                                  ? prev.channels.filter(c => c !== ch.value)
+                                  : [...prev.channels, ch.value];
+                                return { ...prev, channels: newChannels.length > 0 ? newChannels : [ch.value] };
+                              });
+                            }}
+                            data-testid={`button-channel-${ch.value}`}
+                          >
+                            {ch.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Selecione um ou mais canais. Cada contato receberá a mensagem em todos os canais selecionados.
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -575,9 +591,10 @@ export default function AdminCampaigns() {
                         <SelectContent>
                           <SelectItem value="novo">Novo</SelectItem>
                           <SelectItem value="qualificado">Qualificado</SelectItem>
+                          <SelectItem value="proposta">Proposta</SelectItem>
                           <SelectItem value="negociacao">Negociação</SelectItem>
-                          <SelectItem value="fechado">Fechado</SelectItem>
-                          <SelectItem value="perdido">Perdido</SelectItem>
+                          <SelectItem value="fechado_ganho">Fechado Ganho</SelectItem>
+                          <SelectItem value="fechado_perdido">Fechado Perdido</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -606,7 +623,7 @@ export default function AdminCampaigns() {
                         </div>
                         {segmentPreview.sample && segmentPreview.sample.length > 0 && (
                           <div className="text-sm text-muted-foreground">
-                            Exemplos: {segmentPreview.sample.map((s: any) => s.name || s.phone).join(", ")}
+                            Exemplos: {segmentPreview.sample.map((s: { name: string; phone: string }) => s.name || s.phone).join(", ")}
                           </div>
                         )}
                       </CardContent>
@@ -1025,7 +1042,7 @@ export default function AdminCampaigns() {
 }
 
 function CampaignMetrics({ campaignId }: { campaignId: string }) {
-  const { data, isLoading } = useQuery<{ campaign: Campaign; metrics: any }>({
+  const { data, isLoading } = useQuery<{ campaign: Campaign; metrics: { total: number; sent: number; delivered: number; replied: number; converted: number; failed: number } }>({
     queryKey: ["/api/admin/campaigns", campaignId, "metrics"],
     queryFn: async () => {
       const res = await fetch(`/api/admin/campaigns/${campaignId}/metrics`, {
