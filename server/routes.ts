@@ -2300,7 +2300,7 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/queue", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const contacts = await storage.getQueueContacts(req.userId!);
+      const contacts = await storage.getQueueContacts(req.user!.userId);
       res.json(contacts);
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar fila" });
@@ -2311,7 +2311,7 @@ Return ONLY the JSON array, no markdown.`,
     try {
       const { contactId } = req.params;
       const { agentId } = req.body;
-      const targetAgent = agentId || req.userId!;
+      const targetAgent = agentId || req.user!.userId;
       const contact = await storage.assignContactToAgent(contactId, targetAgent);
       if (!contact) return res.status(404).json({ message: "Contato não encontrado" });
       res.json(contact);
@@ -2323,7 +2323,7 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/queue/:contactId/resolve", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const { contactId } = req.params;
-      const contact = await storage.resolveContact(contactId, req.userId!);
+      const contact = await storage.resolveContact(contactId, req.user!.userId);
       if (!contact) return res.status(404).json({ message: "Contato não encontrado" });
       res.json(contact);
     } catch (error) {
@@ -2335,7 +2335,7 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/learning-tracks", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const tracks = await storage.getLearningTracksByUser(req.userId!);
+      const tracks = await storage.getLearningTracksByUser(req.user!.userId);
       res.json(tracks);
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar trilhas" });
@@ -2344,7 +2344,7 @@ Return ONLY the JSON array, no markdown.`,
 
   app.post("/api/learning-tracks", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const parsed = insertLearningTrackSchema.safeParse({ ...req.body, userId: req.userId });
+      const parsed = insertLearningTrackSchema.safeParse({ ...req.body, userId: req.user!.userId });
       if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
       const track = await storage.createLearningTrack(parsed.data);
       res.status(201).json(track);
@@ -2396,14 +2396,14 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const webhooks = await storage.getOutboundWebhooks(req.userId!);
+      const webhooks = await storage.getOutboundWebhooks(req.user!.userId);
       res.json(webhooks);
     } catch { res.status(500).json({ message: "Erro ao listar webhooks" }); }
   });
 
   app.post("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const parsed = insertOutboundWebhookSchema.safeParse({ ...req.body, userId: req.userId });
+      const parsed = insertOutboundWebhookSchema.safeParse({ ...req.body, userId: req.user!.userId });
       if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
       const wh = await storage.createOutboundWebhook(parsed.data);
       res.status(201).json(wh);
@@ -2462,14 +2462,14 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/integrations/sheets", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const integrations = await storage.getSheetIntegrations(req.userId!);
+      const integrations = await storage.getSheetIntegrations(req.user!.userId);
       res.json(integrations.map(i => ({ ...i, googleToken: i.googleToken ? "configured" : null })));
     } catch { res.status(500).json({ message: "Erro ao listar integrações" }); }
   });
 
   app.post("/api/integrations/sheets", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const parsed = insertSheetIntegrationSchema.safeParse({ ...req.body, userId: req.userId });
+      const parsed = insertSheetIntegrationSchema.safeParse({ ...req.body, userId: req.user!.userId });
       if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
       const si = await storage.createSheetIntegration(parsed.data);
       res.status(201).json(si);
@@ -2518,7 +2518,7 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/settings/email", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const cfg = await storage.getEmailConfig(req.userId!);
+      const cfg = await storage.getEmailConfig(req.user!.userId);
       if (!cfg) return res.json(null);
       res.json({ ...cfg, smtpPass: cfg.smtpPass ? "••••••••" : "" });
     } catch { res.status(500).json({ message: "Erro ao buscar config de e-mail" }); }
@@ -2526,9 +2526,9 @@ Return ONLY the JSON array, no markdown.`,
 
   app.post("/api/settings/email", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const parsed = insertEmailConfigSchema.safeParse({ ...req.body, userId: req.userId });
+      const parsed = insertEmailConfigSchema.safeParse({ ...req.body, userId: req.user!.userId });
       if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
-      const cfg = await storage.upsertEmailConfig(req.userId!, parsed.data);
+      const cfg = await storage.upsertEmailConfig(req.user!.userId, parsed.data);
       res.json({ ...cfg, smtpPass: "••••••••" });
     } catch { res.status(500).json({ message: "Erro ao salvar config de e-mail" }); }
   });

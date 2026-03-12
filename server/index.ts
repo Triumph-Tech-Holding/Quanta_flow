@@ -116,7 +116,7 @@ async function ensureAdminUser() {
         tipoAtor: "admin",
         status: "active",
         tokenVersion: 0,
-        mustChangePassword: false,
+        mustChangePassword: true,
       });
       log("Admin user created: admin@quantaflow.com", "seed");
     } else {
@@ -260,7 +260,12 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        const sensitiveRoutes = ["/api/auth/login", "/api/auth/register", "/api/auth/me"];
+        if (sensitiveRoutes.some(r => path.startsWith(r))) {
+          logLine += ` :: {redacted}`;
+        } else {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
       }
 
       log(logLine);
