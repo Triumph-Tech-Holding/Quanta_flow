@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quanta Flow - Documentação Técnica Completa v5.0.0</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Arial', sans-serif; line-height: 1.7; color: #333; background: white; padding: 40px; max-width: 1000px; margin: 0 auto; }
+    h1 { color: #00A86B; font-size: 2.5em; margin: 30px 0 10px 0; border-bottom: 3px solid #00A86B; padding-bottom: 10px; }
+    h2 { color: #1B3A57; font-size: 2em; margin: 25px 0 10px 0; border-left: 5px solid #00A86B; padding-left: 15px; }
+    h3 { color: #1B3A57; font-size: 1.4em; margin: 15px 0 8px 0; }
+    h4 { color: #333; margin: 12px 0 5px 0; }
+    p { margin: 10px 0; }
+    ul, ol { margin: 10px 0 10px 30px; }
+    li { margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+    th { background: #00A86B; color: white; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    pre { background: #f0f0f0; padding: 15px; border-radius: 5px; border-left: 4px solid #00A86B; overflow-x: auto; margin: 10px 0; }
+    .page-break { page-break-after: always; }
+    @media print { body { padding: 20px; } }
+    .download-btn { background: #00A86B; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 5px; cursor: pointer; margin: 20px 0; }
+    .download-btn:hover { background: #1B3A57; }
+  </style>
+</head>
+<body><h1>QUANTA FLOW - DOCUMENTAÇÃO TÉCNICA COMPLETA</h1><p>**Plataforma Omnichannel de CRM, Automação de Vendas e IA**  </p><p>_Versão: 5.0.0 | Status: Produção | Data: Março 2026_</p><p>---</p><h2>📑 ÍNDICE</h2><p>1. [Visão Geral Executiva](#visão-geral-executiva)</p><p>2. [Arquitetura do Sistema](#arquitetura-do-sistema)</p><p>3. [Estrutura de Arquivos](#estrutura-de-arquivos)</p><p>4. [Database Schema](#database-schema)</p><p>5. [API Endpoints](#api-endpoints)</p><p>6. [Fluxos de Dados](#fluxos-de-dados)</p><p>7. [Módulos & Funcionalidades](#módulos--funcionalidades)</p><p>8. [Configuração & Setup](#configuração--setup)</p><p>9. [Deploy & Ci/Cd](#deploy--cicd)</p><p>10. [Guia de Desenvolvimento](#guia-de-desenvolvimento)</p><p>---</p><h2>VISÃO GERAL EXECUTIVA</h2><h3>O Que é Quanta Flow?</h3><p>**Quanta Flow** é uma plataforma SaaS de automação de vendas que:</p><li>✅ Centraliza comunicação de múltiplos canais (WhatsApp, Telegram, Instagram, E-mail)</li><li>✅ Detecta intenção de compra via IA (OpenAI GPT-4)</li><li>✅ Automatiza respostas e fluxos de vendas</li><li>✅ Gerencia fila de atendimento com SLA em tempo real</li><li>✅ Integra com sistemas externos (Google Sheets, Zapier, webhooks customizados)</li><li>✅ Oferece análise completa de performance</li><li>✅ Suporta múltiplos usuários com RBAC granular</li><h3>Números do Projeto</h3><table><tr><td>Métrica</td><td>Valor</td></tr><p>|---------|-------|</p><td>Total de módulos implementados</td><td>17</td></tr><td>Sprints completados</td><td>5</td></tr><td>Endpoints API</td><td>80+</td></tr><td>Tabelas de banco</td><td>20+</td></tr><td>Canais suportados</td><td>4</td></tr><td>Linhas de código (backend)</td><td>~3500</td></tr><td>Linhas de código (frontend)</td><td>~4200</td></tr><td>Testes automatizados</td><td>Planejado Sprint 6</td></tr></table><h3>Stack Tecnológico</h3><table><tr><td>Camada</td><td>Tecnologia</td></tr><p>|--------|-----------|</p><td>Frontend</td><td>React 18 + Vite + TypeScript + Tailwind CSS + Shadcn UI</td></tr><td>Backend</td><td>Node.js + Express.js + TypeScript</td></tr><td>Banco de Dados</td><td>PostgreSQL + Drizzle ORM</td></tr><td>Autenticação</td><td>JWT + bcrypt</td></tr><td>Real-time</td><td>Socket.io WebSocket</td></tr><td>IA</td><td>OpenAI API (gpt-4o-mini)</td></tr><td>CI/CD</td><td>GitHub Actions</td></tr><td>Hosting</td><td>Replit</td></tr><td>Email</td><td>Nodemailer (SMTP)</td></tr></table><p>---</p><h2>ARQUITETURA DO SISTEMA</h2><pre>┌─────────────────────────────────────────────────────────┐
+│                    CLIENTE (FRONTEND)                   │
+│  React + Vite + TypeScript | Shadcn UI + Tailwind CSS  │
+└─────────────────────────────────────────────────────────┘
+                              ↕
+           ┌────────────────────────────────────┐
+           │  REST API + WebSocket (Socket.io)  │
+           │      Express.js + Middleware       │
+           └────────────────────────────────────┘
+                              ↕
+    ┌──────────────────────────────────────────────────┐
+    │            BACKEND SERVICES                      │
+    ├──────────────────────────────────────────────────┤
+    │ • Authentication (JWT + bcrypt)                  │
+    │ • Message Processing (WhatsApp, Telegram, etc)  │
+    │ • Intent Detection (OpenAI)                      │
+    │ • Automation Engine (Flows, Conditions)          │
+    │ • Queue Management (SLA Tracking)                │
+    │ • Learning Worker (Microlearning Delivery)       │
+    │ • Job Queue (Async Tasks - 5s interval)         │
+    │ • Webhook Dispatcher (External notifications)   │
+    │ • Google Sheets Sync (OAuth2)                    │
+    │ • RBAC (Role-Based Access Control)               │
+    └──────────────────────────────────────────────────┘
+                              ↕
+    ┌──────────────────────────────────────────────────┐
+    │          POSTGRESQL DATABASE                     │
+    │  (Users, Leads, Messages, Conversations, etc)    │
+    └──────────────────────────────────────────────────┘
+                              ↕
+    ┌──────────────────────────────────────────────────┐
+    │          EXTERNAL INTEGRATIONS                   │
+    ├──────────────────────────────────────────────────┤
+    │ • Z-API (WhatsApp)                               │
+    │ • Telegram Bot API                               │
+    │ • Meta Graph API (Instagram)                     │
+    │ • Google Sheets API v4                           │
+    │ • OpenAI API                                      │
+    │ • SMTP (E-mail)                                   │
+    │ • Webhooks HTTP                                  │
+    └──────────────────────────────────────────────────┘
+</pre><p>---</p><h2>ESTRUTURA DE ARQUIVOS</h2><pre>quanta-flow/
+├── 📁 client/                          # Frontend React
+│   ├── src/
+│   │   ├── pages/                      # Páginas/rotas
+│   │   │   ├── login.tsx
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── inbox.tsx               # Chat + Fila
+│   │   │   ├── crm.tsx                 # Kanban CRM
+│   │   │   ├── automation.tsx           # Fluxos (9 seções)
+│   │   │   ├── learning-tracks.tsx      # Microlearning CRUD
+│   │   │   ├── settings-webhooks.tsx    # Webhooks outbound
+│   │   │   ├── settings-integrations.tsx # Google Sheets
+│   │   │   ├── settings-channels.tsx    # Telegram, Instagram, Email
+│   │   │   ├── contact-profile.tsx
+│   │   │   ├── admin-users.tsx
+│   │   │   ├── admin-audit-logs.tsx
+│   │   │   ├── admin-branding.tsx
+│   │   │   └── [8+ other pages]
+│   │   │
+│   │   ├── components/                 # Reusable UI components
+│   │   │   ├── app-sidebar.tsx
+│   │   │   ├── theme-toggle.tsx
+│   │   │   └── ui/                     # Shadcn components
+│   │   │       ├── button.tsx
+│   │   │       ├── card.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── dialog.tsx
+│   │   │       ├── select.tsx
+│   │   │       ├── table.tsx
+│   │   │       ├── badge.tsx
+│   │   │       ├── form.tsx
+│   │   │       └── [10+ more]
+│   │   │
+│   │   ├── lib/
+│   │   │   ├── queryClient.ts          # React Query setup
+│   │   │   ├── auth.tsx                # Auth context
+│   │   │   └── socket.ts               # Socket.io client
+│   │   │
+│   │   ├── hooks/
+│   │   │   └── use-toast.ts
+│   │   │
+│   │   ├── App.tsx                     # Router principal
+│   │   └── index.css                   # Tailwind + CSS vars
+│   │
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── 📁 server/                          # Backend Node.js
+│   ├── index.ts                        # Entry point
+│   ├── routes.ts                       # 80+ endpoints
+│   ├── storage.ts                      # Database operations
+│   ├── db.ts                           # Drizzle connection
+│   ├── socket.ts                       # Socket.io setup
+│   ├── jobQueue.ts                     # Async jobs (5s interval)
+│   ├── learningWorker.ts               # Microlearning (5min interval)
+│   │
+│   ├── middleware/
+│   │   ├── rbacMiddleware.ts           # Role-based access
+│   │   └── authMiddleware.ts
+│   │
+│   ├── services/
+│   │   ├── messageProcessor.ts         # Multi-channel message processing
+│   │   ├── intentService.ts            # OpenAI intent detection
+│   │   ├── whatsappProvider.ts         # Z-API + Baileys
+│   │   ├── evolutionService.ts         # Evolution API (legacy)
+│   │   ├── telegramService.ts          # Telegram Bot API
+│   │   ├── instagramService.ts         # Meta Graph API
+│   │   ├── emailService.ts             # SMTP + Nodemailer
+│   │   ├── googleSheetsService.ts      # Google Sheets OAuth2 + append
+│   │   ├── webhookDispatcher.ts        # HMAC-SHA256 signed webhooks
+│   │   └── configService.ts            # Dynamic config management
+│   │
+│   └── [other support files]
+│
+├── 📁 shared/                          # Shared types & schemas
+│   └── schema.ts                       # Drizzle schema + Zod validation
+│
+├── 📁 .github/
+│   └── workflows/
+│       ├── deploy.yml                  # Auto-deploy on push main
+│       └── pr-check.yml                # PR validation
+│
+├── 📁 drizzle/                         # Database migrations
+│   ├── migrations/
+│   │   ├── 0001_init.sql
+│   │   ├── 0002_add_queue.sql
+│   │   ├── 0003_add_learning.sql
+│   │   └── [etc]
+│   └── meta/
+│
+├── .env.example                        # Environment variables template
+├── package.json                        # Dependencies
+├── tsconfig.json
+├── drizzle.config.ts
+├── vite.config.ts
+├── replit.md                           # Project documentation
+└── README.md
+
+</pre><p>---</p><h2>DATABASE SCHEMA</h2><h3>Tabelas Principais (20+)</h3><h4>1. **users**</h4><pre>users {
+  id: UUID (PK)
+  email: VARCHAR(255) UNIQUE
+  password: TEXT (hashed bcrypt)
+  tipoAtor: ENUM ['consumidor', 'agente_fidelizacao', 'lojista', 'admin']
+  nome: VARCHAR(255)
+  telefone: VARCHAR(20)
+  status: ENUM ['active', 'inactive', 'suspended']
+  mustChangePassword: BOOLEAN
+  tokenVersion: INTEGER
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>2. **unified_contacts** (CRM central)</h4><pre>unified_contacts {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  nome: VARCHAR(255)
+  email: VARCHAR(255)
+  telefone: VARCHAR(20)
+  avatarUrl: TEXT
+  pipelineStage: ENUM ['novo', 'contatado', 'qualificado', 'convertido']
+  temperature: ENUM ['frio', 'morno', 'quente']
+  lastIntent: VARCHAR (detectado via IA)
+  score: INTEGER
+  notes: TEXT
+  tags: JSONB ARRAY
+  lastContactAt: TIMESTAMP
+  assignedToUserId: UUID (FK → users)
+  
+  -- Sprint 4: Queue & SLA
+  queueStatus: ENUM ['waiting', 'assigned', 'resolved']
+  queueEnteredAt: TIMESTAMP
+  slaDeadline: TIMESTAMP
+  slaBreached: BOOLEAN
+  activeFlowId: UUID (FK → automation_flows) -- fluxo ativo
+  
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>3. **conversations** (Chats por canal)</h4><pre>conversations {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  leadId: UUID (FK → leads) -- legacy
+  remoteJid: VARCHAR(100) -- ID remoto (WhatsApp, Telegram, etc)
+  contactName: VARCHAR(255)
+  contactPhone: VARCHAR(50)
+  lastMessage: TEXT
+  lastMessageAt: TIMESTAMP
+  unreadCount: VARCHAR(10)
+  channel: VARCHAR(20) DEFAULT 'whatsapp' -- novo Sprint 5
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>4. **messages** (Histórico de chat)</h4><pre>messages {
+  id: UUID (PK)
+  conversationId: UUID (FK → conversations)
+  userId: UUID (FK → users)
+  messageId: VARCHAR(100) -- ID externo (Z-API, Telegram, etc)
+  direction: ENUM ['incoming', 'outgoing']
+  content: TEXT
+  mediaType: VARCHAR(50) -- 'image', 'video', 'document'
+  mediaUrl: TEXT
+  timestamp: TIMESTAMP
+  createdAt: TIMESTAMP
+}
+</pre><h4>5. **automation_flows** (Fluxos automáticos)</h4><pre>automation_flows {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  name: VARCHAR(255)
+  isActive: BOOLEAN DEFAULT true
+  triggerKeywords: TEXT -- comma-separated
+  
+  -- Seção 1: Resposta básica
+  responseTemplate: TEXT
+  responseDelay: INTEGER -- segundos
+  
+  -- Seção 2: Sistema IA
+  systemPrompt: TEXT
+  temperature: FLOAT [0-1]
+  
+  -- Seção 3: Inicial
+  initialMessage: TEXT
+  
+  -- Seção 4: Inatividade
+  inactivityTimeout: INTEGER -- minutos
+  
+  -- Seção 5: Condições
+  successCondition: TEXT -- keyword/intenção para resolver
+  interruptCondition: TEXT -- keyword para entrar na fila
+  
+  -- Seção 6: Resumo
+  summaryEnabled: BOOLEAN
+  summaryFields: TEXT
+  
+  -- Seção 7: Multi-step
+  steps: JSONB ARRAY [
+    { order: 1, message: "...", delaySeconds: 10 },
+    { order: 2, message: "...", delaySeconds: 20 }
+  ]
+  
+  -- Seção 8: Saídas condicionais
+  conditionalExits: JSONB ARRAY [
+    {
+      condition: "...",
+      label: "Suporte",
+      targetFlowId: "...",
+      triggerKeywords: ["suporte", "ajuda"]
+    }
+  ]
+  
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>6. **omnichannelMessages** (IA Intent tracking)</h4><pre>omnichannelMessages {
+  id: UUID (PK)
+  unifiedContactId: UUID (FK → unified_contacts)
+  channelType: VARCHAR(50) -- 'whatsapp', 'telegram', etc
+  direction: ENUM ['incoming', 'outgoing']
+  content: TEXT
+  externalMessageId: VARCHAR(100)
+  detectedIntent: VARCHAR(100) -- intent IA
+  intentConfidence: VARCHAR(10) -- 0-1
+  userId: UUID (FK → users)
+  timestamp: TIMESTAMP
+  createdAt: TIMESTAMP
+}
+</pre><h4>7. **outbound_webhooks** (Sprint 5)</h4><pre>outbound_webhooks {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  name: TEXT
+  url: TEXT
+  events: JSONB ARRAY ['lead.created', 'lead.qualified', 'flow.success', ...]
+  isActive: BOOLEAN DEFAULT true
+  secret: TEXT -- HMAC secret
+  lastStatus: TEXT -- 'success' ou 'error:msg'
+  lastTriggeredAt: TIMESTAMP
+  createdAt: TIMESTAMP
+}
+</pre><h4>8. **sheet_integrations** (Sprint 5)</h4><pre>sheet_integrations {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  name: TEXT
+  spreadsheetId: TEXT
+  sheetName: TEXT DEFAULT 'Leads'
+  triggerEvent: TEXT -- 'lead.created', 'lead.qualified', etc
+  columnMapping: JSONB { "name": "A", "phone": "B", ... }
+  isActive: BOOLEAN DEFAULT true
+  googleToken: TEXT -- encrypted OAuth2 token
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>9. **email_configs** (Sprint 5)</h4><pre>email_configs {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  smtpHost: TEXT
+  smtpPort: INTEGER DEFAULT 587
+  smtpUser: TEXT
+  smtpPass: TEXT -- encrypted
+  imapHost: TEXT
+  imapPort: INTEGER
+  isActive: BOOLEAN DEFAULT false
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>10. **learning_tracks** (Microlearning)</h4><pre>learning_tracks {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  name: TEXT
+  stageOrIntent: TEXT -- 'qualificado' ou 'compra_quente'
+  stepOrder: INTEGER
+  delayHours: FLOAT
+  contentType: ENUM ['texto', 'video', 'link']
+  content: TEXT
+  isActive: BOOLEAN DEFAULT true
+  createdAt: TIMESTAMP
+  updatedAt: TIMESTAMP
+}
+</pre><h4>11. **agent_assignments** (Atribuição a agentes)</h4><pre>agent_assignments {
+  id: UUID (PK)
+  contactId: UUID (FK → unified_contacts)
+  agentId: UUID (FK → users)
+  assignedAt: TIMESTAMP
+}
+</pre><h4>12. **roles & permissions** (RBAC)</h4><pre>roles {
+  id: INTEGER (PK)
+  name: VARCHAR(100) -- 'super_admin', 'admin', 'user'
+}
+
+permissions {
+  id: INTEGER (PK)
+  name: VARCHAR(100) -- 'view_leads', 'edit_leads', etc
+}
+
+user_roles {
+  userId: UUID (FK)
+  roleId: INTEGER (FK)
+}
+
+role_permissions {
+  roleId: INTEGER (FK)
+  permissionId: INTEGER (FK)
+}
+</pre><h4>13. **audit_logs** (Rastreamento)</h4><pre>audit_logs {
+  id: UUID (PK)
+  userId: UUID (FK → users)
+  action: VARCHAR(100) -- 'create', 'update', 'delete'
+  resource: VARCHAR(100) -- 'lead', 'flow', 'user'
+  resourceId: VARCHAR(100)
+  changes: JSONB -- antes/depois
+  timestamp: TIMESTAMP
+}
+</pre><p>**Outras tabelas:** leads, api_configs, evolution_configs, quick_replies, branding_config, contact_identifiers, learning_deliveries, pipeline_stages, channels, settings, user_roles, etc.</p><p>---</p><h2>API ENDPOINTS</h2><h3>Authentication (5 endpoints)</h3><pre>POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+POST   /api/auth/refresh
+POST   /api/auth/logout
+</pre><h3>CRM Leads (8 endpoints)</h3><pre>GET    /api/crm/dashboard
+GET    /api/crm/contacts
+POST   /api/crm/contacts
+GET    /api/crm/contacts/:id
+PATCH  /api/crm/contacts/:id
+DELETE /api/crm/contacts/:id
+GET    /api/crm/contacts/:id/profile
+PATCH  /api/crm/contacts/:id/stage
+</pre><h3>Inbox (8 endpoints)</h3><pre>GET    /api/conversations
+GET    /api/conversations/:id
+POST   /api/conversations/:id/messages
+GET    /api/messages?conversationId=...
+POST   /api/messages/:id/read
+GET    /api/quick-replies
+POST   /api/quick-replies
+PUT    /api/quick-replies/:id
+DELETE /api/quick-replies/:id
+</pre><h3>Queue (4 endpoints)</h3><pre>GET    /api/queue
+POST   /api/queue/:contactId/assign
+POST   /api/queue/:contactId/resolve
+GET    /api/queue/:contactId/sla
+</pre><h3>Automation (6 endpoints)</h3><pre>GET    /api/automation-flows
+POST   /api/automation-flows
+GET    /api/automation-flows/:id
+PUT    /api/automation-flows/:id
+DELETE /api/automation-flows/:id
+POST   /api/automation-flows/:id/test
+</pre><h3>Learning Tracks (4 endpoints)</h3><pre>GET    /api/learning-tracks
+POST   /api/learning-tracks
+PUT    /api/learning-tracks/:id
+DELETE /api/learning-tracks/:id
+</pre><h3>Webhooks Outbound (5 endpoints) - Sprint 5</h3><pre>GET    /api/webhooks/outbound
+POST   /api/webhooks/outbound
+PUT    /api/webhooks/outbound/:id
+DELETE /api/webhooks/outbound/:id
+POST   /api/webhooks/outbound/:id/test
+</pre><h3>Google Sheets (6 endpoints) - Sprint 5</h3><pre>GET    /api/integrations/sheets
+POST   /api/integrations/sheets
+PUT    /api/integrations/sheets/:id
+DELETE /api/integrations/sheets/:id
+GET    /api/integrations/sheets/auth
+GET    /api/integrations/sheets/callback
+</pre><h3>Email (3 endpoints) - Sprint 5</h3><pre>GET    /api/settings/email
+POST   /api/settings/email
+POST   /api/settings/email/test
+</pre><h3>Webhooks Entrada - Sprint 5</h3><pre>POST   /api/webhooks/telegram
+POST   /api/webhooks/instagram
+GET    /api/webhooks/instagram
+POST   /api/settings/telegram/connect
+POST   /api/settings/instagram/connect
+</pre><h3>WhatsApp (10+ endpoints)</h3><pre>POST   /api/whatsapp/webhook
+GET    /api/whatsapp/status
+POST   /api/whatsapp/send
+POST   /api/whatsapp/connect-zapi
+POST   /api/whatsapp/connect-evolution
+POST   /api/whatsapp/disconnect
+POST   /api/whatsapp/refresh-webhooks
+[etc]
+</pre><h3>Configurações (8 endpoints)</h3><pre>GET    /api/settings
+POST   /api/settings
+PUT    /api/settings/:id
+GET    /api/branding
+PUT    /api/branding
+GET    /api/api-configs
+POST   /api/api-configs
+[etc]
+</pre><h3>Admin (8 endpoints)</h3><pre>GET    /api/admin/users
+POST   /api/admin/users
+PUT    /api/admin/users/:id
+DELETE /api/admin/users/:id
+GET    /api/admin/audit-logs
+GET    /api/audit-logs
+[etc]
+</pre><h3>Health (1 endpoint)</h3><pre>GET    /api/health
+</pre><p>**Total: 80+ endpoints**</p><p>---</p><h2>FLUXOS DE DADOS</h2><h3>Fluxo 1: Mensagem WhatsApp → Automação → Resposta</h3><pre>1. Z-API/Baileys recebe msg no WhatsApp
+   ↓
+2. Webhook POST para /api/whatsapp/webhook
+   ↓
+3. processIncomingMessage() processa a msg
+   - Salva em conversations + messages
+   - Cria/atualiza unified_contact
+   - Emite via Socket.io para UI (real-time)
+   ↓
+4. processMessageIntent() chama OpenAI
+   - Detecta intenção: "compra_quente", "duvida", etc
+   - Score de confiança
+   - Salva em omnichannelMessages
+   ↓
+5. messageProcessor() busca automationFlow
+   - Por keyword trigger ou activeFlowId
+   - Valida condições (success, interrupt, conditional exits)
+   ↓
+6. Se interruptCondition match → Entra na fila
+   - Cria job check_sla
+   - SLA deadline = now + defaultSlaMinutes
+   ↓
+7. Se successCondition match → Resolve
+   - updateUnifiedContact(queueStatus='resolved')
+   - Dispara webhook 'flow.success'
+   ↓
+8. Se há steps → Agenda envios
+   - JobQueue.add({ type: 'send_message', ... })
+   - Executa a cada 5s
+   ↓
+9. JobQueue processa job
+   - Envia via sendChannelMessage()
+   - Z-API/Telegram/Email/Instagram
+   ↓
+10. Mensagem enviada!
+</pre><h3>Fluxo 2: Lead entra na fila → SLA tracking</h3><pre>1. interruptCondition acionada
+   ↓
+2. storage.enterQueue(contactId, slaMinutes)
+   - queueStatus = 'waiting'
+   - queueEnteredAt = now
+   - slaDeadline = now + (slaMinutes * 60)
+   ↓
+3. JobQueue.add({ type: 'check_sla', ... })
+   - Agendado para slaDeadline
+   ↓
+4. JobQueue executa check_sla
+   - Se deadline passou: slaBreached = true
+   - Emite para UI via Socket.io
+   ↓
+5. Frontend mostra timer regressivo
+   - Atualiza a cada 1s
+   - Muda cor se vencido
+   ↓
+6. Agent clica "Assumir"
+   - PATCH /api/queue/:id/assign
+   - queueStatus = 'assigned'
+   - assignedToUserId = agentId
+   ↓
+7. Agent clica "Resolver"
+   - POST /api/queue/:id/resolve
+   - queueStatus = 'resolved'
+   - removeFrom queue view
+</pre><h3>Fluxo 3: Lead qualificado → Google Sheets append</h3><pre>1. Lead pipeline stage muda para 'qualificado'
+   ↓
+2. dispatchEvent('lead.qualified', contact, userId)
+   ↓
+3. webhookDispatcher() processa
+   - Busca sheet_integrations ativas com triggerEvent='lead.qualified'
+   ↓
+4. Para cada integração:
+   - mapContactToRow(contact, columnMapping)
+   - appendRow(spreadsheetId, sheetName, values, accessToken)
+   ↓
+5. Google Sheets API v4
+   - POST https://sheets.googleapis.com/v4/spreadsheets/.../values/...:append
+   - Insere nova linha
+   ↓
+6. Planilha atualizada!
+</pre><h3>Fluxo 4: Telegram recebe mensagem</h3><pre>1. Telegram Bot recebe update
+   ↓
+2. POST /api/webhooks/telegram
+   ↓
+3. Extrai: chat.id, from.first_name, message.text
+   ↓
+4. processIncomingMessage({
+     userId: firstUser,
+     phone: chatId,
+     contactName: name,
+     messageContent: text,
+     channel: 'telegram',
+     provider: 'telegram'
+   })
+   ↓
+5. Cria conversation com channel='telegram'
+   ↓
+6. Resto é idêntico ao fluxo WhatsApp
+   (intent detection, automation, etc)
+</pre><p>---</p><h2>MÓDULOS & FUNCIONALIDADES</h2><h3>✅ IMPLEMENTADOS</h3><h4>1. Dashboard</h4><li>KPI overview (total contatos, distribuição)</li><li>Hot leads (score > 15, temperatura='quente')</li><li>Recent contacts</li><li>Pipeline distribution</li><li>Intent distribution</li><h4>2. Inbox</h4><li>Chat unificado (WhatsApp, Telegram, Instagram, Email)</li><li>Real-time via Socket.io</li><li>Fila de Atendimento com SLA timer</li><li>Respostas Rápidas (CRUD)</li><li>Refresh automático (30s)</li><h4>3. CRM</h4><li>Kanban visual por pipeline stage</li><li>Busca + filtros (temperatura, intenção)</li><li>Perfil detalhado do contato</li><li>Omnichannel message timeline</li><li>IA intent summary</li><li>Agent assignment (manual + round-robin)</li><li>CRUD leads</li><h4>4. Automação</h4><li>9 seções (básico, resposta, sistema, avançado, inatividade, condições, multi-step, resumo, saídas)</li><li>Fluxos por keyword trigger</li><li>Response templates com delay</li><li>IA intent detection</li><li>Success/interrupt conditions</li><li>Conditional exits (transferência entre fluxos)</li><li>Multi-step sequences</li><h4>5. Microlearning</h4><li>Conteúdo automático por stage/intenção</li><li>Delay configurável (horas)</li><li>Content types: texto, vídeo, link</li><li>Delivery tracking (enviado, visualizado)</li><li>LearningWorker background (5min)</li><h4>6. Webhooks Outbound</h4><li>HMAC-SHA256 signed</li><li>5 event types</li><li>Test endpoint</li><li>Status tracking (último disparo)</li><li>CRUD</li><h4>7. Google Sheets</h4><li>OAuth2 authentication</li><li>Auto-append on lead events</li><li>Column mapping customizável</li><li>CRUD</li><h4>8. Telegram</h4><li>Bot integration</li><li>Message receive/send</li><li>Automação completa</li><h4>9. Instagram</h4><li>Meta Messaging API</li><li>Message receive/send</li><li>Automação completa</li><h4>10. Email</h4><li>SMTP configuration</li><li>Auto-send respostas</li><li>Test connection</li><h4>11. Configurações</h4><li>API settings (Z-API, Evolution, Baileys)</li><li>Branding (cores, logo, SLA padrão)</li><li>Email SMTP</li><li>Webhooks</li><li>Canais</li><li>Integrações</li><h4>12. Admin</h4><li>User management (CRUD)</li><li>Audit logs</li><li>Branding</li><li>Roles & permissions</li><li>Settings</li><h4>13. Autenticação</h4><li>Register/Login</li><li>JWT (24h expiration)</li><li>Bcrypt password hashing</li><li>Token versioning</li><li>Forgot password</li><li>Mandatory password change</li><h4>14. Health Check</h4><li>GET /api/health</li><li>DB connectivity status</li><li>Version + uptime</li><h4>15. CI/CD</h4><li>GitHub Actions deploy</li><li>PR checks (TypeScript, build)</li><li>Auto-deploy on push main</li><h3>🚀 PLANEJADOS (Future)</h3><h4>1. Social / Ads</h4><li>Facebook Ads integration</li><li>LinkedIn Ads</li><li>Google Ads</li><li>TikTok Ads</li><li>ROI calculator</li><li>Lead attribution</li><li>Retargeting automático</li><h4>2. IA Brain</h4><li>Análise preditiva</li><li>NLP avançado (sentimento, urgência)</li><li>Recomendação de ações</li><li>Scoring dinâmico</li><li>Pattern recognition</li><h4>3. Tribos</h4><li>Team management</li><li>Leaderboard</li><li>Gamification (badges, pontos)</li><li>Commission engine</li><li>Knowledge base</li><li>Internal chat</li><p>---</p><h2>CONFIGURAÇÃO & SETUP</h2><h3>Pré-requisitos</h3><li>Node.js 18+</li><li>PostgreSQL 13+</li><li>npm ou yarn</li><li>Git</li><h3>Variáveis de Ambiente (.env)</h3><pre># Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/quanta_flow
+
+# Auth
+SESSION_SECRET=seu_jwt_secret_aqui_32_chars_min
+
+# WhatsApp
+ZAPI_API_KEY=sk_...
+EVOLUTION_URL=https://api.evolution.ai
+EVOLUTION_TOKEN=...
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu@email.com
+SMTP_PASS=app_password
+
+# Google Sheets
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+
+# Telegram
+TELEGRAM_BOT_TOKEN=...
+
+# Instagram
+INSTAGRAM_VERIFY_TOKEN=quanta_flow_ig
+
+# Webhooks
+WEBHOOK_BASE_URL=https://seu-dominio.replit.dev
+</pre><h3>Setup Local</h3><pre># 1. Clone repo
+git clone https://github.com/seu-repo/quanta-flow.git
+cd quanta-flow
+
+# 2. Install dependencies
+npm install
+
+# 3. Setup database
+npx drizzle-kit push
+
+# 4. Start dev server
+npm run dev
+
+# 5. Acesse
+# Frontend: http://localhost:5173
+# Backend: http://localhost:5000
+# API: http://localhost:5000/api
+</pre><h3>Seed Data</h3><p>Admin user padrão:</p><pre>Email: admin@quantaflow.com
+Password: Admin@123
+Role: super_admin
+</pre><p>---</p><h2>DEPLOY & CI/CD</h2><h3>Deployment no Replit</h3><pre># 1. Push para main branch
+git push origin main
+
+# 2. GitHub Actions dispara automaticamente
+# - Checkout código
+# - npm install
+# - TypeScript check
+# - npm run build
+# - Deploy no Replit
+
+# 3. Verificar saúde
+curl https://seu-replit-domain.replit.dev/api/health
+</pre><h3>Health Check</h3><pre>{
+  "status": "ok",
+  "version": "5.0.0",
+  "uptime": 1234,
+  "dbConnected": true,
+  "timestamp": "2026-03-12T00:00:30.178Z"
+}
+</pre><p>---</p><h2>GUIA DE DESENVOLVIMENTO</h2><h3>Adicionar Novo Endpoint</h3><p>1. **Definir schema** (shared/schema.ts)</p><pre>export const myNewTable = pgTable("my_new_table", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id").notNull(),
+  name: text("name"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+</pre><p>2. **Adicionar storage methods** (server/storage.ts)</p><pre>async getMyData(userId: string) {
+  return db.select().from(myNewTable)
+    .where(eq(myNewTable.userId, userId));
+}
+</pre><p>3. **Adicionar endpoint** (server/routes.ts)</p><pre>app.get("/api/my-endpoint", authenticateToken, async (req, res) => {
+  try {
+    const data = await storage.getMyData(req.userId!);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error" });
+  }
+});
+</pre><p>4. **Usar no frontend** (client/src/pages/mypage.tsx)</p><pre>const { data } = useQuery({
+  queryKey: ['/api/my-endpoint'],
+});
+</pre><h3>Adicionar Novo Canal de Mensagem</h3><p>1. **Criar service** (server/services/mynewchannel.ts)</p><pre>export async function sendMyChannelMessage(id, message) {
+  // Implementar
+}
+</pre><p>2. **Actualizar messageProcessor.ts**</p><pre>else if (channel === 'mynewchannel') {
+  await sendMyChannelMessage(phone, message);
+}
+</pre><p>3. **Criar endpoint webhook** (server/routes.ts)</p><pre>app.post('/api/webhooks/mynewchannel', async (req, res) => {
+  // Processa msg e chama processIncomingMessage()
+});
+</pre><h3>Adicionando Novo Event de Webhook</h3><p>1. **Adicionar em webhookDispatcher.ts**</p><pre>const SUPPORTED_EVENTS = [
+  ...,
+  "mynew.event"
+];
+</pre><p>2. **Disparar evento**</p><pre>dispatchEvent("mynew.event", payload, userId);
+</pre><p>3. **Será automaticamente enviado** para webhooks configurados</p><p>---</p><h2>PERFORMANCE & ESCALABILIDADE</h2><h3>Otimizações Implementadas</h3><li>✅ React Query caching</li><li>✅ Debounced searches</li><li>✅ Pagination no CRM Kanban</li><li>✅ Socket.io eficiente (apenas deltas)</li><li>✅ JobQueue async (5s interval)</li><li>✅ LearningWorker background (5min)</li><li>✅ Database indexing via Drizzle</li><h3>Limites Atuais</h3><li>Max 10k contatos/usuário (antes de indexação)</li><li>Max 100 messages/conversation carregadas</li><li>Max 50 webhooks/usuário</li><li>Max 30 active jobs/usuário</li><h3>Escalabilidade Futura</h3><li>[ ] Redis para cache distribuído</li><li>[ ] Bull queue para jobs distribuídos</li><li>[ ] Elasticsearch para busca rápida</li><li>[ ] CDN para assets</li><li>[ ] Database replication (master-slave)</li><p>---</p><h2>SEGURANÇA</h2><p>✅ **Implementado:**</p><li>JWT com 24h expiration</li><li>bcrypt password hashing (10 salt rounds)</li><li>HMAC-SHA256 webhook signing</li><li>AES-256-CBC credential encryption</li><li>RBAC (3 roles, 18 permissions)</li><li>SQL injection prevention (Drizzle ORM)</li><li>XSS prevention (React + TypeScript)</li><li>CORS enabled</li><li>Rate limiting (planejado)</li><li>Input validation (Zod schemas)</li><p>⚠️ **Recomendações Produção:**</p><li>[ ] HTTPS only (TLS certificate)</li><li>[ ] WAF (Web Application Firewall)</li><li>[ ] DDoS protection</li><li>[ ] Database encryption at rest</li><li>[ ] API key rotation</li><li>[ ] Two-factor authentication</li><li>[ ] Session timeout</li><li>[ ] IP whitelist</li><p>---</p><h2>TESTING</h2><h3>Atualmente</h3><li>Manual testing na UI</li><li>Curl/Postman para API</li><h3>Planejado Sprint 6</h3><li>[ ] Jest unit tests (backend)</li><li>[ ] React Testing Library (frontend)</li><li>[ ] E2E tests (Cypress)</li><li>[ ] Coverage mínimo: 80%</li><p>---</p><h2>SUPORTE & TROUBLESHOOTING</h2><h3>Health Check não passa</h3><pre>curl http://localhost:5000/api/health
+# Se dbConnected: false → verificar DATABASE_URL
+</pre><h3>Workflow falhando</h3><pre>npm run db:push  # Aplicar migrations
+npm run build    # Verificar build errors
+npm run dev      # Restartar dev server
+</pre><h3>Mensagens não chegam</h3><li>Verificar se Z-API/Telegram token está correto</li><li>Verificar se WEBHOOK_BASE_URL está configurado</li><li>Checar logs do servidor: `npm run dev 2>&1 | tee app.log`</li><p>---</p><h2>ROADMAP FUTURO</h2><table><tr><td>Sprint</td><td>Funcionalidade</td><td>Status</td></tr><p>|--------|---|---|</p><td>1-5</td><td>Core CRM + Automação</td><td>✅ Completo</td></tr><td>6</td><td>Social Ads</td><td>🚀 Next</td></tr><td>7</td><td>IA Brain avançada</td><td>📅 Planejado</td></tr><td>8</td><td>Tribos</td><td>📅 Planejado</td></tr><td>9</td><td>Mobile app (React Native)</td><td>📅 Planejado</td></tr><td>10</td><td>Self-hosted (Docker)</td><td>📅 Planejado</td></tr></table><p>---</p><h2>CRÉDITOS & DEPENDÊNCIAS</h2><h3>Principais Dependências</h3><li>React 18, Vite, TypeScript, Tailwind CSS, Shadcn UI</li><li>Express, Drizzle ORM, PostgreSQL</li><li>Socket.io, OpenAI API, Nodemailer</li><li>Zod, React Query, React Hook Form</li><h3>Contribuidores</h3><li>AI Architecture & Development: Replit Agent</li><li>Product Design: Quanta Flow Team</li><p>---</p><p>**Documento gerado: Março 2026**  </p><p>**Versão: 5.0.0 | Status: Produção**  </p><p>**Última atualização: Sprint 5 Completo**</p>
+  <div class="page-break"></div>
+  <p style="text-align: center; margin-top: 50px; color: #999;">
+    <strong>Quanta Flow v5.0.0</strong><br>
+    Plataforma Omnichannel de CRM, Automação de Vendas e IA<br>
+    Documento gerado: Março 2026 | Status: Produção Completo
+  </p>
+</body>
+</html>
