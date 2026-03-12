@@ -20,6 +20,9 @@ import AdminBranding from "@/pages/admin-branding";
 import UserSettings from "@/pages/user-settings";
 import ForgotPassword from "@/pages/forgot-password";
 import LearningTracksPage from "@/pages/learning-tracks";
+import SettingsWebhooksPage from "@/pages/settings-webhooks";
+import SettingsIntegrationsPage from "@/pages/settings-integrations";
+import SettingsChannelsPage from "@/pages/settings-channels";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -112,6 +115,15 @@ function Router() {
       </Route>
       <Route path="/learning-tracks">
         <ProtectedRoute component={LearningTracksPage} />
+      </Route>
+      <Route path="/settings/webhooks">
+        <ProtectedRoute component={SettingsWebhooksPage} />
+      </Route>
+      <Route path="/settings/integrations">
+        <ProtectedRoute component={SettingsIntegrationsPage} />
+      </Route>
+      <Route path="/settings/channels">
+        <ProtectedRoute component={SettingsChannelsPage} />
       </Route>
       <Route component={NotFound} />
     </Switch>

@@ -71,6 +71,7 @@ export const conversations = pgTable("conversations", {
   lastMessage: text("last_message"),
   lastMessageAt: timestamp("last_message_at"),
   unreadCount: varchar("unread_count", { length: 10 }).default("0"),
+  channel: varchar("channel", { length: 20 }).default("whatsapp"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -572,6 +573,92 @@ export const insertLearningDeliverySchema = createInsertSchema(learningDeliverie
   id: true, createdAt: true,
 });
 
+// ─── Sprint 5: Outbound Webhooks ─────────────────────────────────────────────
+
+export const outboundWebhooks = pgTable("outbound_webhooks", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  events: jsonb("events").notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  secret: text("secret"),
+  lastStatus: text("last_status"),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertOutboundWebhookSchema = createInsertSchema(outboundWebhooks).omit({
+  id: true, createdAt: true, lastStatus: true, lastTriggeredAt: true,
+});
+
+export const updateOutboundWebhookSchema = z.object({
+  name: z.string().min(1).optional(),
+  url: z.string().url().optional(),
+  events: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
+  secret: z.string().optional().nullable(),
+});
+
+// ─── Sprint 5: Google Sheets Integrations ────────────────────────────────────
+
+export const sheetIntegrations = pgTable("sheet_integrations", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  name: text("name").notNull(),
+  spreadsheetId: text("spreadsheet_id").notNull(),
+  sheetName: text("sheet_name").notNull().default("Leads"),
+  triggerEvent: text("trigger_event").notNull(),
+  columnMapping: jsonb("column_mapping").notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  googleToken: text("google_token"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSheetIntegrationSchema = createInsertSchema(sheetIntegrations).omit({
+  id: true, createdAt: true, updatedAt: true, googleToken: true,
+});
+
+export const updateSheetIntegrationSchema = z.object({
+  name: z.string().optional(),
+  spreadsheetId: z.string().optional(),
+  sheetName: z.string().optional(),
+  triggerEvent: z.string().optional(),
+  columnMapping: z.record(z.string()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+// ─── Sprint 5: Email Configs ──────────────────────────────────────────────────
+
+export const emailConfigs = pgTable("email_configs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  smtpHost: text("smtp_host").notNull(),
+  smtpPort: integer("smtp_port").notNull().default(587),
+  smtpUser: text("smtp_user").notNull(),
+  smtpPass: text("smtp_pass").notNull(),
+  imapHost: text("imap_host"),
+  imapPort: integer("imap_port"),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEmailConfigSchema = createInsertSchema(emailConfigs).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateEmailConfigSchema = z.object({
+  smtpHost: z.string().optional(),
+  smtpPort: z.number().int().optional(),
+  smtpUser: z.string().optional(),
+  smtpPass: z.string().optional(),
+  imapHost: z.string().optional().nullable(),
+  imapPort: z.number().int().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
 export type QuickReply = typeof quickReplies.$inferSelect;
 export type InsertQuickReply = z.infer<typeof insertQuickReplySchema>;
 export type UpdateQuickReply = z.infer<typeof updateQuickReplySchema>;
@@ -588,3 +675,12 @@ export type InsertLearningTrack = z.infer<typeof insertLearningTrackSchema>;
 export type UpdateLearningTrack = z.infer<typeof updateLearningTrackSchema>;
 export type LearningDelivery = typeof learningDeliveries.$inferSelect;
 export type InsertLearningDelivery = z.infer<typeof insertLearningDeliverySchema>;
+export type OutboundWebhook = typeof outboundWebhooks.$inferSelect;
+export type InsertOutboundWebhook = z.infer<typeof insertOutboundWebhookSchema>;
+export type UpdateOutboundWebhook = z.infer<typeof updateOutboundWebhookSchema>;
+export type SheetIntegration = typeof sheetIntegrations.$inferSelect;
+export type InsertSheetIntegration = z.infer<typeof insertSheetIntegrationSchema>;
+export type UpdateSheetIntegration = z.infer<typeof updateSheetIntegrationSchema>;
+export type EmailConfig = typeof emailConfigs.$inferSelect;
+export type InsertEmailConfig = z.infer<typeof insertEmailConfigSchema>;
+export type UpdateEmailConfig = z.infer<typeof updateEmailConfigSchema>;

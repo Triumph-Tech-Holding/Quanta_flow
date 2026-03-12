@@ -26,20 +26,29 @@ Not specified.
 - **AI Integration**: OpenAI (gpt-4o-mini via Replit AI Integrations) for AI Intent Detection, classifying messages, auto-scoring leads, and automatically moving leads through pipelines based on intent.
 
 ### Feature Specifications
-- **Inbox Module**: Unified messaging center supporting WhatsApp integration via Z-API and Baileys (Evolution API for legacy). Features include real-time conversation viewing, sending/receiving messages, and automatic webhook configuration.
+- **Inbox Module**: Unified messaging center supporting WhatsApp integration via Z-API and Baileys (Evolution API for legacy). Features include real-time conversation viewing, sending/receiving messages, automatic webhook configuration, and Fila de Atendimento with SLA timer.
 - **Settings Module**: Secure management of system configurations, including API keys and service URLs, with encryption, caching, and audit trails.
 - **CRM Module**: Comprehensive customer relationship management, including lead management (create, update, delete), contact profiles with omnichannel message timelines, AI intent summaries, and agent assignment (manual and round-robin auto-assignment). Kanban board view with search, filters (temperature, intention), and visual AI indicators.
-- **Automation Module**: Management of automated flows based on keywords and response templates.
-- **Branding Module**: Customizable branding settings for the platform's appearance.
-- **File Uploads**: API endpoint for image uploads (PNG, JPG, GIF, WebP) with size limits.
+- **Automation Module**: Multi-step flows with 9 sections including conditional exits, SLA support, queue entry, and microlearning triggers.
+- **Branding Module**: Customizable branding settings including defaultSlaMinutes for SLA control.
+- **Queue Module**: Lead queue management with queueStatus (waiting/assigned/resolved), SLA deadlines, and agent assignment.
+- **Learning Tracks (Microlearning)**: Automated content delivery triggered by lead stage/intent, with delivery tracking.
+- **Outbound Webhooks**: Configurable webhooks to notify external systems (Zapier, HubSpot, etc.) on events: lead.created, lead.qualified, flow.success, flow.interrupt, conversation.closed. With HMAC-SHA256 signing.
+- **Google Sheets Integration**: Automatic row append on lead events with configurable column mapping and OAuth2 authentication.
+- **Multi-channel Support**: Unified processIncomingMessage() supports WhatsApp, Telegram, Instagram, and Email channels. Dedicated service files for each.
+- **CI/CD**: GitHub Actions workflows for deploy (on push to main) and PR checks.
+- **Health Check**: GET /api/health endpoint with DB connectivity status.
 
 ### System Design Choices
 - **Modular Structure**: Clear separation of client, server, and shared codebases.
-- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations, messages, settings, roles, permissions, and audit logs.
-- **API Endpoints**: Structured API for authentication, lead management, WhatsApp integration, admin settings, user management, role management, audit logs, and AI services.
+- **Database Schema**: Dedicated tables for users, leads, API configurations, conversations (with channel field), messages, settings, roles, permissions, audit logs, unified_contacts (with queueStatus/SLA/activeFlowId), agent_assignments, learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations, email_configs.
+- **API Endpoints**: Structured API for authentication, lead management, WhatsApp integration, admin settings, user management, role management, audit logs, AI services, queue management, learning tracks, outbound webhooks, sheet integrations, email config, Telegram/Instagram webhooks, health check.
 - **WhatsApp Provider Management**: Flexible system to switch between different WhatsApp providers (Z-API, Baileys, Evolution).
 - **Agent Assignment**: Functionality for listing agents, assigning contacts, and automated round-robin assignment.
 - **Real-time Data Sync**: Socket.io for instant updates on new messages, instance connections, and configuration changes.
+- **JobQueue**: In-memory job queue processing send_message, check_inactivity, and check_sla jobs every 5 seconds.
+- **LearningWorker**: Background worker processing microlearning delivery every 5 minutes.
+- **WebhookDispatcher**: Async webhook dispatcher with HMAC signing and 5s timeout per call.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.
@@ -49,3 +58,7 @@ Not specified.
 - **Socket.io**: Real-time bidirectional event-based communication.
 - **@whiskeysockets/baileys**: Node.js library for WhatsApp Web.
 - **Multer**: Node.js middleware for handling `multipart/form-data`, used for file uploads.
+- **Nodemailer**: Node.js library for SMTP email sending.
+- **Telegram Bot API**: Direct HTTP integration for bot messaging.
+- **Meta Graph API**: Direct HTTP integration for Instagram messaging.
+- **Google Sheets API v4**: Direct HTTP integration for spreadsheet row appending.

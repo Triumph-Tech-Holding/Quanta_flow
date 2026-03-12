@@ -5,6 +5,7 @@ import {
   unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
   quickReplies, automationFlows, brandingConfig, userRoles, roles,
   agentAssignments, learningTracks, learningDeliveries,
+  outboundWebhooks, sheetIntegrations, emailConfigs,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -19,6 +20,9 @@ import {
   type AgentAssignment, type InsertAgentAssignment,
   type LearningTrack, type InsertLearningTrack, type UpdateLearningTrack,
   type LearningDelivery, type InsertLearningDelivery,
+  type OutboundWebhook, type InsertOutboundWebhook, type UpdateOutboundWebhook,
+  type SheetIntegration, type InsertSheetIntegration, type UpdateSheetIntegration,
+  type EmailConfig, type InsertEmailConfig, type UpdateEmailConfig,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -680,6 +684,99 @@ export class DatabaseStorage implements IStorage {
 
   async updateLearningDelivery(id: string, data: Partial<LearningDelivery>): Promise<void> {
     await db.update(learningDeliveries).set(data).where(eq(learningDeliveries.id, id));
+  }
+
+  // ==================== Outbound Webhooks ====================
+
+  async getOutboundWebhooks(userId: string): Promise<OutboundWebhook[]> {
+    return db.select().from(outboundWebhooks)
+      .where(eq(outboundWebhooks.userId, userId))
+      .orderBy(desc(outboundWebhooks.createdAt));
+  }
+
+  async getOutboundWebhook(id: string): Promise<OutboundWebhook | undefined> {
+    const [wh] = await db.select().from(outboundWebhooks).where(eq(outboundWebhooks.id, id));
+    return wh;
+  }
+
+  async createOutboundWebhook(data: InsertOutboundWebhook): Promise<OutboundWebhook> {
+    const [wh] = await db.insert(outboundWebhooks).values(data).returning();
+    return wh;
+  }
+
+  async updateOutboundWebhook(id: string, data: UpdateOutboundWebhook): Promise<OutboundWebhook | undefined> {
+    const [wh] = await db.update(outboundWebhooks).set(data).where(eq(outboundWebhooks.id, id)).returning();
+    return wh;
+  }
+
+  async deleteOutboundWebhook(id: string): Promise<boolean> {
+    const result = await db.delete(outboundWebhooks).where(eq(outboundWebhooks.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async updateOutboundWebhookStatus(id: string, status: string): Promise<void> {
+    await db.update(outboundWebhooks)
+      .set({ lastStatus: status, lastTriggeredAt: new Date() })
+      .where(eq(outboundWebhooks.id, id));
+  }
+
+  // ==================== Sheet Integrations ====================
+
+  async getSheetIntegrations(userId: string): Promise<SheetIntegration[]> {
+    return db.select().from(sheetIntegrations)
+      .where(eq(sheetIntegrations.userId, userId))
+      .orderBy(desc(sheetIntegrations.createdAt));
+  }
+
+  async getSheetIntegration(id: string): Promise<SheetIntegration | undefined> {
+    const [si] = await db.select().from(sheetIntegrations).where(eq(sheetIntegrations.id, id));
+    return si;
+  }
+
+  async createSheetIntegration(data: InsertSheetIntegration): Promise<SheetIntegration> {
+    const [si] = await db.insert(sheetIntegrations).values(data).returning();
+    return si;
+  }
+
+  async updateSheetIntegration(id: string, data: UpdateSheetIntegration & { googleToken?: string }): Promise<SheetIntegration | undefined> {
+    const [si] = await db.update(sheetIntegrations).set({ ...data, updatedAt: new Date() }).where(eq(sheetIntegrations.id, id)).returning();
+    return si;
+  }
+
+  async deleteSheetIntegration(id: string): Promise<boolean> {
+    const result = await db.delete(sheetIntegrations).where(eq(sheetIntegrations.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getActiveSheetIntegrationsForEvent(userId: string, event: string): Promise<SheetIntegration[]> {
+    return db.select().from(sheetIntegrations)
+      .where(and(
+        eq(sheetIntegrations.userId, userId),
+        eq(sheetIntegrations.isActive, true),
+        eq(sheetIntegrations.triggerEvent, event),
+      ));
+  }
+
+  // ==================== Email Configs ====================
+
+  async getEmailConfig(userId: string): Promise<EmailConfig | undefined> {
+    const [cfg] = await db.select().from(emailConfigs)
+      .where(eq(emailConfigs.userId, userId))
+      .limit(1);
+    return cfg;
+  }
+
+  async upsertEmailConfig(userId: string, data: InsertEmailConfig): Promise<EmailConfig> {
+    const existing = await this.getEmailConfig(userId);
+    if (existing) {
+      const [cfg] = await db.update(emailConfigs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(emailConfigs.userId, userId))
+        .returning();
+      return cfg;
+    }
+    const [cfg] = await db.insert(emailConfigs).values({ ...data, userId }).returning();
+    return cfg;
   }
 }
 

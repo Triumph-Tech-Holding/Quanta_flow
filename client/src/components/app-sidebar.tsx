@@ -14,6 +14,9 @@ import {
   ScrollText,
   Palette,
   GraduationCap,
+  Webhook,
+  Table2,
+  Radio,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -125,6 +128,24 @@ const adminMenuItems = [
     url: "/admin/audit-logs",
     icon: ScrollText,
     permission: "view_audit_logs",
+  },
+  {
+    title: "Canais",
+    url: "/settings/channels",
+    icon: Radio,
+    permission: "edit_settings",
+  },
+  {
+    title: "Webhooks",
+    url: "/settings/webhooks",
+    icon: Webhook,
+    permission: "edit_settings",
+  },
+  {
+    title: "Integrações",
+    url: "/settings/integrations",
+    icon: Table2,
+    permission: "edit_settings",
   },
 ];
 

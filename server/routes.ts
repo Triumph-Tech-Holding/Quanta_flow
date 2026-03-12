@@ -7,7 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema } from "@shared/schema";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema } from "@shared/schema";
 import { z } from "zod";
 import { createEvolutionService } from "./services/evolutionService";
 import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "./socket";
@@ -19,7 +19,13 @@ import { users as usersTable, auditLogs, roles, userRoles, rolePermissions, perm
 import { eq, desc, and, sql as sqlExpr } from "drizzle-orm";
 import { detectIntent, processMessageIntent } from "./services/intentService";
 import { getWhatsAppProvider, BaileysProvider, getBaileysInstance } from "./services/whatsappProvider";
-import { processIncomingWhatsAppMessage } from "./services/messageProcessor";
+import { processIncomingWhatsAppMessage, processIncomingMessage } from "./services/messageProcessor";
+import { dispatchEvent } from "./services/webhookDispatcher";
+import { sendTelegramMessage, registerTelegramWebhook, getTelegramBotInfo } from "./services/telegramService";
+import { verifyInstagramWebhook } from "./services/instagramService";
+import { testSmtpConnection } from "./services/emailService";
+import { appendRow, mapContactToRow } from "./services/googleSheetsService";
+import os from "os";
 
 const JWT_SECRET: string = process.env.SESSION_SECRET!;
 if (!process.env.SESSION_SECRET) {
@@ -2081,6 +2087,266 @@ export async function registerRoutes(
     } catch (error) {
       res.status(500).json({ message: "Erro ao remover trilha" });
     }
+  });
+
+  // ─── Health Check ──────────────────────────────────────────────────────────
+
+  app.get("/api/health", async (_req: Request, res: Response) => {
+    let dbConnected = false;
+    try {
+      await db.execute(sqlExpr`SELECT 1`);
+      dbConnected = true;
+    } catch {}
+    res.json({
+      status: "ok",
+      version: "5.0.0",
+      uptime: Math.floor(process.uptime()),
+      dbConnected,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── Outbound Webhooks ─────────────────────────────────────────────────────
+
+  app.get("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const webhooks = await storage.getOutboundWebhooks(req.userId!);
+      res.json(webhooks);
+    } catch { res.status(500).json({ message: "Erro ao listar webhooks" }); }
+  });
+
+  app.post("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = insertOutboundWebhookSchema.safeParse({ ...req.body, userId: req.userId });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const wh = await storage.createOutboundWebhook(parsed.data);
+      res.status(201).json(wh);
+    } catch { res.status(500).json({ message: "Erro ao criar webhook" }); }
+  });
+
+  app.put("/api/webhooks/outbound/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = updateOutboundWebhookSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const wh = await storage.updateOutboundWebhook(req.params.id, parsed.data);
+      if (!wh) return res.status(404).json({ message: "Webhook não encontrado" });
+      res.json(wh);
+    } catch { res.status(500).json({ message: "Erro ao atualizar webhook" }); }
+  });
+
+  app.delete("/api/webhooks/outbound/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const deleted = await storage.deleteOutboundWebhook(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Webhook não encontrado" });
+      res.json({ message: "Webhook removido" });
+    } catch { res.status(500).json({ message: "Erro ao remover webhook" }); }
+  });
+
+  app.post("/api/webhooks/outbound/:id/test", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const wh = await storage.getOutboundWebhook(req.params.id);
+      if (!wh) return res.status(404).json({ message: "Webhook não encontrado" });
+      const payload = JSON.stringify({
+        event: "test",
+        payload: { message: "Teste do Quanta Flow", timestamp: new Date().toISOString() },
+        timestamp: new Date().toISOString(),
+      });
+      const headers: Record<string, string> = { "Content-Type": "application/json", "X-Quanta-Event": "test" };
+      if (wh.secret) {
+        const crypto = await import("crypto");
+        headers["X-Quanta-Signature"] = `sha256=${crypto.createHmac("sha256", wh.secret).update(payload).digest("hex")}`;
+      }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const response = await fetch(wh.url, { method: "POST", headers, body: payload, signal: controller.signal });
+        clearTimeout(timeout);
+        await storage.updateOutboundWebhookStatus(wh.id, response.ok ? "success" : `error:${response.status}`);
+        res.json({ ok: response.ok, status: response.status });
+      } catch (fetchErr) {
+        clearTimeout(timeout);
+        const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        await storage.updateOutboundWebhookStatus(wh.id, `error:${msg}`.slice(0, 100));
+        res.status(502).json({ ok: false, message: msg });
+      }
+    } catch { res.status(500).json({ message: "Erro ao testar webhook" }); }
+  });
+
+  // ─── Google Sheets Integrations ────────────────────────────────────────────
+
+  app.get("/api/integrations/sheets", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const integrations = await storage.getSheetIntegrations(req.userId!);
+      res.json(integrations.map(i => ({ ...i, googleToken: i.googleToken ? "configured" : null })));
+    } catch { res.status(500).json({ message: "Erro ao listar integrações" }); }
+  });
+
+  app.post("/api/integrations/sheets", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = insertSheetIntegrationSchema.safeParse({ ...req.body, userId: req.userId });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const si = await storage.createSheetIntegration(parsed.data);
+      res.status(201).json(si);
+    } catch { res.status(500).json({ message: "Erro ao criar integração" }); }
+  });
+
+  app.put("/api/integrations/sheets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = updateSheetIntegrationSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const si = await storage.updateSheetIntegration(req.params.id, parsed.data);
+      if (!si) return res.status(404).json({ message: "Integração não encontrada" });
+      res.json(si);
+    } catch { res.status(500).json({ message: "Erro ao atualizar integração" }); }
+  });
+
+  app.delete("/api/integrations/sheets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const deleted = await storage.deleteSheetIntegration(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Integração não encontrada" });
+      res.json({ message: "Integração removida" });
+    } catch { res.status(500).json({ message: "Erro ao remover integração" }); }
+  });
+
+  app.get("/api/integrations/sheets/auth", authenticateToken, async (_req: Request, res: Response) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    if (!clientId) return res.status(400).json({ message: "GOOGLE_CLIENT_ID não configurado" });
+    const { getAuthUrl } = await import("./services/googleSheetsService");
+    const redirectUri = `${process.env.WEBHOOK_BASE_URL || "http://localhost:5000"}/api/integrations/sheets/callback`;
+    res.json({ authUrl: getAuthUrl(clientId, redirectUri) });
+  });
+
+  app.get("/api/integrations/sheets/callback", authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { code } = req.query;
+    if (!code || typeof code !== "string") return res.status(400).json({ message: "Código inválido" });
+    const { exchangeCodeForToken } = await import("./services/googleSheetsService");
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+    const redirectUri = `${process.env.WEBHOOK_BASE_URL || "http://localhost:5000"}/api/integrations/sheets/callback`;
+    const tokens = await exchangeCodeForToken(code, clientId, clientSecret, redirectUri);
+    if (!tokens) return res.status(400).json({ message: "Falha ao trocar código por token" });
+    res.json({ message: "Autenticação realizada com sucesso", token: tokens.access_token });
+  });
+
+  // ─── Email Config ──────────────────────────────────────────────────────────
+
+  app.get("/api/settings/email", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const cfg = await storage.getEmailConfig(req.userId!);
+      if (!cfg) return res.json(null);
+      res.json({ ...cfg, smtpPass: cfg.smtpPass ? "••••••••" : "" });
+    } catch { res.status(500).json({ message: "Erro ao buscar config de e-mail" }); }
+  });
+
+  app.post("/api/settings/email", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = insertEmailConfigSchema.safeParse({ ...req.body, userId: req.userId });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      const cfg = await storage.upsertEmailConfig(req.userId!, parsed.data);
+      res.json({ ...cfg, smtpPass: "••••••••" });
+    } catch { res.status(500).json({ message: "Erro ao salvar config de e-mail" }); }
+  });
+
+  app.post("/api/settings/email/test", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
+      if (!smtpHost || !smtpUser || !smtpPass) return res.status(400).json({ message: "Dados incompletos" });
+      const ok = await testSmtpConnection({ smtpHost, smtpPort: Number(smtpPort) || 587, smtpUser, smtpPass });
+      res.json({ ok, message: ok ? "Conexão estabelecida com sucesso" : "Falha na conexão SMTP" });
+    } catch { res.status(500).json({ message: "Erro ao testar conexão" }); }
+  });
+
+  // ─── Telegram Webhook ──────────────────────────────────────────────────────
+
+  app.post("/api/webhooks/telegram", async (req: Request, res: Response) => {
+    try {
+      res.json({ ok: true });
+      const update = req.body;
+      const message = update?.message;
+      if (!message || !message.text) return;
+
+      const chatId = String(message.chat?.id || message.from?.id);
+      const name = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(" ") || chatId;
+      const text = message.text;
+
+      const allUsers = await db.execute(sqlExpr`SELECT id FROM users LIMIT 1`);
+      const firstUserId = (allUsers.rows[0] as { id: string })?.id;
+      if (!firstUserId) return;
+
+      await processIncomingMessage({
+        userId: firstUserId,
+        phone: chatId,
+        contactName: name,
+        messageContent: text,
+        channel: "telegram",
+        provider: "telegram",
+      });
+    } catch (err) {
+      console.error("[telegram webhook]", err);
+    }
+  });
+
+  app.post("/api/settings/telegram/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { botToken } = req.body;
+      if (!botToken) return res.status(400).json({ message: "botToken é obrigatório" });
+      const botInfo = await getTelegramBotInfo(botToken);
+      if (!botInfo.ok) return res.status(400).json({ message: "Token inválido" });
+      const baseUrl = process.env.WEBHOOK_BASE_URL;
+      if (!baseUrl) return res.status(400).json({ message: "WEBHOOK_BASE_URL não configurado — configure nas Configurações" });
+      const result = await registerTelegramWebhook(botToken, `${baseUrl}/api/webhooks/telegram`);
+      res.json({ ok: result.ok, botName: botInfo.result?.username, description: result.description });
+    } catch { res.status(500).json({ message: "Erro ao conectar Telegram" }); }
+  });
+
+  // ─── Instagram Webhook ────────────────────────────────────────────────────
+
+  app.get("/api/webhooks/instagram", (req: Request, res: Response) => {
+    const mode = req.query["hub.mode"] as string;
+    const token = req.query["hub.verify_token"] as string;
+    const challenge = req.query["hub.challenge"] as string;
+    const verifyToken = process.env.INSTAGRAM_VERIFY_TOKEN || "quanta_flow_ig";
+    const result = verifyInstagramWebhook(mode, token, challenge, verifyToken);
+    if (result) return res.status(200).send(result);
+    res.status(403).send("Forbidden");
+  });
+
+  app.post("/api/webhooks/instagram", async (req: Request, res: Response) => {
+    try {
+      res.json({ ok: true });
+      const entry = req.body?.entry?.[0];
+      const messaging = entry?.messaging?.[0];
+      if (!messaging?.message?.text) return;
+
+      const senderId = String(messaging.sender?.id);
+      const text = messaging.message.text;
+
+      const allUsers = await db.execute(sqlExpr`SELECT id FROM users LIMIT 1`);
+      const firstUserId = (allUsers.rows[0] as { id: string })?.id;
+      if (!firstUserId) return;
+
+      await processIncomingMessage({
+        userId: firstUserId,
+        phone: senderId,
+        contactName: senderId,
+        messageContent: text,
+        channel: "instagram",
+        provider: "instagram",
+      });
+    } catch (err) {
+      console.error("[instagram webhook]", err);
+    }
+  });
+
+  app.post("/api/settings/instagram/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { accessToken } = req.body;
+      if (!accessToken) return res.status(400).json({ message: "accessToken é obrigatório" });
+      const verifyRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
+      if (!verifyRes.ok) return res.status(400).json({ message: "Token inválido" });
+      const info = await verifyRes.json() as { name?: string; id?: string };
+      res.json({ ok: true, name: info.name, id: info.id });
+    } catch { res.status(500).json({ message: "Erro ao verificar token do Instagram" }); }
   });
 
   return httpServer;

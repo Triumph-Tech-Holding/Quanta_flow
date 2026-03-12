@@ -3,6 +3,15 @@ import { emitMessageReceived } from "../socket";
 import { processMessageIntent } from "./intentService";
 import { log } from "../index";
 import { jobQueue } from "../jobQueue";
+import { dispatchEvent } from "./webhookDispatcher";
+import { sendTelegramMessage } from "./telegramService";
+import { sendInstagramMessage } from "./instagramService";
+import { sendEmail } from "./emailService";
+import { db } from "../db";
+import { emailConfigs } from "../../shared/schema";
+import { eq } from "drizzle-orm";
+
+export type MessageChannel = "whatsapp" | "telegram" | "instagram" | "email";
 
 export interface IncomingMessageParams {
   userId: string;
@@ -11,13 +20,60 @@ export interface IncomingMessageParams {
   messageContent: string;
   messageId?: string;
   provider?: string;
+  channel?: MessageChannel;
+  channelMetadata?: Record<string, unknown>;
 }
 
-export async function processIncomingWhatsAppMessage(params: IncomingMessageParams): Promise<void> {
-  const { userId, phone, contactName, messageContent, messageId, provider = "zapi" } = params;
+async function sendChannelMessage(
+  channel: MessageChannel,
+  phone: string,
+  message: string,
+  userId: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  if (channel === "whatsapp") {
+    const { sendWhatsAppMessage } = await import("./whatsappProvider");
+    await sendWhatsAppMessage(userId, phone, message);
+  } else if (channel === "telegram") {
+    const botToken = (metadata?.botToken as string) || "";
+    if (botToken) await sendTelegramMessage(phone, message, botToken);
+  } else if (channel === "instagram") {
+    const accessToken = (metadata?.accessToken as string) || "";
+    if (accessToken) await sendInstagramMessage(phone, message, accessToken);
+  } else if (channel === "email") {
+    const [emailCfg] = await db
+      .select()
+      .from(emailConfigs)
+      .where(eq(emailConfigs.userId, userId))
+      .limit(1);
+    if (emailCfg) {
+      await sendEmail(phone, "Resposta automática", message, {
+        smtpHost: emailCfg.smtpHost,
+        smtpPort: emailCfg.smtpPort,
+        smtpUser: emailCfg.smtpUser,
+        smtpPass: emailCfg.smtpPass,
+      });
+    }
+  }
+}
 
-  const remoteJid = phone.includes("@") ? phone : `${phone}@s.whatsapp.net`;
-  const msgId = messageId || `${provider}_${Date.now()}`;
+export async function processIncomingMessage(params: IncomingMessageParams): Promise<void> {
+  const {
+    userId,
+    phone,
+    contactName,
+    messageContent,
+    messageId,
+    provider = "zapi",
+    channel = "whatsapp",
+    channelMetadata = {},
+  } = params;
+
+  const remoteJid =
+    channel === "whatsapp" && !phone.includes("@")
+      ? `${phone}@s.whatsapp.net`
+      : phone;
+  const msgId = messageId || `${channel}_${Date.now()}`;
 
   let conversation = await storage.getConversationByRemoteJid(userId, remoteJid);
 
@@ -30,6 +86,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
       lastMessage: messageContent,
       lastMessageAt: new Date(),
       unreadCount: "1",
+      channel,
     });
   } else {
     const currentUnread = parseInt(conversation.unreadCount || "0");
@@ -50,7 +107,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
     timestamp: new Date(),
   });
 
-  log(`[${provider}] Message saved: ${newMessage.id} from ${phone}`, "msg-processor");
+  log(`[${channel}/${provider}] Message saved: ${newMessage.id} from ${phone}`, "msg-processor");
 
   emitMessageReceived(userId, {
     message: newMessage,
@@ -60,7 +117,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
   const skipIntentPatterns = ["[Mensagem]", "[Imagem]", "[Sticker]", "[Contato]", "[Localização]"];
   if (messageContent && !skipIntentPatterns.includes(messageContent)) {
     try {
-      let crmContact = await storage.findUnifiedContactByIdentifier(userId, "whatsapp", phone);
+      let crmContact = await storage.findUnifiedContactByIdentifier(userId, channel, phone);
       if (!crmContact) {
         crmContact = await storage.findUnifiedContactByPhoneOrEmail(userId, phone);
       }
@@ -71,25 +128,28 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
         crmContact = await storage.createUnifiedContact({
           userId,
           nome: contactName || phone,
-          telefone: phone,
+          telefone: channel !== "email" ? phone : undefined,
+          email: channel === "email" ? phone : undefined,
           pipelineStage: "novo",
           temperature: "frio",
           lastIntent: "indefinido",
         });
         await storage.createContactIdentifier({
           unifiedContactId: crmContact.id,
-          channelType: "whatsapp",
+          channelType: channel,
           identifier: phone,
           displayName: contactName || phone,
         });
-        log(`CRM: Auto-created contact ${crmContact.id} for ${phone}`, "msg-processor");
+        log(`CRM: Auto-created contact ${crmContact.id} for ${phone} [${channel}]`, "msg-processor");
+
+        // Dispatch lead.created event
+        dispatchEvent("lead.created", crmContact, userId).catch(() => {});
       }
 
       if (isNewContact) {
         await storage.autoAssignContact(userId, crmContact.id);
       }
 
-      // Cancela jobs de inatividade pendentes para este contato (nova mensagem reinicia o timer)
       jobQueue.cancelByContactAndType(crmContact.id, "check_inactivity");
 
       const intentResult = await processMessageIntent(messageContent, crmContact.id, userId, storage);
@@ -97,7 +157,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
       if (intentResult) {
         await storage.createOmnichannelMessage({
           unifiedContactId: crmContact.id,
-          channelType: "whatsapp",
+          channelType: channel,
           direction: "incoming",
           content: messageContent,
           externalMessageId: msgId,
@@ -111,12 +171,10 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
 
       // === AUTOMAÇÃO ===
       try {
-        // Buscar fluxo ativo do contato ou fluxo por keyword
         let automationFlow = crmContact.activeFlowId
           ? await storage.getAutomationFlow(crmContact.activeFlowId)
           : null;
 
-        // Se não há fluxo ativo, buscar por keyword
         if (!automationFlow || !automationFlow.isActive) {
           automationFlow = await storage.findMatchingAutomationFlow(userId, messageContent);
         }
@@ -125,7 +183,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
           const now = Date.now();
           const msgLower = messageContent.toLowerCase();
 
-          // === 4.4: Verificar saídas condicionais ===
+          // Verificar saídas condicionais
           const conditionalExits = automationFlow.conditionalExits as Array<{
             condition: string; label: string; targetFlowId: string; triggerKeywords: string[];
           }> | null;
@@ -146,7 +204,7 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
                     const exitDelay = (targetFlow.responseDelay ?? 10) * 1000;
                     jobQueue.add({
                       type: "send_message",
-                      payload: { userId, phone, message: targetFlow.initialMessage, conversationId: conversation.id },
+                      payload: { userId, phone, message: targetFlow.initialMessage, conversationId: conversation.id, channel, channelMetadata },
                       runAt: now + exitDelay,
                     });
                   }
@@ -157,14 +215,13 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
             }
           }
 
-          // Atualizar activeFlowId se ainda não está definido
           if (!crmContact.activeFlowId && automationFlow) {
             await storage.updateUnifiedContact(crmContact.id, { activeFlowId: automationFlow.id });
           }
 
           const delay = (automationFlow.responseDelay ?? 10) * 1000;
 
-          // === 4.1d: Verificar interruptCondition → entrar na fila ===
+          // Verificar interruptCondition → entrar na fila
           if (automationFlow.interruptCondition) {
             const interruptLower = automationFlow.interruptCondition.toLowerCase();
             if (
@@ -182,17 +239,19 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
                   runAt: slaRunAt,
                 });
               }
+              dispatchEvent("flow.interrupt", { contact: crmContact, flow: automationFlow }, userId).catch(() => {});
               log(`Automation: contact ${crmContact.id} entered queue (interruptCondition matched)`, "msg-processor");
               return;
             }
           }
 
-          // === 4.1d: Verificar successCondition → resolver ===
+          // Verificar successCondition → resolver
           if (automationFlow.successCondition) {
             const successLower = automationFlow.successCondition.toLowerCase();
             if (msgLower.includes(successLower)) {
               await storage.resolveContact(crmContact.id, userId);
               await storage.updateUnifiedContact(crmContact.id, { activeFlowId: null });
+              dispatchEvent("flow.success", { contact: crmContact, flow: automationFlow }, userId).catch(() => {});
               log(`Automation: contact ${crmContact.id} resolved (successCondition matched)`, "msg-processor");
               return;
             }
@@ -201,38 +260,25 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
           const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
 
           if (steps && steps.length > 0) {
-            // Fluxo multi-etapa: agendar cada step com seu delay
             const sorted = [...steps].sort((a, b) => a.order - b.order);
             for (const step of sorted) {
               const runAt = now + (step.delaySeconds * 1000);
               jobQueue.add({
                 type: "send_message",
-                payload: {
-                  userId,
-                  phone,
-                  message: step.message,
-                  conversationId: conversation.id,
-                },
+                payload: { userId, phone, message: step.message, conversationId: conversation.id, channel, channelMetadata },
                 runAt,
               });
             }
             log(`Automation: scheduled ${sorted.length} steps for ${phone}`, "msg-processor");
           } else {
-            // Fluxo simples: usar responseTemplate com responseDelay
             jobQueue.add({
               type: "send_message",
-              payload: {
-                userId,
-                phone,
-                message: automationFlow.responseTemplate,
-                conversationId: conversation.id,
-              },
+              payload: { userId, phone, message: automationFlow.responseTemplate, conversationId: conversation.id, channel, channelMetadata },
               runAt: now + delay,
             });
-            log(`Automation: scheduled response to ${phone} in ${delay / 1000}s`, "msg-processor");
+            log(`Automation: scheduled response to ${phone} in ${delay / 1000}s [${channel}]`, "msg-processor");
           }
 
-          // Agendar job de inatividade após o envio
           if (automationFlow.inactivityTimeout && automationFlow.inactivityTimeout > 0) {
             const inactivityMs = automationFlow.inactivityTimeout * 60 * 1000;
             jobQueue.add({
@@ -256,3 +302,9 @@ export async function processIncomingWhatsAppMessage(params: IncomingMessagePara
     }
   }
 }
+
+// Backward-compatible alias
+export const processIncomingWhatsAppMessage = (params: IncomingMessageParams) =>
+  processIncomingMessage({ ...params, channel: "whatsapp" });
+
+export { sendChannelMessage };
