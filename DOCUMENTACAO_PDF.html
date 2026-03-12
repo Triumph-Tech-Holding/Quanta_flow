@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quanta Flow - Documentação Técnica Completa v5.0.0</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #fff; }
+        @page { size: A4; margin: 2cm; }
+        @media print {
+            body { margin: 0; padding: 0; background: white; }
+            .page-break { page-break-after: always; }
+            h1, h2, h3 { page-break-after: avoid; }
+            p, ul, pre { page-break-inside: avoid; }
+        }
+        body { max-width: 900px; margin: 0 auto; padding: 2cm; }
+        .cover { text-align: center; padding: 5em 0; border-bottom: 3px solid #00A86B; margin-bottom: 2em; }
+        .cover h1 { font-size: 3em; color: #00A86B; margin: 0.5em 0; }
+        .cover .subtitle { font-size: 1.5em; color: #1B3A57; margin: 1em 0; }
+        .cover .meta { color: #666; margin-top: 2em; font-size: 1em; }
+        h1 { color: #00A86B; font-size: 2.5em; margin: 1.5em 0 0.5em 0; border-bottom: 3px solid #00A86B; padding-bottom: 0.3em; }
+        h2 { color: #1B3A57; font-size: 2em; margin: 1.5em 0 0.5em 0; border-left: 5px solid #00A86B; padding-left: 0.5em; page-break-after: avoid; }
+        h3 { color: #1B3A57; font-size: 1.4em; margin: 1.2em 0 0.4em 0; page-break-after: avoid; }
+        h4 { color: #333; font-size: 1.1em; margin: 0.8em 0 0.3em 0; page-break-after: avoid; }
+        p { margin: 0.8em 0; text-align: justify; }
+        ul, ol { margin: 0.8em 0 0.8em 2em; }
+        li { margin-bottom: 0.4em; }
+        table { width: 100%; border-collapse: collapse; margin: 1em 0; page-break-inside: avoid; }
+        th { background: #00A86B; color: white; padding: 0.8em; text-align: left; font-weight: bold; }
+        td { border: 1px solid #ddd; padding: 0.6em; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        code { background: #f4f4f4; padding: 0.2em 0.5em; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 0.95em; }
+        pre { background: #f4f4f4; padding: 1em; border-radius: 5px; overflow-x: auto; margin: 1em 0; border-left: 4px solid #00A86B; font-family: 'Courier New', monospace; font-size: 0.9em; page-break-inside: avoid; }
+        .box { background: #f9f9f9; border-left: 4px solid #00A86B; padding: 1em; margin: 1em 0; border-radius: 3px; page-break-inside: avoid; }
+        .badge { display: inline-block; background: #00A86B; color: white; padding: 0.3em 0.7em; border-radius: 3px; font-size: 0.9em; margin-right: 0.5em; }
+        .toc { background: #f9f9f9; padding: 1.5em; border-radius: 5px; margin: 1.5em 0; }
+        .toc ol { margin-left: 2em; }
+        .page-break { page-break-after: always; height: 0; margin: 2em 0; }
+        .timestamp { text-align: right; color: #999; font-size: 0.9em; margin-top: 3em; padding-top: 1em; border-top: 1px solid #ddd; page-break-inside: avoid; }
+        hr { border: none; border-top: 2px dashed #00A86B; margin: 2em 0; }
+        .print-info { background: #fffbea; border: 2px solid #FFD700; padding: 1em; border-radius: 5px; margin: 1em 0; text-align: center; color: #333; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>QUANTA FLOW</h1>
+        <p class="subtitle">Plataforma Omnichannel de CRM, Automação de Vendas e IA</p>
+        <div class="meta">
+            <p><strong>Versão:</strong> 5.0.0</p>
+            <p><strong>Status:</strong> Produção</p>
+            <p><strong>Data:</strong> Março de 2026</p>
+            <p style="margin-top: 1em; font-size: 1.2em;"><em>"Venda no automático."</em></p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h1>ÍNDICE</h1>
+    <div class="toc">
+        <ol>
+            <li>Visão Geral Executiva</li>
+            <li>Arquitetura do Sistema</li>
+            <li>Estrutura de Arquivos</li>
+            <li>Database Schema (20+ Tabelas)</li>
+            <li>API Endpoints (80+)</li>
+            <li>Fluxos de Dados</li>
+            <li>Módulos & Funcionalidades</li>
+            <li>Configuração & Setup</li>
+            <li>Deploy & CI/CD</li>
+            <li>Guia de Desenvolvimento</li>
+            <li>Performance & Escalabilidade</li>
+            <li>Segurança</li>
+            <li>Roadmap Futuro</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h1>VISÃO GERAL EXECUTIVA</h1>
+
+    <h2>O Que é Quanta Flow?</h2>
+    <p><strong>Quanta Flow</strong> é uma plataforma SaaS de automação de vendas que:</p>
+    <ul>
+        <li>✅ Centraliza comunicação de múltiplos canais (WhatsApp, Telegram, Instagram, E-mail)</li>
+        <li>✅ Detecta intenção de compra via IA (OpenAI GPT-4)</li>
+        <li>✅ Automatiza respostas e fluxos de vendas</li>
+        <li>✅ Gerencia fila de atendimento com SLA em tempo real</li>
+        <li>✅ Integra com sistemas externos (Google Sheets, Zapier, webhooks)</li>
+        <li>✅ Oferece análise completa de performance</li>
+        <li>✅ Suporta múltiplos usuários com RBAC granular</li>
+    </ul>
+
+    <h2>Números do Projeto</h2>
+    <table>
+        <tr><th>Métrica</th><th>Valor</th></tr>
+        <tr><td>Módulos implementados</td><td>17</td></tr>
+        <tr><td>Sprints completados</td><td>5</td></tr>
+        <tr><td>Endpoints API</td><td>80+</td></tr>
+        <tr><td>Tabelas de banco</td><td>20+</td></tr>
+        <tr><td>Canais suportados</td><td>4 (WhatsApp, Telegram, Instagram, Email)</td></tr>
+        <tr><td>Linhas de código (backend)</td><td>~3500</td></tr>
+        <tr><td>Linhas de código (frontend)</td><td>~4200</td></tr>
+    </table>
+
+    <h2>Stack Tecnológico</h2>
+    <table>
+        <tr><th>Camada</th><th>Tecnologia</th></tr>
+        <tr><td>Frontend</td><td>React 18 + Vite + TypeScript + Tailwind + Shadcn UI</td></tr>
+        <tr><td>Backend</td><td>Node.js + Express.js + TypeScript</td></tr>
+        <tr><td>Banco de Dados</td><td>PostgreSQL + Drizzle ORM</td></tr>
+        <tr><td>Autenticação</td><td>JWT + bcrypt</td></tr>
+        <tr><td>Real-time</td><td>Socket.io WebSocket</td></tr>
+        <tr><td>IA</td><td>OpenAI API (gpt-4o-mini)</td></tr>
+        <tr><td>CI/CD</td><td>GitHub Actions</td></tr>
+        <tr><td>Hosting</td><td>Replit</td></tr>
+        <tr><td>Email</td><td>Nodemailer (SMTP)</td></tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h1>ARQUITETURA DO SISTEMA</h1>
+
+    <pre>┌──────────────────────────────────────────────────┐
+│         CLIENTE (FRONTEND)                       │
+│ React + Vite + TypeScript + Shadcn + Tailwind   │
+└──────────────────────────────────────────────────┘
+                    ↕
+    ┌────────────────────────────────────┐
+    │ REST API + WebSocket (Socket.io)   │
+    │      Express.js + Middleware       │
+    └────────────────────────────────────┘
+                    ↕
+┌──────────────────────────────────────────────────┐
+│         BACKEND SERVICES                        │
+├──────────────────────────────────────────────────┤
+│ • Authentication (JWT + bcrypt)                │
+│ • Message Processing (Multi-canal)            │
+│ • Intent Detection (OpenAI)                    │
+│ • Automation Engine (Flows, Conditions)        │
+│ • Queue Management (SLA Tracking)              │
+│ • Learning Worker (5min interval)              │
+│ • Job Queue (Async - 5s interval)             │
+│ • Webhook Dispatcher (HMAC signed)            │
+│ • Google Sheets Sync (OAuth2)                  │
+│ • RBAC (Role-Based Access Control)            │
+└──────────────────────────────────────────────────┘
+                    ↕
+┌──────────────────────────────────────────────────┐
+│      POSTGRESQL DATABASE (20+ Tabelas)          │
+│ (Users, Leads, Messages, Conversations, etc)    │
+└──────────────────────────────────────────────────┘
+                    ↕
+┌──────────────────────────────────────────────────┐
+│      EXTERNAL INTEGRATIONS                      │
+├──────────────────────────────────────────────────┤
+│ • Z-API (WhatsApp)                             │
+│ • Telegram Bot API                              │
+│ • Meta Graph API (Instagram)                    │
+│ • Google Sheets API v4                          │
+│ • OpenAI API                                    │
+│ • SMTP (E-mail)                                │
+│ • Webhooks HTTP (outbound)                     │
+└──────────────────────────────────────────────────┘</pre>
+
+    <div class="page-break"></div>
+
+    <h1>ESTRUTURA DE ARQUIVOS</h1>
+
+    <pre>quanta-flow/
+├── client/                          # Frontend React
+│   ├── src/pages/                   # 15+ páginas/rotas
+│   ├── src/components/              # UI componentes reutilizáveis
+│   ├── src/lib/                     # queryClient, auth, socket
+│   └── src/App.tsx                  # Router principal
+│
+├── server/                          # Backend Node.js
+│   ├── index.ts                     # Entry point
+│   ├── routes.ts                    # 80+ endpoints
+│   ├── storage.ts                   # Database operations
+│   ├── jobQueue.ts                  # Async jobs (5s)
+│   ├── learningWorker.ts            # Microlearning (5min)
+│   ├── middleware/                  # RBAC, auth
+│   └── services/
+│       ├── messageProcessor.ts      # Multi-canal
+│       ├── intentService.ts         # OpenAI
+│       ├── telegramService.ts       # Telegram Bot
+│       ├── instagramService.ts      # Meta API
+│       ├── emailService.ts          # Nodemailer
+│       ├── googleSheetsService.ts   # Google Sheets OAuth2
+│       ├── webhookDispatcher.ts     # HMAC-SHA256
+│       └── configService.ts         # Dynamic config
+│
+├── shared/schema.ts                 # Drizzle ORM + Zod
+├── .github/workflows/               # CI/CD (deploy, pr-check)
+└── drizzle/migrations/              # Database schema</pre>
+
+    <div class="page-break"></div>
+
+    <h1>DATABASE SCHEMA (20+ TABELAS)</h1>
+
+    <h2>Tabelas Principais</h2>
+
+    <h3>1. users - Autenticação</h3>
+    <div class="box">
+        <ul>
+            <li><strong>id:</strong> UUID (PK)</li>
+            <li><strong>email, password:</strong> bcrypt hashed</li>
+            <li><strong>status:</strong> active, inactive, suspended</li>
+            <li><strong>tokenVersion, mustChangePassword:</strong> JWT management</li>
+        </ul>
+    </div>
+
+    <h3>2. unified_contacts - CRM Central</h3>
+    <div class="box">
+        <ul>
+            <li><strong>pipelineStage:</strong> novo, contatado, qualificado, convertido</li>
+            <li><strong>temperature:</strong> frio, morno, quente</li>
+            <li><strong>score, lastIntent, tags, notes</strong></li>
+            <li><strong>queueStatus:</strong> waiting, assigned, resolved [fila]</li>
+            <li><strong>slaDeadline, activeFlowId:</strong> automação integrada</li>
+            <li><strong>assignedToUserId:</strong> agent assignment</li>
+        </ul>
+    </div>
+
+    <h3>3. conversations - Chats Multi-Canal</h3>
+    <div class="box">
+        <ul>
+            <li><strong>channel:</strong> 'whatsapp' (default), 'telegram', 'instagram', 'email' [Sprint 5]</li>
+            <li><strong>remoteJid:</strong> ID do contato no canal</li>
+            <li><strong>lastMessage, lastMessageAt, unreadCount</strong></li>
+        </ul>
+    </div>
+
+    <h3>4. messages - Histórico</h3>
+    <div class="box">
+        <ul>
+            <li><strong>direction:</strong> incoming, outgoing</li>
+            <li><strong>content, mediaType, mediaUrl</strong></li>
+            <li><strong>timestamp</strong></li>
+        </ul>
+    </div>
+
+    <h3>5. automation_flows - 9 Seções</h3>
+    <div class="box">
+        <ul>
+            <li><strong>triggerKeywords:</strong> gatilhos para acionamento</li>
+            <li><strong>responseTemplate, responseDelay:</strong> resposta automática</li>
+            <li><strong>systemPrompt, temperature:</strong> IA config</li>
+            <li><strong>successCondition, interruptCondition:</strong> lógica condicional</li>
+            <li><strong>steps (JSONB):</strong> multi-step sequences</li>
+            <li><strong>conditionalExits (JSONB):</strong> transferência entre fluxos</li>
+        </ul>
+    </div>
+
+    <h3>6. outbound_webhooks [Sprint 5]</h3>
+    <div class="box">
+        <ul>
+            <li><strong>events:</strong> lead.created, lead.qualified, flow.success, flow.interrupt, conversation.closed</li>
+            <li><strong>secret:</strong> HMAC-SHA256 key</li>
+            <li><strong>lastStatus, lastTriggeredAt:</strong> tracking</li>
+        </ul>
+    </div>
+
+    <h3>7. sheet_integrations [Sprint 5]</h3>
+    <div class="box">
+        <ul>
+            <li><strong>spreadsheetId, sheetName:</strong> Google Sheets reference</li>
+            <li><strong>triggerEvent:</strong> lead.created, lead.qualified, etc</li>
+            <li><strong>columnMapping (JSONB):</strong> campo → coluna</li>
+            <li><strong>googleToken:</strong> OAuth2 token (encrypted)</li>
+        </ul>
+    </div>
+
+    <h3>8. email_configs [Sprint 5]</h3>
+    <div class="box">
+        <ul>
+            <li><strong>smtpHost, smtpPort, smtpUser, smtpPass:</strong> credenciais</li>
+            <li><strong>imapHost, imapPort:</strong> receção (opcional)</li>
+            <li><strong>isActive:</strong> status</li>
+        </ul>
+    </div>
+
+    <h3>9-13. Tabelas Adicionais</h3>
+    <ul>
+        <li><strong>learning_tracks:</strong> microlearning CRUD</li>
+        <li><strong>roles, permissions, user_roles, role_permissions:</strong> RBAC (3 roles, 18 permissions)</li>
+        <li><strong>audit_logs:</strong> rastreamento de ações</li>
+        <li><strong>agent_assignments:</strong> atribuição a agentes</li>
+        <li><strong>omnichannelMessages:</strong> intent tracking por canal</li>
+        <li><strong>quick_replies, branding_config, api_configs, evolution_configs</strong></li>
+        <li><strong>learning_deliveries, pipeline_stages, channels, settings</strong></li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h1>API ENDPOINTS (80+)</h1>
+
+    <h2>Categorias e Contagem</h2>
+    <table>
+        <tr><th>Categoria</th><th>Endpoints</th><th>Exemplo</th></tr>
+        <tr><td>Authentication</td><td>5</td><td>POST /api/auth/login</td></tr>
+        <tr><td>CRM Leads</td><td>8</td><td>GET /api/crm/contacts</td></tr>
+        <tr><td>Inbox (Chat + Queue)</td><td>8</td><td>GET /api/conversations</td></tr>
+        <tr><td>Queue Management</td><td>4</td><td>POST /api/queue/:id/assign</td></tr>
+        <tr><td>Automation Flows</td><td>6</td><td>POST /api/automation-flows</td></tr>
+        <tr><td>Learning Tracks</td><td>4</td><td>GET /api/learning-tracks</td></tr>
+        <tr><td>Webhooks Outbound [S5]</td><td>5</td><td>POST /api/webhooks/outbound</td></tr>
+        <tr><td>Google Sheets [S5]</td><td>6</td><td>POST /api/integrations/sheets</td></tr>
+        <tr><td>Email Config [S5]</td><td>3</td><td>POST /api/settings/email/test</td></tr>
+        <tr><td>Webhook Entrada [S5]</td><td>5</td><td>POST /api/webhooks/telegram</td></tr>
+        <tr><td>WhatsApp</td><td>10+</td><td>POST /api/whatsapp/send</td></tr>
+        <tr><td>Settings</td><td>8</td><td>GET /api/settings</td></tr>
+        <tr><td>Admin</td><td>8</td><td>GET /api/admin/users</td></tr>
+        <tr><td>Health Check</td><td>1</td><td>GET /api/health</td></tr>
+        <tr style="font-weight: bold;"><td>TOTAL</td><td>80+</td><td></td></tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h1>FLUXOS DE DADOS</h1>
+
+    <h2>Fluxo 1: Mensagem WhatsApp → Automação</h2>
+    <pre>1. Z-API/Baileys recebe msg
+   ↓
+2. POST /api/whatsapp/webhook
+   ↓
+3. processIncomingMessage() salva em BD
+   Socket.io emite para UI em tempo real
+   ↓
+4. OpenAI detecta intenção + score
+   ↓
+5. messageProcessor() busca automationFlow
+   Por keyword trigger ou activeFlowId
+   ↓
+6a. Se interruptCondition → Entra na fila
+    queueStatus = 'waiting'
+    SLA deadline = now + slaMinutes
+    ↓
+6b. Se successCondition → Resolve
+    dispatchEvent('flow.success')
+    ↓
+6c. Se steps → Agenda mensagens
+    JobQueue.add() a cada 5s
+    ↓
+7. Envio via sendChannelMessage()
+   Z-API / Telegram / Email / Instagram</pre>
+
+    <h2>Fluxo 2: SLA Queue Tracking</h2>
+    <pre>Lead entra na fila → Timer SLA inicia
+   ↓
+JobQueue verifica deadline a cada 5s
+   ↓
+Frontend mostra countdown em tempo real
+   ↓
+Agent clica Assumir/Resolver
+   ↓
+Status atualizado via Socket.io</pre>
+
+    <h2>Fluxo 3: Lead → Google Sheets</h2>
+    <pre>Lead stage = 'qualificado'
+   ↓
+dispatchEvent('lead.qualified')
+   ↓
+webhookDispatcher() processa
+   ↓
+Google Sheets API append row
+   ↓
+Planilha atualizada em tempo real</pre>
+
+    <div class="page-break"></div>
+
+    <h1>MÓDULOS & FUNCIONALIDADES (17 IMPLEMENTADOS)</h1>
+
+    <h2>Módulos Core</h2>
+    
+    <h3>1-3. Dashboard + CRM + Inbox</h3>
+    <div class="box">
+        <p><strong>Dashboard:</strong> KPIs, hot leads, distribuição por temperatura</p>
+        <p><strong>CRM:</strong> Kanban visual, filtros, perfil omnichannel</p>
+        <p><strong>Inbox:</strong> Chat + Fila com SLA timer, Respostas Rápidas</p>
+    </div>
+
+    <h3>4. Automação (9 Seções)</h3>
+    <div class="box">
+        <ol>
+            <li>Básico (nome, keywords)</li>
+            <li>Resposta (template, delay)</li>
+            <li>Sistema (prompt IA)</li>
+            <li>Avançado (temperature, inicial)</li>
+            <li>Inatividade (timeout, monitor)</li>
+            <li>Condições (sucesso, interrupção)</li>
+            <li>Multi-step (sequência com delays)</li>
+            <li>Resumo (automático)</li>
+            <li>Saídas Condicionais (fluxos interligados)</li>
+        </ol>
+    </div>
+
+    <h3>5-10. Integrações Multi-Canal [Sprint 5]</h3>
+    <ul>
+        <li>Webhooks Outbound (HMAC-SHA256, 5 eventos)</li>
+        <li>Google Sheets (OAuth2, auto-append)</li>
+        <li>Telegram (Bot API)</li>
+        <li>Instagram (Meta Graph API)</li>
+        <li>Email (SMTP/Nodemailer)</li>
+        <li>Microlearning (trigger automático)</li>
+    </ul>
+
+    <h3>11-15. Admin & Segurança</h3>
+    <ul>
+        <li>User Management (CRUD, roles)</li>
+        <li>Branding (dynamic colors, logo, SLA)</li>
+        <li>Audit Logs (rastreamento completo)</li>
+        <li>Autenticação (JWT, bcrypt)</li>
+        <li>Health Check (DB connectivity)</li>
+    </ul>
+
+    <h3>16-17. DevOps</h3>
+    <ul>
+        <li>GitHub Actions (deploy automático em push main)</li>
+        <li>PR Checks (TypeScript, build validation)</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h1>SETUP & CONFIGURAÇÃO</h1>
+
+    <h2>Variáveis de Ambiente</h2>
+    <pre>DATABASE_URL=postgresql://...
+SESSION_SECRET=seu_jwt_secret
+ZAPI_API_KEY=sk_...
+OPENAI_API_KEY=sk-...
+SMTP_HOST=smtp.gmail.com
+TELEGRAM_BOT_TOKEN=...
+INSTAGRAM_VERIFY_TOKEN=quanta_flow_ig
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...</pre>
+
+    <h2>Setup Local</h2>
+    <pre>git clone ...
+npm install
+npx drizzle-kit push
+npm run dev
+
+Frontend: http://localhost:5173
+Backend API: http://localhost:5000/api
+Health: http://localhost:5000/api/health</pre>
+
+    <h2>Admin Padrão</h2>
+    <ul>
+        <li><strong>Email:</strong> admin@quantaflow.com</li>
+        <li><strong>Password:</strong> Admin@123</li>
+        <li><strong>Role:</strong> super_admin</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h1>DEPLOY & CI/CD</h1>
+
+    <h2>GitHub Actions Workflows</h2>
+    <table>
+        <tr><th>Workflow</th><th>Trigger</th><th>Ações</th></tr>
+        <tr><td>deploy.yml</td><td>Push main</td><td>Build → Deploy Replit</td></tr>
+        <tr><td>pr-check.yml</td><td>Pull Request</td><td>TypeScript check, Build test</td></tr>
+    </table>
+
+    <h2>Health Check Resposta</h2>
+    <pre>GET /api/health
+{
+  "status": "ok",
+  "version": "5.0.0",
+  "uptime": 1234,
+  "dbConnected": true,
+  "timestamp": "2026-03-12T00:00:30.178Z"
+}</pre>
+
+    <div class="page-break"></div>
+
+    <h1>SEGURANÇA</h1>
+
+    <h3>✅ Implementado</h3>
+    <ul>
+        <li>JWT com 24h expiration</li>
+        <li>bcrypt password hashing (10 salt rounds)</li>
+        <li>HMAC-SHA256 webhook signing</li>
+        <li>AES-256-CBC credential encryption</li>
+        <li>RBAC (3 roles, 18 permissions)</li>
+        <li>SQL injection prevention (Drizzle ORM)</li>
+        <li>XSS prevention (React + TypeScript)</li>
+        <li>CORS enabled</li>
+        <li>Input validation (Zod schemas)</li>
+    </ul>
+
+    <h3>🚀 Futuro</h3>
+    <ul>
+        <li>HTTPS only (TLS)</li>
+        <li>WAF (Web Application Firewall)</li>
+        <li>DDoS protection</li>
+        <li>Database encryption at rest</li>
+        <li>Two-factor authentication</li>
+        <li>IP whitelist</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h1>ROADMAP FUTURO</h1>
+
+    <h2>Sprint 6: Social / Ads</h2>
+    <ul>
+        <li>Facebook Ads integration</li>
+        <li>LinkedIn Ads sync</li>
+        <li>Google Ads tracking</li>
+        <li>TikTok Ads leads</li>
+        <li>ROI calculator (custo por lead)</li>
+        <li>Lead attribution tracking</li>
+    </ul>
+
+    <h2>Sprint 7: IA Brain</h2>
+    <ul>
+        <li>Análise preditiva (qual lead converte?)</li>
+        <li>NLP avançado (sentimento, urgência)</li>
+        <li>Recomendação automática de ações</li>
+        <li>Scoring dinâmico por padrões</li>
+        <li>Pattern recognition</li>
+        <li>Chatbot IA independente</li>
+    </ul>
+
+    <h2>Sprint 8: Tribos</h2>
+    <ul>
+        <li>Team management e hierarquia</li>
+        <li>Leaderboard & gamification</li>
+        <li>Distribuição inteligente de leads</li>
+        <li>Commission engine (bônus automático)</li>
+        <li>Knowledge base colaborativo</li>
+        <li>Chat/forum interno</li>
+    </ul>
+
+    <h2>Sprints 9+</h2>
+    <ul>
+        <li>Mobile app (React Native)</li>
+        <li>Self-hosted (Docker)</li>
+        <li>White-label marketplace</li>
+        <li>API pública (resellers)</li>
+        <li>Advanced BI & reporting</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h1>PERFORMANCE & ESCALABILIDADE</h1>
+
+    <h3>✅ Implementado</h3>
+    <ul>
+        <li>React Query caching (frontend)</li>
+        <li>JobQueue async 5s interval</li>
+        <li>LearningWorker background 5min</li>
+        <li>Database indexing via Drizzle</li>
+        <li>Socket.io eficiente (deltas only)</li>
+    </ul>
+
+    <h3>Limites Atuais</h3>
+    <ul>
+        <li>Max 10k contatos/usuário</li>
+        <li>Max 100 messages por conversa (load)</li>
+        <li>Max 50 webhooks/usuário</li>
+    </ul>
+
+    <h3>🚀 Futuro</h3>
+    <ul>
+        <li>Redis cache distribuído</li>
+        <li>Bull queue (jobs distribuídos)</li>
+        <li>Elasticsearch (busca rápida)</li>
+        <li>CDN para assets</li>
+        <li>Database replication (master-slave)</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <div class="timestamp">
+        <h2 style="border: none; margin-top: 0;">COMO CONVERTER PARA PDF</h2>
+        <div class="print-info">
+            <p>📌 <strong>Para salvar como PDF:</strong></p>
+            <p>1. Abra este arquivo no navegador</p>
+            <p>2. Pressione <strong>Ctrl+P</strong> (Windows/Linux) ou <strong>Cmd+P</strong> (Mac)</p>
+            <p>3. Destino: "<strong>Salvar como PDF</strong>"</p>
+            <p>4. Clique em <strong>Salvar</strong></p>
+        </div>
+
+        <hr>
+
+        <p style="margin-top: 2em; text-align: center;">
+            <strong>Quanta Flow v5.0.0</strong><br>
+            Plataforma Omnichannel de CRM, Automação de Vendas e IA<br>
+            <em>"Venda no automático."</em><br><br>
+            Documento gerado: Março 2026<br>
+            Status: Produção - 17 Módulos Completos<br>
+            Sprint 5 Finalizado
+        </p>
+    </div>
+
+</body>
+</html>
