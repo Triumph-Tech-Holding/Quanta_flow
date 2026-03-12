@@ -684,3 +684,26 @@ export type UpdateSheetIntegration = z.infer<typeof updateSheetIntegrationSchema
 export type EmailConfig = typeof emailConfigs.$inferSelect;
 export type InsertEmailConfig = z.infer<typeof insertEmailConfigSchema>;
 export type UpdateEmailConfig = z.infer<typeof updateEmailConfigSchema>;
+
+// ==================== Documentation Versions ====================
+
+export const documentationVersions = pgTable("documentation_versions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  version: varchar("version", { length: 20 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  content: text("content").notNull(),
+  format: varchar("format", { length: 20 }).default("markdown"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDocumentationVersionSchema = createInsertSchema(documentationVersions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DocumentationVersion = typeof documentationVersions.$inferSelect;
+export type InsertDocumentationVersion = z.infer<typeof insertDocumentationVersionSchema>;

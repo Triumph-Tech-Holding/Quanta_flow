@@ -5,7 +5,7 @@ import {
   unifiedContacts, contactIdentifiers, omnichannelMessages, pipelineStages, channels,
   quickReplies, automationFlows, brandingConfig, userRoles, roles,
   agentAssignments, learningTracks, learningDeliveries,
-  outboundWebhooks, sheetIntegrations, emailConfigs,
+  outboundWebhooks, sheetIntegrations, emailConfigs, documentationVersions,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -23,6 +23,7 @@ import {
   type OutboundWebhook, type InsertOutboundWebhook, type UpdateOutboundWebhook,
   type SheetIntegration, type InsertSheetIntegration, type UpdateSheetIntegration,
   type EmailConfig, type InsertEmailConfig, type UpdateEmailConfig,
+  type DocumentationVersion, type InsertDocumentationVersion,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -96,6 +97,11 @@ export interface IStorage {
   getActiveAgents(): Promise<User[]>;
   assignContactToUser(contactId: string, assignedToUserId: string | null): Promise<UnifiedContact | undefined>;
   autoAssignContact(ownerUserId: string, contactId: string): Promise<UnifiedContact | undefined>;
+  // Documentation Versions
+  getDocumentationVersions(userId: string): Promise<DocumentationVersion[]>;
+  getDocumentationVersion(id: string): Promise<DocumentationVersion | undefined>;
+  createDocumentationVersion(data: InsertDocumentationVersion): Promise<DocumentationVersion>;
+  deleteDocumentationVersion(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -777,6 +783,30 @@ export class DatabaseStorage implements IStorage {
     }
     const [cfg] = await db.insert(emailConfigs).values({ ...data, userId }).returning();
     return cfg;
+  }
+
+  // ==================== Documentation Versions ====================
+
+  async getDocumentationVersions(userId: string): Promise<DocumentationVersion[]> {
+    return db.select().from(documentationVersions)
+      .where(eq(documentationVersions.userId, userId))
+      .orderBy(desc(documentationVersions.createdAt));
+  }
+
+  async getDocumentationVersion(id: string): Promise<DocumentationVersion | undefined> {
+    const [doc] = await db.select().from(documentationVersions)
+      .where(eq(documentationVersions.id, id)).limit(1);
+    return doc;
+  }
+
+  async createDocumentationVersion(data: InsertDocumentationVersion): Promise<DocumentationVersion> {
+    const [doc] = await db.insert(documentationVersions).values(data).returning();
+    return doc;
+  }
+
+  async deleteDocumentationVersion(id: string): Promise<boolean> {
+    const result = await db.delete(documentationVersions).where(eq(documentationVersions.id, id)).returning();
+    return result.length > 0;
   }
 }
 

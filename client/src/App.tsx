@@ -23,6 +23,7 @@ import LearningTracksPage from "@/pages/learning-tracks";
 import SettingsWebhooksPage from "@/pages/settings-webhooks";
 import SettingsIntegrationsPage from "@/pages/settings-integrations";
 import SettingsChannelsPage from "@/pages/settings-channels";
+import AdminDocumentation from "@/pages/admin-documentation";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -109,6 +110,9 @@ function Router() {
       </Route>
       <Route path="/admin/branding">
         <ProtectedRoute component={AdminBranding} />
+      </Route>
+      <Route path="/admin/documentation">
+        <ProtectedRoute component={AdminDocumentation} />
       </Route>
       <Route path="/user-settings">
         <ProtectedRoute component={UserSettings} />

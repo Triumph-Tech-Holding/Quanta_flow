@@ -2349,6 +2349,67 @@ export async function registerRoutes(
     } catch { res.status(500).json({ message: "Erro ao verificar token do Instagram" }); }
   });
 
+  // ─── Documentation Versions ────────────────────────────────────────────────────
+
+  app.get("/api/documentation/versions", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const versions = await storage.getDocumentationVersions(req.user.userId);
+      res.json(versions);
+    } catch (err) {
+      log.error("[GET /api/documentation/versions]", err);
+      res.status(500).json({ message: "Erro ao buscar versões" });
+    }
+  });
+
+  app.get("/api/documentation/versions/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const version = await storage.getDocumentationVersion(id);
+      if (!version) return res.status(404).json({ message: "Versão não encontrada" });
+      res.json(version);
+    } catch (err) {
+      log.error("[GET /api/documentation/versions/:id]", err);
+      res.status(500).json({ message: "Erro ao buscar versão" });
+    }
+  });
+
+  app.post("/api/documentation/versions", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const schema = insertDocumentationVersionSchema.parse(req.body);
+      const doc = await storage.createDocumentationVersion({
+        ...schema,
+        userId: req.user.userId,
+      });
+      await logAudit(req.user.userId, "CREATE", "documentation_versions", doc.id, null, JSON.stringify(doc));
+      res.json(doc);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      log.error("[POST /api/documentation/versions]", err);
+      res.status(500).json({ message: "Erro ao criar documentação" });
+    }
+  });
+
+  app.delete("/api/documentation/versions/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { id } = req.params;
+      const doc = await storage.getDocumentationVersion(id);
+      if (!doc) return res.status(404).json({ message: "Versão não encontrada" });
+      if (doc.userId !== req.user.userId && !["super_admin", "admin"].includes(req.user.tipoAtor)) {
+        return res.status(403).json({ message: "Sem permissão" });
+      }
+      const deleted = await storage.deleteDocumentationVersion(id);
+      if (!deleted) return res.status(404).json({ message: "Falha ao deletar" });
+      await logAudit(req.user.userId, "DELETE", "documentation_versions", id, JSON.stringify(doc), null);
+      res.json({ ok: true });
+    } catch (err) {
+      log.error("[DELETE /api/documentation/versions/:id]", err);
+      res.status(500).json({ message: "Erro ao deletar documentação" });
+    }
+  });
+
   return httpServer;
 }
 

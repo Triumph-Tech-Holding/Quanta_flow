@@ -17,6 +17,7 @@ import {
   Webhook,
   Table2,
   Radio,
+  BookOpen,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -145,6 +146,12 @@ const adminMenuItems = [
     title: "Integrações",
     url: "/settings/integrations",
     icon: Table2,
+    permission: "edit_settings",
+  },
+  {
+    title: "Documentação",
+    url: "/admin/documentation",
+    icon: BookOpen,
     permission: "edit_settings",
   },
 ];
