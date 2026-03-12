@@ -841,16 +841,29 @@ function BlockConfigPanel({
         )}
 
         {blockType === "delay" && (
-          <div>
-            <Label className="text-xs">Tempo (segundos)</Label>
-            <Input
-              type="number"
-              value={(config.delaySeconds as number) || 30}
-              onChange={(e) => setConfig({ ...config, delaySeconds: parseInt(e.target.value) || 30 })}
-              className="h-8 text-xs"
-              data-testid="input-block-delay"
-            />
-          </div>
+          <>
+            <div>
+              <Label className="text-xs">Tempo</Label>
+              <Input
+                type="number"
+                value={(config.delaySeconds as number) || 30}
+                onChange={(e) => setConfig({ ...config, delaySeconds: parseInt(e.target.value) || 30 })}
+                className="h-8 text-xs"
+                data-testid="input-block-delay"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Unidade</Label>
+              <Select value={(config.delayUnit as string) || "seconds"} onValueChange={(v) => setConfig({ ...config, delayUnit: v })}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-delay-unit"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="seconds">Segundos</SelectItem>
+                  <SelectItem value="minutes">Minutos</SelectItem>
+                  <SelectItem value="hours">Horas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         )}
 
         {blockType === "condition" && (

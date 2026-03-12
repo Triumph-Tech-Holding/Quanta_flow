@@ -1944,8 +1944,19 @@ Return ONLY the JSON array, no markdown.`,
           return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
         }
       }
-      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0 && !data.thumbnail) {
-        (data as Record<string, unknown>).thumbnail = generateFlowThumbnail(data.blocks as Array<{ type: string; label?: string }>);
+      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0) {
+        const blockArr = data.blocks as Array<{ type: string; label?: string; config?: Record<string, unknown> }>;
+        for (const block of blockArr) {
+          if (block.type === "ai_agent" && block.config?.agentId) {
+            const blockAgent = await storage.getAiAgent(block.config.agentId as string);
+            if (!blockAgent || blockAgent.userId !== req.user!.userId) {
+              return res.status(400).json({ message: `Agente IA "${block.config.agentId}" no bloco "${block.label}" não encontrado ou não pertence a este usuário` });
+            }
+          }
+        }
+        if (!data.thumbnail) {
+          (data as Record<string, unknown>).thumbnail = generateFlowThumbnail(blockArr);
+        }
       }
       const flow = await storage.createAutomationFlow(data);
       res.status(201).json(flow);
@@ -1972,8 +1983,19 @@ Return ONLY the JSON array, no markdown.`,
           return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
         }
       }
-      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0 && !data.thumbnail) {
-        data.thumbnail = generateFlowThumbnail(data.blocks as Array<{ type: string; label?: string }>);
+      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0) {
+        const blockArr = data.blocks as Array<{ type: string; label?: string; config?: Record<string, unknown> }>;
+        for (const block of blockArr) {
+          if (block.type === "ai_agent" && block.config?.agentId) {
+            const blockAgent = await storage.getAiAgent(block.config.agentId as string);
+            if (!blockAgent || blockAgent.userId !== req.user!.userId) {
+              return res.status(400).json({ message: `Agente IA "${block.config.agentId}" no bloco "${block.label}" não encontrado ou não pertence a este usuário` });
+            }
+          }
+        }
+        if (!data.thumbnail) {
+          data.thumbnail = generateFlowThumbnail(blockArr);
+        }
       }
       const updated = await storage.updateAutomationFlow(id, data);
       res.json(updated);

@@ -56,6 +56,27 @@ export class ZApiProvider implements IWhatsAppProvider {
     return { messageId: result.messageId || `zapi_${Date.now()}` };
   }
 
+  async sendAudio(phone: string, audioPath: string): Promise<SendMessageResult> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    const fs = await import("fs");
+    const audioBuffer = fs.default.readFileSync(audioPath);
+    const base64Audio = audioBuffer.toString("base64");
+    const sendUrl = `${this.baseUrl}/send-audio`;
+    const response = await fetch(sendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": this.clientToken,
+      },
+      body: JSON.stringify({ phone: cleanPhone, audio: `data:audio/mpeg;base64,${base64Audio}` }),
+    });
+    if (!response.ok) {
+      throw new Error(`Z-API send-audio error: ${response.status}`);
+    }
+    const result = await response.json() as { messageId?: string };
+    return { messageId: result.messageId || `zapi_audio_${Date.now()}` };
+  }
+
   async sendImage(phone: string, imageUrl: string, caption?: string): Promise<SendMessageResult> {
     const cleanPhone = phone.replace(/\D/g, "");
     const sendUrl = `${this.baseUrl}/send-image`;
@@ -307,6 +328,32 @@ export class BaileysProvider implements IWhatsAppProvider {
     const jid = phone.includes("@") ? phone : `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
     const result = await this.instance.socket.sendMessage(jid, { text });
     return { messageId: result?.key?.id || `baileys_${Date.now()}` };
+  }
+
+  async sendAudio(phone: string, audioPath: string): Promise<SendMessageResult> {
+    if (!this.instance.socket || !this.instance.connected) {
+      throw new Error("Baileys não conectado");
+    }
+    const jid = phone.includes("@") ? phone : `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
+    const audioBuffer = fs.readFileSync(audioPath);
+    const result = await this.instance.socket.sendMessage(jid, {
+      audio: audioBuffer,
+      mimetype: "audio/mpeg",
+      ptt: true,
+    });
+    return { messageId: result?.key?.id || `baileys_audio_${Date.now()}` };
+  }
+
+  async sendImage(phone: string, imageUrl: string, caption?: string): Promise<SendMessageResult> {
+    if (!this.instance.socket || !this.instance.connected) {
+      throw new Error("Baileys não conectado");
+    }
+    const jid = phone.includes("@") ? phone : `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
+    const result = await this.instance.socket.sendMessage(jid, {
+      image: { url: imageUrl },
+      caption: caption || "",
+    });
+    return { messageId: result?.key?.id || `baileys_img_${Date.now()}` };
   }
 
   async getStatus(): Promise<ProviderStatus> {

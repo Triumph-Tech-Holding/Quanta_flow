@@ -241,7 +241,10 @@ async function executeFlowBlocks(
         break;
       }
       case "delay": {
-        const delaySec = cfg.delaySeconds || 30;
+        let delaySec = (cfg.delaySeconds as number) || 30;
+        const unit = (cfg.delayUnit as string) || "seconds";
+        if (unit === "minutes") delaySec *= 60;
+        else if (unit === "hours") delaySec *= 3600;
         stepDelay += delaySec * 1000;
         currentBlockId = block.nextBlockId || null;
         break;
