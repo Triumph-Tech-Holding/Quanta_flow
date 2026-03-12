@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Download - Documentação Quanta Flow</title>
+    <style>
+        body { font-family: Arial; text-align: center; padding: 50px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        h1 { color: #00A86B; }
+        .btn { display: inline-block; background: #00A86B; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px; text-decoration: none; }
+        .btn:hover { background: #1B3A57; }
+        .desc { color: #666; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📥 Download Documentação Quanta Flow</h1>
+        <p class="desc">Escolha o formato que você prefere:</p>
+        
+        <a href="javascript:downloadMarkdown()" class="btn">📄 BAIXAR MARKDOWN (.md)</a>
+        <a href="javascript:downloadHTML()" class="btn">🌐 BAIXAR HTML (.html)</a>
+        <a href="javascript:convertToPDF()" class="btn">📕 CONVERTER PARA PDF</a>
+        
+        <hr style="margin-top: 40px;">
+        
+        <h3>Como fazer PDF (SUPER FÁCIL):</h3>
+        <ol style="text-align: left; display: inline-block;">
+            <li>Clique em "BAIXAR MARKDOWN"</li>
+            <li>Abra o site: <strong>markdown2pdf.com</strong></li>
+            <li>Cole o conteúdo lá</li>
+            <li>Clique "Download PDF" ✅</li>
+        </ol>
+    </div>
+
+    <script>
+        function downloadMarkdown() {
+            const link = document.createElement('a');
+            link.href = '/DOCUMENTACAO_COMPLETA.md';
+            link.download = 'QUANTA_FLOW_DOCUMENTACAO.md';
+            link.click();
+        }
+        
+        function downloadHTML() {
+            const link = document.createElement('a');
+            link.href = '/QUANTA_FLOW_DOCS.html';
+            link.download = 'QUANTA_FLOW_DOCUMENTACAO.html';
+            link.click();
+        }
+        
+        function convertToPDF() {
+            alert('Abra: https://markdown2pdf.com/\n\nDepois faça download do arquivo DOCUMENTACAO_COMPLETA.md e cole lá para converter em PDF!\n\nOu abra o HTML e faça Ctrl+P para salvar como PDF');
+        }
+    </script>
+</body>
+</html>
