@@ -132,7 +132,7 @@ export default function AdminAgents() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: AgentFormData) => apiRequest("POST", "/api/admin/agents", data),
+    mutationFn: (data: Record<string, unknown>) => apiRequest("POST", "/api/admin/agents", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/agents"] });
       toast({ title: "Agente criado com sucesso" });
@@ -143,7 +143,7 @@ export default function AdminAgents() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: AgentFormData }) => apiRequest("PUT", `/api/admin/agents/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => apiRequest("PUT", `/api/admin/agents/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/agents"] });
       toast({ title: "Agente atualizado" });
@@ -232,9 +232,9 @@ export default function AdminAgents() {
     }
     const payload = buildPayload(form);
     if (editingAgent) {
-      updateMutation.mutate({ id: editingAgent.id, data: payload as any });
+      updateMutation.mutate({ id: editingAgent.id, data: payload });
     } else {
-      createMutation.mutate(payload as any);
+      createMutation.mutate(payload);
     }
   }
 

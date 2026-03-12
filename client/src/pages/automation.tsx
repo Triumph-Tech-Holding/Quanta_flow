@@ -54,8 +54,16 @@ interface AutomationFlow {
   summaryFields: string | null;
   steps: FlowStep[] | null;
   conditionalExits: ConditionalExit[] | null;
+  agentId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface AiAgentOption {
+  id: string;
+  name: string;
+  specialty: string;
+  isActive: boolean;
 }
 
 interface FlowFormState {
@@ -73,6 +81,7 @@ interface FlowFormState {
   summaryFields: string;
   steps: FlowStep[];
   conditionalExits: ConditionalExit[];
+  agentId: string;
 }
 
 const defaultForm: FlowFormState = {
@@ -90,6 +99,7 @@ const defaultForm: FlowFormState = {
   summaryFields: "",
   steps: [],
   conditionalExits: [],
+  agentId: "",
 };
 
 // ─── Templates de assistente ────────────────────────────────────────────────
@@ -191,6 +201,10 @@ export default function AutomationPage() {
   const [editingFlow, setEditingFlow] = useState<AutomationFlow | null>(null);
   const [form, setForm] = useState<FlowFormState>(defaultForm);
 
+  const { data: aiAgents = [] } = useQuery<AiAgentOption[]>({
+    queryKey: ["/api/admin/agents"],
+  });
+
   const { data: flows, isLoading } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
   });
@@ -214,6 +228,7 @@ export default function AutomationPage() {
     summaryFields: form.summaryFields || null,
     steps: form.steps.length > 0 ? form.steps : null,
     conditionalExits: form.conditionalExits.length > 0 ? form.conditionalExits : null,
+    agentId: form.agentId || null,
   });
 
   function addExit() {
@@ -319,6 +334,7 @@ export default function AutomationPage() {
       summaryFields: flow.summaryFields || "",
       steps: flow.steps || [],
       conditionalExits: flow.conditionalExits || [],
+      agentId: flow.agentId || "",
     });
     setDialogOpen(true);
   }
@@ -677,6 +693,40 @@ export default function AutomationPage() {
                       <span>0.4 — Ideal para vendas</span>
                       <span>1.0 — Criativo demais</span>
                     </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* SEÇÃO 4.5 — Agente IA Expert */}
+              <AccordionItem value="secao4b">
+                <AccordionTrigger className="text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-primary" />
+                    Agente IA Expert
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-2">
+                    <Label>Associar Agente IA ao Fluxo</Label>
+                    <Select
+                      value={form.agentId || "_none"}
+                      onValueChange={(v) => setField("agentId", v === "_none" ? "" : v)}
+                    >
+                      <SelectTrigger data-testid="select-agent-id">
+                        <SelectValue placeholder="Nenhum agente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Nenhum (usar template)</SelectItem>
+                        {aiAgents.filter((a) => a.isActive).map((agent) => (
+                          <SelectItem key={agent.id} value={agent.id}>
+                            {agent.name} ({agent.specialty})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Quando um agente IA é associado, ele gera respostas dinâmicas com IA em vez de usar o template fixo. Configure agentes em Administração → Agentes IA.
+                    </p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
