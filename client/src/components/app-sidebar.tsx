@@ -18,6 +18,7 @@ import {
   Table2,
   Radio,
   BookOpen,
+  Zap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -158,6 +159,12 @@ const adminMenuItems = [
     title: "Agentes IA",
     url: "/admin/agents",
     icon: Brain,
+    permission: "edit_settings",
+  },
+  {
+    title: "Flow Builder",
+    url: "/admin/flows",
+    icon: Zap,
     permission: "edit_settings",
   },
 ];

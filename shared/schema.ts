@@ -407,6 +407,37 @@ export const quickReplies = pgTable("quick_replies", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export type FlowBlockType = "text" | "audio_tts" | "image_ai" | "delay" | "condition" | "ai_agent" | "webhook" | "queue_entry" | "resolve" | "update_lead";
+
+export interface FlowBlock {
+  id: string;
+  type: FlowBlockType;
+  label?: string;
+  config: {
+    message?: string;
+    variables?: string[];
+    voice?: string;
+    prompt?: string;
+    delaySeconds?: number;
+    delayUnit?: "seconds" | "minutes" | "hours";
+    conditionType?: "keyword" | "intent" | "temperature" | "score";
+    conditionValue?: string;
+    agentId?: string;
+    webhookUrl?: string;
+    webhookMethod?: "GET" | "POST";
+    webhookHeaders?: Record<string, string>;
+    slaMinutes?: number;
+    leadStage?: string;
+    leadTemperature?: string;
+    leadTag?: string;
+    leadScore?: number;
+  };
+  position?: { x: number; y: number };
+  nextBlockId?: string | null;
+  conditionTrueId?: string | null;
+  conditionFalseId?: string | null;
+}
+
 export const automationFlows = pgTable("automation_flows", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
@@ -426,6 +457,8 @@ export const automationFlows = pgTable("automation_flows", {
   steps: jsonb("steps").$type<Array<{ order: number; message: string; delaySeconds: number }>>(),
   conditionalExits: jsonb("conditional_exits").$type<Array<{ condition: string; label: string; targetFlowId: string; triggerKeywords: string[] }>>(),
   agentId: varchar("agent_id", { length: 36 }),
+  blocks: jsonb("blocks").$type<FlowBlock[]>(),
+  thumbnail: text("thumbnail"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -541,6 +574,17 @@ export const updateAutomationFlowSchema = z.object({
     triggerKeywords: z.array(z.string()),
   })).optional().nullable(),
   agentId: z.string().optional().nullable(),
+  blocks: z.array(z.object({
+    id: z.string(),
+    type: z.enum(["text", "audio_tts", "image_ai", "delay", "condition", "ai_agent", "webhook", "queue_entry", "resolve", "update_lead"]),
+    label: z.string().optional(),
+    config: z.record(z.unknown()),
+    position: z.object({ x: z.number(), y: z.number() }).optional(),
+    nextBlockId: z.string().optional().nullable(),
+    conditionTrueId: z.string().optional().nullable(),
+    conditionFalseId: z.string().optional().nullable(),
+  })).optional().nullable(),
+  thumbnail: z.string().optional().nullable(),
 });
 
 export const insertBrandingConfigSchema = createInsertSchema(brandingConfig).omit({

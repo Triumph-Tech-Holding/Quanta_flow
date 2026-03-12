@@ -1623,6 +1623,217 @@ export async function registerRoutes(
 
   // ==================== AUTOMATION FLOWS ====================
 
+  // ==================== FLOW BUILDER ENDPOINTS ====================
+
+  const FLOW_BLOCK_TYPES_DESCRIPTION = `
+Block types:
+- text: { message: string, variables?: string[] } — Send text message with optional variable interpolation
+- audio_tts: { message: string, voice?: string } — Generate and send TTS audio
+- image_ai: { prompt: string } — Generate and send DALL-E image
+- delay: { delaySeconds: number } — Wait before next block
+- condition: { conditionType: "keyword"|"intent"|"temperature"|"score", conditionValue: string } — Branch flow (conditionTrueId/conditionFalseId)
+- ai_agent: { agentId?: string } — Generate dynamic AI response
+- webhook: { webhookUrl: string, webhookMethod: "GET"|"POST" } — Call external webhook
+- queue_entry: { slaMinutes?: number } — Enter human queue with SLA
+- resolve: {} — Mark contact as resolved
+- update_lead: { leadStage?, leadTemperature?, leadTag?, leadScore? } — Update lead data`;
+
+  app.post("/api/admin/flows/generate", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { description } = req.body;
+      if (!description || typeof description !== "string") {
+        return res.status(400).json({ message: "Descrição é obrigatória" });
+      }
+
+      const genOpenai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const response = await genOpenai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a flow builder assistant. Given a description of a business automation flow, generate a JSON array of flow blocks.
+Each block has: { id: string (use "block_1", "block_2", etc.), type: string, label: string, config: object, position: { x: number, y: number }, nextBlockId: string|null, conditionTrueId?: string|null, conditionFalseId?: string|null }
+${FLOW_BLOCK_TYPES_DESCRIPTION}
+Position blocks in a vertical layout, starting at x:250, y:50 with 150px vertical spacing. For conditions, branch right (x+250) for true and left (x-250) for false.
+Return ONLY the JSON array, no markdown.`,
+          },
+          { role: "user", content: description },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+
+      const content = response.choices[0]?.message?.content || "[]";
+      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const blocks = JSON.parse(cleaned);
+      res.json({ blocks });
+    } catch (err) {
+      log.error("[POST /api/admin/flows/generate]", err);
+      res.status(500).json({ message: "Erro ao gerar fluxo com IA" });
+    }
+  });
+
+  app.post("/api/flows/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { text, voice } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ message: "Campo 'text' é obrigatório" });
+      }
+      const ttsOpenai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+      const ttsResponse = await ttsOpenai.audio.speech.create({
+        model: "tts-1",
+        voice: (voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
+        input: text.slice(0, 4096),
+      });
+      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
+      res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
+      res.send(buffer);
+    } catch (err) {
+      log.error("[POST /api/flows/tts]", err);
+      res.status(500).json({ message: "Erro ao gerar áudio TTS" });
+    }
+  });
+
+  app.post("/api/flows/image-gen", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { prompt } = req.body;
+      if (!prompt || typeof prompt !== "string") {
+        return res.status(400).json({ message: "Campo 'prompt' é obrigatório" });
+      }
+      const imgOpenai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+      const imageResponse = await imgOpenai.images.generate({
+        model: "dall-e-3",
+        prompt: prompt.slice(0, 1000),
+        n: 1,
+        size: "1024x1024",
+      });
+      const imageUrl = imageResponse.data[0]?.url || null;
+      res.json({ imageUrl });
+    } catch (err) {
+      log.error("[POST /api/flows/image-gen]", err);
+      res.status(500).json({ message: "Erro ao gerar imagem" });
+    }
+  });
+
+  app.get("/api/admin/flows/templates", authenticateToken, async (_req: AuthRequest, res: Response) => {
+    const templates = [
+      {
+        id: "welcome",
+        name: "Boas-vindas",
+        description: "Fluxo de boas-vindas para novos contatos",
+        blocks: [
+          { id: "b1", type: "text", label: "Saudação", config: { message: "Olá {nome}! 👋 Seja bem-vindo(a)! Como posso te ajudar hoje?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+          { id: "b2", type: "delay", label: "Aguardar resposta", config: { delaySeconds: 60 }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+          { id: "b3", type: "text", label: "Follow-up", config: { message: "Estou aqui se precisar de algo! 😊" }, position: { x: 250, y: 350 }, nextBlockId: null },
+        ],
+      },
+      {
+        id: "qualification",
+        name: "Qualificação de Vendas",
+        description: "Qualifica leads automaticamente e encaminha quentes para humano",
+        blocks: [
+          { id: "b1", type: "text", label: "Pergunta inicial", config: { message: "Olá {nome}! Obrigado pelo interesse. Pode me contar mais sobre o que você precisa?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+          { id: "b2", type: "ai_agent", label: "IA Qualifica", config: {}, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+          { id: "b3", type: "condition", label: "Lead Quente?", config: { conditionType: "temperature", conditionValue: "quente" }, position: { x: 250, y: 350 }, conditionTrueId: "b4", conditionFalseId: "b5" },
+          { id: "b4", type: "queue_entry", label: "Fila VIP", config: { slaMinutes: 15 }, position: { x: 500, y: 500 }, nextBlockId: null },
+          { id: "b5", type: "update_lead", label: "Marcar Morno", config: { leadTemperature: "morno" }, position: { x: 0, y: 500 }, nextBlockId: "b6" },
+          { id: "b6", type: "text", label: "Nutrição", config: { message: "Vou te enviar mais informações sobre nossos serviços! 📋" }, position: { x: 0, y: 650 }, nextBlockId: null },
+        ],
+      },
+      {
+        id: "support",
+        name: "Suporte Técnico",
+        description: "Atendimento de suporte com IA e escalação para humano",
+        blocks: [
+          { id: "b1", type: "text", label: "Início", config: { message: "Olá! Sou o assistente de suporte. Descreva sua dúvida e vou te ajudar." }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+          { id: "b2", type: "ai_agent", label: "IA Resolve", config: {}, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+          { id: "b3", type: "condition", label: "Resolvido?", config: { conditionType: "keyword", conditionValue: "obrigado,resolvido,entendi" }, position: { x: 250, y: 350 }, conditionTrueId: "b4", conditionFalseId: "b5" },
+          { id: "b4", type: "resolve", label: "Finalizar", config: {}, position: { x: 500, y: 500 }, nextBlockId: null },
+          { id: "b5", type: "queue_entry", label: "Escalar Humano", config: { slaMinutes: 30 }, position: { x: 0, y: 500 }, nextBlockId: null },
+        ],
+      },
+      {
+        id: "billing",
+        name: "Cobrança",
+        description: "Fluxo de cobrança com lembrete e escalação",
+        blocks: [
+          { id: "b1", type: "text", label: "Lembrete", config: { message: "Olá {nome}, identificamos uma pendência em sua conta. Pode verificar?" }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+          { id: "b2", type: "delay", label: "Aguardar 24h", config: { delaySeconds: 86400 }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+          { id: "b3", type: "condition", label: "Respondeu?", config: { conditionType: "keyword", conditionValue: "paguei,vou pagar,já resolvi" }, position: { x: 250, y: 350 }, conditionTrueId: "b4", conditionFalseId: "b5" },
+          { id: "b4", type: "resolve", label: "Resolver", config: {}, position: { x: 500, y: 500 }, nextBlockId: null },
+          { id: "b5", type: "text", label: "2º Lembrete", config: { message: "Olá {nome}, gostaríamos de resolver sua pendência. Entre em contato conosco." }, position: { x: 0, y: 500 }, nextBlockId: "b6" },
+          { id: "b6", type: "queue_entry", label: "Atendimento", config: { slaMinutes: 60 }, position: { x: 0, y: 650 }, nextBlockId: null },
+        ],
+      },
+      {
+        id: "onboarding",
+        name: "Onboarding",
+        description: "Fluxo de onboarding para novos clientes",
+        blocks: [
+          { id: "b1", type: "text", label: "Boas-vindas", config: { message: "Bem-vindo(a) {nome}! 🎉 Vamos configurar tudo para você aproveitar ao máximo." }, position: { x: 250, y: 50 }, nextBlockId: "b2" },
+          { id: "b2", type: "delay", label: "5 min", config: { delaySeconds: 300 }, position: { x: 250, y: 200 }, nextBlockId: "b3" },
+          { id: "b3", type: "text", label: "Dica 1", config: { message: "💡 Dica: Comece explorando o painel principal. Lá você encontra tudo que precisa!" }, position: { x: 250, y: 350 }, nextBlockId: "b4" },
+          { id: "b4", type: "delay", label: "1 hora", config: { delaySeconds: 3600 }, position: { x: 250, y: 500 }, nextBlockId: "b5" },
+          { id: "b5", type: "text", label: "Dica 2", config: { message: "📊 Sabia que você pode personalizar seus relatórios? Acesse Configurações > Relatórios." }, position: { x: 250, y: 650 }, nextBlockId: "b6" },
+          { id: "b6", type: "update_lead", label: "Onboarded", config: { leadStage: "qualificado", leadTag: "onboarded" }, position: { x: 250, y: 800 }, nextBlockId: null },
+        ],
+      },
+    ];
+    res.json(templates);
+  });
+
+  app.post("/api/automation-flows/:id/export", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const flow = await storage.getAutomationFlow(req.params.id);
+      if (!flow || flow.userId !== req.user.userId) {
+        return res.status(404).json({ message: "Fluxo não encontrado" });
+      }
+      const { id, userId, createdAt, updatedAt, ...exportData } = flow;
+      res.json(exportData);
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao exportar fluxo" });
+    }
+  });
+
+  app.post("/api/automation-flows/import", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { name, triggerKeywords, responseTemplate, blocks, ...rest } = req.body;
+      if (!name) return res.status(400).json({ message: "Nome é obrigatório" });
+      const data = insertAutomationFlowSchema.parse({
+        name,
+        triggerKeywords: triggerKeywords || "",
+        responseTemplate: responseTemplate || " ",
+        blocks: blocks || null,
+        userId: req.user.userId,
+        ...rest,
+      });
+      const flow = await storage.createAutomationFlow(data);
+      res.status(201).json(flow);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", errors: err.errors });
+      }
+      res.status(500).json({ message: "Erro ao importar fluxo" });
+    }
+  });
+
+  // ==================== AUTOMATION FLOWS (LEGACY + NEW) ====================
+
   app.get("/api/automation-flows", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const flows = await storage.getAutomationFlowsByUser(req.user!.userId);

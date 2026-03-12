@@ -25,6 +25,7 @@ import SettingsIntegrationsPage from "@/pages/settings-integrations";
 import SettingsChannelsPage from "@/pages/settings-channels";
 import AdminDocumentation from "@/pages/admin-documentation";
 import AdminAgents from "@/pages/admin-agents";
+import AdminFlows from "@/pages/admin-flows";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -132,6 +133,9 @@ function Router() {
       </Route>
       <Route path="/admin/agents">
         <ProtectedRoute component={AdminAgents} />
+      </Route>
+      <Route path="/admin/flows">
+        <ProtectedRoute component={AdminFlows} />
       </Route>
       <Route component={NotFound} />
     </Switch>

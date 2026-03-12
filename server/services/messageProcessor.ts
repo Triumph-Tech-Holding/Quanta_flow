@@ -58,6 +58,209 @@ async function sendChannelMessage(
   }
 }
 
+interface BlockExecContext {
+  userId: string;
+  phone: string;
+  messageContent: string;
+  conversationId: string;
+  channel: MessageChannel;
+  channelMetadata: Record<string, unknown>;
+  contactId: string;
+  crmContact: { id: string; nome: string; temperature?: string | null; score?: number; lastIntent?: string | null; [key: string]: unknown };
+  intentResult?: { intent: string } | null;
+  now: number;
+  delay: number;
+}
+
+function interpolateVars(msg: string, contact: BlockExecContext["crmContact"]): string {
+  return msg
+    .replace(/\{nome\}/gi, contact.nome || "")
+    .replace(/\{telefone\}/gi, (contact as Record<string, unknown>).telefone as string || "")
+    .replace(/\{email\}/gi, (contact as Record<string, unknown>).email as string || "");
+}
+
+async function executeFlowBlocks(
+  blocks: import("@shared/schema").FlowBlock[],
+  ctx: BlockExecContext
+): Promise<void> {
+  const blockMap = new Map(blocks.map((b) => [b.id, b]));
+
+  const targetIds = new Set<string>();
+  for (const b of blocks) {
+    if (b.nextBlockId) targetIds.add(b.nextBlockId);
+    if (b.conditionTrueId) targetIds.add(b.conditionTrueId);
+    if (b.conditionFalseId) targetIds.add(b.conditionFalseId);
+  }
+  const rootBlock = blocks.find((b) => !targetIds.has(b.id)) || blocks[0];
+  if (!rootBlock) return;
+
+  let currentBlockId: string | null = rootBlock.id;
+  let stepDelay = 0;
+  const visited = new Set<string>();
+  const MAX_STEPS = 50;
+  let steps = 0;
+
+  while (currentBlockId) {
+    if (steps++ >= MAX_STEPS) {
+      log(`Block executor: max steps (${MAX_STEPS}) reached — aborting flow`, "msg-processor");
+      break;
+    }
+    if (visited.has(currentBlockId)) {
+      log(`Block executor: cycle detected at block ${currentBlockId} — aborting`, "msg-processor");
+      break;
+    }
+    visited.add(currentBlockId);
+
+    const block = blockMap.get(currentBlockId);
+    if (!block) break;
+
+    const cfg = block.config;
+
+    switch (block.type) {
+      case "text": {
+        const msg = interpolateVars(cfg.message || "", ctx.crmContact);
+        jobQueue.add({
+          type: "send_message",
+          payload: { userId: ctx.userId, phone: ctx.phone, message: msg, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+          runAt: ctx.now + ctx.delay + stepDelay,
+        });
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "audio_tts": {
+        const text = interpolateVars(cfg.message || "", ctx.crmContact);
+        jobQueue.add({
+          type: "send_message",
+          payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+          runAt: ctx.now + ctx.delay + stepDelay,
+        });
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "image_ai": {
+        jobQueue.add({
+          type: "send_message",
+          payload: { userId: ctx.userId, phone: ctx.phone, message: `🖼️ [Imagem gerada: ${cfg.prompt || "imagem"}]`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+          runAt: ctx.now + ctx.delay + stepDelay,
+        });
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "delay": {
+        const delaySec = cfg.delaySeconds || 30;
+        stepDelay += delaySec * 1000;
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "condition": {
+        let conditionMet = false;
+        const condVal = (cfg.conditionValue || "").toLowerCase();
+        const msgLow = ctx.messageContent.toLowerCase();
+
+        if (cfg.conditionType === "keyword") {
+          const keywords = condVal.split(",").map((k) => k.trim());
+          conditionMet = keywords.some((kw) => msgLow.includes(kw));
+        } else if (cfg.conditionType === "intent") {
+          conditionMet = ctx.intentResult?.intent === condVal;
+        } else if (cfg.conditionType === "temperature") {
+          conditionMet = (ctx.crmContact.temperature || "").toLowerCase() === condVal;
+        } else if (cfg.conditionType === "score") {
+          const scoreThreshold = parseInt(condVal) || 0;
+          conditionMet = (ctx.crmContact.score || 0) >= scoreThreshold;
+        }
+
+        currentBlockId = conditionMet
+          ? (block.conditionTrueId || null)
+          : (block.conditionFalseId || null);
+        break;
+      }
+      case "ai_agent": {
+        try {
+          const agentId = cfg.agentId;
+          const aiAgent = agentId ? await storage.getAiAgent(agentId) : null;
+          const agentOpenai = new OpenAI({
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+          });
+          const agentResponse = await agentOpenai.chat.completions.create({
+            model: aiAgent?.model || "gpt-4o-mini",
+            messages: [
+              { role: "system", content: aiAgent?.systemPrompt || "You are a helpful assistant." },
+              { role: "user", content: ctx.messageContent },
+            ],
+            temperature: aiAgent?.temperature ?? 0.7,
+            max_tokens: aiAgent?.maxTokens ?? 500,
+          });
+          const reply = agentResponse.choices[0]?.message?.content || "...";
+          jobQueue.add({
+            type: "send_message",
+            payload: { userId: ctx.userId, phone: ctx.phone, message: reply, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+            runAt: ctx.now + ctx.delay + stepDelay,
+          });
+        } catch (err) {
+          log(`Block executor: ai_agent error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");
+        }
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "webhook": {
+        try {
+          const method = cfg.webhookMethod || "POST";
+          const url = cfg.webhookUrl || "";
+          if (url) {
+            fetch(url, {
+              method,
+              headers: { "Content-Type": "application/json", ...(cfg.webhookHeaders || {}) },
+              body: method === "POST" ? JSON.stringify({ phone: ctx.phone, contactId: ctx.contactId, message: ctx.messageContent }) : undefined,
+              signal: AbortSignal.timeout(5000),
+            }).catch(() => {});
+          }
+        } catch {}
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      case "queue_entry": {
+        const slaMin = cfg.slaMinutes || 60;
+        await storage.enterQueue(ctx.contactId, slaMin);
+        const updated = await storage.getUnifiedContact(ctx.contactId);
+        if (updated?.slaDeadline) {
+          jobQueue.add({
+            type: "check_sla",
+            payload: { contactId: ctx.contactId, userId: ctx.userId },
+            runAt: new Date(updated.slaDeadline).getTime(),
+          });
+        }
+        await storage.updateUnifiedContact(ctx.contactId, { activeFlowId: null });
+        log(`Block executor: queue_entry — contact ${ctx.contactId} entered queue (SLA: ${slaMin}min)`, "msg-processor");
+        currentBlockId = null;
+        break;
+      }
+      case "resolve": {
+        await storage.resolveContact(ctx.contactId, ctx.userId);
+        await storage.updateUnifiedContact(ctx.contactId, { activeFlowId: null });
+        log(`Block executor: resolve — contact ${ctx.contactId} resolved`, "msg-processor");
+        currentBlockId = null;
+        break;
+      }
+      case "update_lead": {
+        const updates: Record<string, unknown> = {};
+        if (cfg.leadStage) updates.pipelineStage = cfg.leadStage;
+        if (cfg.leadTemperature) updates.temperature = cfg.leadTemperature;
+        if (cfg.leadTag) updates.tags = cfg.leadTag;
+        if (cfg.leadScore !== undefined) updates.score = cfg.leadScore;
+        if (Object.keys(updates).length > 0) {
+          await storage.updateUnifiedContact(ctx.contactId, updates);
+        }
+        currentBlockId = block.nextBlockId || null;
+        break;
+      }
+      default:
+        currentBlockId = block.nextBlockId || null;
+        break;
+    }
+  }
+}
+
 export async function processIncomingMessage(params: IncomingMessageParams): Promise<void> {
   const {
     userId,
@@ -258,6 +461,17 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
             }
           }
 
+          const flowBlocks = automationFlow.blocks as import("@shared/schema").FlowBlock[] | null;
+
+          if (flowBlocks && flowBlocks.length > 0) {
+            await executeFlowBlocks(flowBlocks, {
+              userId, phone, messageContent, conversationId: conversation.id,
+              channel, channelMetadata, contactId: crmContact.id, crmContact,
+              intentResult, now, delay,
+            });
+            log(`Automation: executed flow blocks for ${phone} (${flowBlocks.length} blocks)`, "msg-processor");
+          } else {
+
           const steps = automationFlow.steps as Array<{ order: number; message: string; delaySeconds: number }> | null;
           const flowAgentId = automationFlow.agentId;
 
@@ -355,6 +569,7 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
             });
             log(`Automation: scheduled response to ${phone} in ${delay / 1000}s [${channel}]`, "msg-processor");
           }
+          } // close else for blocks check
 
           if (automationFlow.inactivityTimeout && automationFlow.inactivityTimeout > 0) {
             const inactivityMs = automationFlow.inactivityTimeout * 60 * 1000;
