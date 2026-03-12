@@ -139,11 +139,32 @@ async function executeFlowBlocks(
           const audioPath = path.default.join(os.default.tmpdir(), `flow_tts_${Date.now()}.mp3`);
           fs.default.writeFileSync(audioPath, audioBuffer);
 
-          const { getWhatsAppProvider } = await import("./whatsappProvider");
-          const provider = await getWhatsAppProvider(ctx.userId);
-          if (provider && provider.sendAudio) {
-            await provider.sendAudio(ctx.phone, audioPath);
-            log(`Block executor: audio_tts — delivered audio to ${ctx.phone}`, "msg-processor");
+          if (ctx.channel === "whatsapp") {
+            const { getWhatsAppProvider } = await import("./whatsappProvider");
+            const provider = await getWhatsAppProvider(ctx.userId);
+            if (provider.sendAudio) {
+              await provider.sendAudio(ctx.phone, audioPath);
+              log(`Block executor: audio_tts — delivered audio via WhatsApp to ${ctx.phone}`, "msg-processor");
+            } else {
+              jobQueue.add({
+                type: "send_message",
+                payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+                runAt: ctx.now + ctx.delay + stepDelay,
+              });
+            }
+          } else if (ctx.channel === "telegram") {
+            const botToken = (ctx.channelMetadata?.botToken as string) || "";
+            if (botToken) {
+              const formData = new FormData();
+              const audioBlob = new Blob([fs.default.readFileSync(audioPath)], { type: "audio/mpeg" });
+              formData.append("chat_id", ctx.phone);
+              formData.append("audio", audioBlob, "audio.mp3");
+              await fetch(`https://api.telegram.org/bot${botToken}/sendAudio`, {
+                method: "POST",
+                body: formData,
+              }).catch(() => {});
+              log(`Block executor: audio_tts — delivered audio via Telegram to ${ctx.phone}`, "msg-processor");
+            }
           } else {
             jobQueue.add({
               type: "send_message",
@@ -177,12 +198,36 @@ async function executeFlowBlocks(
           });
           const imageUrl = imageResponse.data[0]?.url;
           if (imageUrl) {
-            jobQueue.add({
-              type: "send_message",
-              payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-              runAt: ctx.now + ctx.delay + stepDelay,
-            });
-            log(`Block executor: image_ai — generated image for ${ctx.phone}`, "msg-processor");
+            if (ctx.channel === "whatsapp") {
+              const { getWhatsAppProvider } = await import("./whatsappProvider");
+              const provider = await getWhatsAppProvider(ctx.userId);
+              if (provider.sendImage) {
+                await provider.sendImage(ctx.phone, imageUrl, (cfg.prompt as string) || "");
+                log(`Block executor: image_ai — sent image via provider to ${ctx.phone}`, "msg-processor");
+              } else {
+                jobQueue.add({
+                  type: "send_message",
+                  payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+                  runAt: ctx.now + ctx.delay + stepDelay,
+                });
+              }
+            } else if (ctx.channel === "telegram") {
+              const botToken = (ctx.channelMetadata?.botToken as string) || "";
+              if (botToken) {
+                await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: ctx.phone, photo: imageUrl, caption: (cfg.prompt as string) || "" }),
+                }).catch(() => {});
+              }
+              log(`Block executor: image_ai — sent image via Telegram to ${ctx.phone}`, "msg-processor");
+            } else {
+              jobQueue.add({
+                type: "send_message",
+                payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+                runAt: ctx.now + ctx.delay + stepDelay,
+              });
+            }
           }
         } catch (err) {
           log(`Block executor: image_ai error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");

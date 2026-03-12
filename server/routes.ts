@@ -1680,9 +1680,17 @@ Block types:
   app.post("/api/admin/flows/generate", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const { description } = req.body;
+      const { description, agentId } = req.body;
       if (!description || typeof description !== "string") {
         return res.status(400).json({ message: "Descrição é obrigatória" });
+      }
+
+      let agentContext = "";
+      if (agentId) {
+        const agent = await storage.getAiAgent(agentId);
+        if (agent && agent.userId === req.user.userId) {
+          agentContext = `\nInclude an ai_agent block with agentId "${agentId}" (agent name: "${agent.name}", specialty: "${agent.specialty || "general"}") where the flow needs AI-powered responses.`;
+        }
       }
 
       const genOpenai = new OpenAI({
@@ -1698,7 +1706,7 @@ Block types:
             content: `You are a flow builder assistant. Given a description of a business automation flow, generate a JSON array of flow blocks.
 Each block has: { id: string (use "block_1", "block_2", etc.), type: string, label: string, config: object, position: { x: number, y: number }, nextBlockId: string|null, conditionTrueId?: string|null, conditionFalseId?: string|null }
 ${FLOW_BLOCK_TYPES_DESCRIPTION}
-Position blocks in a vertical layout, starting at x:250, y:50 with 150px vertical spacing. For conditions, branch right (x+250) for true and left (x-250) for false.
+Position blocks in a vertical layout, starting at x:250, y:50 with 150px vertical spacing. For conditions, branch right (x+250) for true and left (x-250) for false.${agentContext}
 Return ONLY the JSON array, no markdown.`,
           },
           { role: "user", content: description },
@@ -1768,12 +1776,16 @@ Return ONLY the JSON array, no markdown.`,
     }
   });
 
-  app.get("/api/flows/tts/file/:filename", async (req: Request, res: Response) => {
+  app.get("/api/flows/tts/file/:filename", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const fs = await import("fs");
       const path = await import("path");
       const os = await import("os");
-      const filePath = path.default.join(os.default.tmpdir(), req.params.filename);
+      const basename = path.default.basename(req.params.filename);
+      if (!/^tts_\d+\.mp3$/.test(basename)) {
+        return res.status(400).json({ message: "Nome de arquivo inválido" });
+      }
+      const filePath = path.default.join(os.default.tmpdir(), basename);
       if (!fs.default.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
       res.set({ "Content-Type": "audio/mpeg" });
       res.sendFile(filePath);

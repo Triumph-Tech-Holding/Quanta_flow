@@ -19,6 +19,7 @@ export interface ProviderStatus {
 export interface IWhatsAppProvider {
   sendMessage(phone: string, text: string): Promise<SendMessageResult>;
   sendAudio?(phone: string, audioPath: string): Promise<SendMessageResult>;
+  sendImage?(phone: string, imageUrl: string, caption?: string): Promise<SendMessageResult>;
   getStatus(): Promise<ProviderStatus>;
   connect(config?: Record<string, string>): Promise<void>;
   disconnect(): Promise<void>;
@@ -53,6 +54,24 @@ export class ZApiProvider implements IWhatsAppProvider {
 
     const result = await response.json() as { messageId?: string };
     return { messageId: result.messageId || `zapi_${Date.now()}` };
+  }
+
+  async sendImage(phone: string, imageUrl: string, caption?: string): Promise<SendMessageResult> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    const sendUrl = `${this.baseUrl}/send-image`;
+    const response = await fetch(sendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": this.clientToken,
+      },
+      body: JSON.stringify({ phone: cleanPhone, image: imageUrl, caption: caption || "" }),
+    });
+    if (!response.ok) {
+      throw new Error(`Z-API send-image error: ${response.status}`);
+    }
+    const result = await response.json() as { messageId?: string };
+    return { messageId: result.messageId || `zapi_img_${Date.now()}` };
   }
 
   async getStatus(): Promise<ProviderStatus> {
