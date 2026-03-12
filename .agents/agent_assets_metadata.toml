@@ -12,3 +12,15 @@ id = "li7hnypPf3c1RD4CvnK4k"
 uri = "file://.canvas/assets/relatorio-quanta-flow.pdf"
 type = "pdf"
 title = "Relatório Técnico - Quanta Flow v2026"
+
+[[outputs]]
+id = "U66U3ZpcLg4yipr8lecN2"
+uri = "file://RELATORIO_SPRINT_5.md"
+type = "text"
+title = "Relatório Sprint 5 - Módulos Implementados"
+
+[[outputs]]
+id = "E9OtcUud7sTLVEBKPgO8s"
+uri = "file://DOCUMENTACAO_COMPLETA.md"
+type = "text"
+title = "Documentação Técnica Completa - Quanta Flow v5.0.0"
