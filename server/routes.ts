@@ -1677,7 +1677,7 @@ Block types:
 - resolve: {} — Mark contact as resolved
 - update_lead: { leadStage?, leadTemperature?, leadTag?, leadScore? } — Update lead data`;
 
-  app.post("/api/admin/flows/generate", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/flows/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const { description, agentId } = req.body;

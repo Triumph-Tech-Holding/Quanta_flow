@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, type DragEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,12 +18,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Connection,
   type Node,
   type Edge,
@@ -177,6 +179,14 @@ function nodesEdgesToBlocks(nodes: Node[], edges: Edge[]): FlowBlock[] {
 }
 
 export default function AdminFlowsPage() {
+  return (
+    <ReactFlowProvider>
+      <AdminFlowsInner />
+    </ReactFlowProvider>
+  );
+}
+
+function AdminFlowsInner() {
   const { toast } = useToast();
   const [editingFlow, setEditingFlow] = useState<AutomationFlow | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -194,6 +204,8 @@ export default function AdminFlowsPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const blockLabelRefs = useRef<Record<string, string>>({});
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
   const { data: flows, isLoading } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
@@ -277,6 +289,45 @@ export default function AdminFlowsPage() {
       }
     }
   }, [nodes, edges, setNodes, setEdges]);
+
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const onDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const type = event.dataTransfer.getData("application/reactflow");
+    if (!type) return;
+    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    const id = `block_${Date.now()}`;
+    const bt = BLOCK_TYPES.find((b) => b.type === type);
+    const newNode: Node = {
+      id,
+      type: "default",
+      position,
+      data: {
+        label: (
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-lg">{getBlockEmoji(type)}</span>
+            <span className="font-medium text-xs">{bt?.label || type}</span>
+          </div>
+        ),
+        blockType: type,
+        config: {},
+      },
+      style: {
+        ...getBlockStyle(type),
+        borderRadius: "8px",
+        border: "2px solid rgba(255,255,255,0.3)",
+        padding: "8px 12px",
+        fontSize: "12px",
+        minWidth: "150px",
+      },
+    };
+    blockLabelRefs.current[id] = bt?.label || type;
+    setNodes((nds) => [...nds, newNode]);
+  }, [screenToFlowPosition, setNodes]);
 
   const deleteSelectedNode = useCallback(() => {
     if (!selectedNode) return;
@@ -514,7 +565,12 @@ export default function AdminFlowsPage() {
                 <button
                   key={bt.type}
                   onClick={() => addBlock(bt.type)}
-                  className="flex items-center gap-2 w-full p-2 rounded-md hover:bg-accent text-left text-xs transition-colors"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/reactflow", bt.type);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  className="flex items-center gap-2 w-full p-2 rounded-md hover:bg-accent text-left text-xs transition-colors cursor-grab active:cursor-grabbing"
                   data-testid={`button-add-block-${bt.type}`}
                 >
                   <div className="w-6 h-6 rounded flex items-center justify-center" style={{ background: bt.color }}>
@@ -529,13 +585,15 @@ export default function AdminFlowsPage() {
             })}
           </aside>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" ref={reactFlowWrapper}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
               onNodeClick={(_e, node) => {
                 setSelectedNode(node);
                 setBlockConfigOpen(true);
