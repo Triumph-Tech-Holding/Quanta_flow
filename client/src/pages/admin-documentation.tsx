@@ -266,7 +266,10 @@ export default function AdminDocumentation() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Dialog open={viewOpen && selectedDoc?.id === doc.id} onOpenChange={setViewOpen}>
+                    <Dialog open={viewOpen && selectedDoc?.id === doc.id} onOpenChange={(open) => {
+                      setViewOpen(open);
+                      if (!open) setSelectedDoc(null);
+                    }}>
                       <Button
                         variant="default"
                         size="sm"
@@ -277,19 +280,21 @@ export default function AdminDocumentation() {
                         <Eye className="w-4 h-4" />
                         Visualizar
                       </Button>
-                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle>{selectedDoc?.title}</DialogTitle>
-                          <DialogDescription>
-                            Versão {selectedDoc?.version} • {new Date(selectedDoc?.createdAt || '').toLocaleString('pt-BR')}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="prose dark:prose-invert max-w-full text-sm">
-                          <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-xs whitespace-pre-wrap break-words">
-                            {selectedDoc?.content}
-                          </pre>
-                        </div>
-                      </DialogContent>
+                      {selectedDoc && (
+                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+                          <DialogHeader>
+                            <DialogTitle>{selectedDoc.title}</DialogTitle>
+                            <DialogDescription>
+                              Versão {selectedDoc.version} • {new Date(selectedDoc.createdAt || '').toLocaleString('pt-BR')}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="flex-1 overflow-y-auto border rounded-lg bg-muted p-4">
+                            <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+                              {selectedDoc.content || 'Conteúdo não disponível'}
+                            </pre>
+                          </div>
+                        </DialogContent>
+                      )}
                     </Dialog>
                     <Button
                       variant="outline"
