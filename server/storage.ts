@@ -890,8 +890,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCampaign(id: string, data: UpdateCampaign): Promise<Campaign | undefined> {
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.segmentFilter !== undefined) updateData.segmentFilter = data.segmentFilter;
+    if (data.channels !== undefined) updateData.channels = data.channels;
+    if (data.contentType !== undefined) updateData.contentType = data.contentType;
+    if (data.messages !== undefined) updateData.messages = data.messages;
+    if (data.agentId !== undefined) updateData.agentId = data.agentId;
+    if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
+    if (data.rateLimit !== undefined) updateData.rateLimit = data.rateLimit;
+    if (data.allowedHours !== undefined) updateData.allowedHours = data.allowedHours;
+
     const [c] = await db.update(campaigns)
-      .set({ ...data, updatedAt: new Date() } as any)
+      .set(updateData)
       .where(eq(campaigns.id, id))
       .returning();
     return c;

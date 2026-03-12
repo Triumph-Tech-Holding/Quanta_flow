@@ -903,7 +903,9 @@ export const messageTemplates = pgTable("message_templates", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+export const insertCampaignSchema = createInsertSchema(campaigns, {
+  scheduledAt: z.union([z.string(), z.date()]).optional().nullable().transform(v => v ? new Date(v) : null),
+}).omit({
   id: true, createdAt: true, updatedAt: true, sentCount: true, deliveredCount: true,
   repliedCount: true, convertedCount: true, failedCount: true, startedAt: true, completedAt: true, totalContacts: true,
 });
@@ -913,7 +915,7 @@ export const updateCampaignSchema = z.object({
   description: z.string().optional().nullable(),
   status: z.enum(["draft", "scheduled", "running", "paused", "completed"]).optional(),
   segmentFilter: z.object({
-    type: z.enum(["all", "temperature", "stage", "tag", "channel"]),
+    type: z.enum(["all", "temperature", "stage", "tag"]),
     value: z.string().optional(),
   }).optional().nullable(),
   channels: z.array(z.string()).optional(),

@@ -90,6 +90,8 @@ export default function AdminCampaigns() {
     messages: [{ order: 0, content: "", delayMinutes: 0 }],
     rateLimit: 100,
     allowedHours: null as { days: number[]; startHour: number; endHour: number } | null,
+    scheduleType: "immediate" as "immediate" | "scheduled",
+    scheduledAt: "",
   });
 
   const [templateForm, setTemplateForm] = useState({
@@ -115,7 +117,7 @@ export default function AdminCampaigns() {
       });
       return res.json();
     },
-    enabled: showWizard && wizardStep === 1,
+    enabled: showWizard && wizardStep === 0,
   });
 
   const createMutation = useMutation({
@@ -222,6 +224,8 @@ export default function AdminCampaigns() {
       messages: [{ order: 0, content: "", delayMinutes: 0 }],
       rateLimit: 100,
       allowedHours: null,
+      scheduleType: "immediate",
+      scheduledAt: "",
     });
     setWizardStep(0);
   }
@@ -236,10 +240,12 @@ export default function AdminCampaigns() {
       messages: formData.messages,
       rateLimit: formData.rateLimit,
       allowedHours: formData.allowedHours,
+      scheduledAt: formData.scheduleType === "scheduled" && formData.scheduledAt ? formData.scheduledAt : null,
     });
   }
 
-  const wizardSteps = ["Informações", "Segmentação", "Conteúdo", "Revisão"];
+  const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const wizardSteps = ["Audiência", "Conteúdo", "Agendamento", "Revisão"];
 
   return (
     <SidebarProvider>
@@ -401,7 +407,7 @@ export default function AdminCampaigns() {
                       <CardContent>
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">{template.content}</p>
                         <Button
-                          variant="link"
+                          variant="ghost"
                           size="sm"
                           className="p-0 mt-2"
                           onClick={() => {
@@ -411,7 +417,7 @@ export default function AdminCampaigns() {
                             }));
                             setActiveTab("campaigns");
                             setShowWizard(true);
-                            setWizardStep(2);
+                            setWizardStep(1);
                             toast({ title: "Template aplicado ao wizard" });
                           }}
                           data-testid={`button-use-template-${template.id}`}
@@ -464,53 +470,40 @@ export default function AdminCampaigns() {
                       data-testid="input-campaign-description"
                     />
                   </div>
-                  <div>
-                    <Label>Tipo de conteúdo</Label>
-                    <Select
-                      value={formData.contentType}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, contentType: v as any }))}
-                    >
-                      <SelectTrigger data-testid="select-content-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="single">Mensagem Única</SelectItem>
-                        <SelectItem value="sequence">Sequência (Drip)</SelectItem>
-                        <SelectItem value="agent">Agente IA</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Tipo de conteúdo</Label>
+                      <Select
+                        value={formData.contentType}
+                        onValueChange={(v) => setFormData(prev => ({ ...prev, contentType: v as any }))}
+                      >
+                        <SelectTrigger data-testid="select-content-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Mensagem Única</SelectItem>
+                          <SelectItem value="sequence">Sequência (Drip)</SelectItem>
+                          <SelectItem value="agent">Agente IA</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Canal</Label>
+                      <Select
+                        value={formData.channels[0]}
+                        onValueChange={(v) => setFormData(prev => ({ ...prev, channels: [v] }))}
+                      >
+                        <SelectTrigger data-testid="select-channel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          <SelectItem value="telegram">Telegram</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Canal</Label>
-                    <Select
-                      value={formData.channels[0]}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, channels: [v] }))}
-                    >
-                      <SelectTrigger data-testid="select-channel">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        <SelectItem value="telegram">Telegram</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Rate Limit (msgs/ciclo)</Label>
-                    <Input
-                      type="number"
-                      value={formData.rateLimit}
-                      onChange={(e) => setFormData(prev => ({ ...prev, rateLimit: parseInt(e.target.value) || 100 }))}
-                      min={1}
-                      data-testid="input-rate-limit"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {wizardStep === 1 && (
-                <div className="space-y-4">
                   <div>
                     <Label>Segmentação</Label>
                     <Select
@@ -526,43 +519,51 @@ export default function AdminCampaigns() {
                         <SelectItem value="all">Todos os contatos</SelectItem>
                         <SelectItem value="temperature">Por Temperatura</SelectItem>
                         <SelectItem value="stage">Por Estágio Pipeline</SelectItem>
-                        <SelectItem value="channel">Por Canal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {formData.segmentFilter.type !== "all" && (
+                  {formData.segmentFilter.type === "temperature" && (
                     <div>
-                      <Label>
-                        {formData.segmentFilter.type === "temperature" ? "Temperatura" :
-                         formData.segmentFilter.type === "stage" ? "Estágio" : "Canal"}
-                      </Label>
-                      {formData.segmentFilter.type === "temperature" ? (
-                        <Select
-                          value={formData.segmentFilter.value}
-                          onValueChange={(v) => setFormData(prev => ({
-                            ...prev, segmentFilter: { ...prev.segmentFilter, value: v },
-                          }))}
-                        >
-                          <SelectTrigger data-testid="select-segment-value">
-                            <SelectValue placeholder="Selecione..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="quente">Quente</SelectItem>
-                            <SelectItem value="morno">Morno</SelectItem>
-                            <SelectItem value="frio">Frio</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={formData.segmentFilter.value}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev, segmentFilter: { ...prev.segmentFilter, value: e.target.value },
-                          }))}
-                          placeholder={formData.segmentFilter.type === "stage" ? "Ex: novo, qualificado" : "Ex: whatsapp, telegram"}
-                          data-testid="input-segment-value"
-                        />
-                      )}
+                      <Label>Temperatura</Label>
+                      <Select
+                        value={formData.segmentFilter.value}
+                        onValueChange={(v) => setFormData(prev => ({
+                          ...prev, segmentFilter: { ...prev.segmentFilter, value: v },
+                        }))}
+                      >
+                        <SelectTrigger data-testid="select-segment-value">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="quente">Quente</SelectItem>
+                          <SelectItem value="morno">Morno</SelectItem>
+                          <SelectItem value="frio">Frio</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {formData.segmentFilter.type === "stage" && (
+                    <div>
+                      <Label>Estágio do Pipeline</Label>
+                      <Select
+                        value={formData.segmentFilter.value}
+                        onValueChange={(v) => setFormData(prev => ({
+                          ...prev, segmentFilter: { ...prev.segmentFilter, value: v },
+                        }))}
+                      >
+                        <SelectTrigger data-testid="select-segment-value">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="novo">Novo</SelectItem>
+                          <SelectItem value="qualificado">Qualificado</SelectItem>
+                          <SelectItem value="negociacao">Negociação</SelectItem>
+                          <SelectItem value="fechado">Fechado</SelectItem>
+                          <SelectItem value="perdido">Perdido</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
 
@@ -584,7 +585,7 @@ export default function AdminCampaigns() {
                 </div>
               )}
 
-              {wizardStep === 2 && (
+              {wizardStep === 1 && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label>Mensagens</Label>
@@ -677,6 +678,140 @@ export default function AdminCampaigns() {
                 </div>
               )}
 
+              {wizardStep === 2 && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Quando enviar</Label>
+                    <Select
+                      value={formData.scheduleType}
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, scheduleType: v as "immediate" | "scheduled" }))}
+                    >
+                      <SelectTrigger data-testid="select-schedule-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="immediate">Imediatamente ao iniciar</SelectItem>
+                        <SelectItem value="scheduled">Agendar data/hora</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.scheduleType === "scheduled" && (
+                    <div>
+                      <Label>Data e hora de envio</Label>
+                      <Input
+                        type="datetime-local"
+                        value={formData.scheduledAt}
+                        onChange={(e) => setFormData(prev => ({ ...prev, scheduledAt: e.target.value }))}
+                        data-testid="input-scheduled-at"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <Label>Rate Limit (msgs por ciclo de 60s)</Label>
+                    <Input
+                      type="number"
+                      value={formData.rateLimit}
+                      onChange={(e) => setFormData(prev => ({ ...prev, rateLimit: parseInt(e.target.value) || 100 }))}
+                      min={1}
+                      data-testid="input-rate-limit"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Horário comercial permitido</Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          allowedHours: prev.allowedHours
+                            ? null
+                            : { days: [1, 2, 3, 4, 5], startHour: 8, endHour: 18 },
+                        }))}
+                        data-testid="button-toggle-hours"
+                      >
+                        {formData.allowedHours ? "Desativar" : "Ativar"}
+                      </Button>
+                    </div>
+
+                    {formData.allowedHours && (
+                      <Card>
+                        <CardContent className="p-4 space-y-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-2 block">Dias permitidos</Label>
+                            <div className="flex gap-1">
+                              {dayLabels.map((day, idx) => (
+                                <Button
+                                  key={day}
+                                  variant={formData.allowedHours!.days.includes(idx) ? "default" : "outline"}
+                                  size="sm"
+                                  className="w-10 h-8 text-xs"
+                                  onClick={() => {
+                                    const days = formData.allowedHours!.days.includes(idx)
+                                      ? formData.allowedHours!.days.filter(d => d !== idx)
+                                      : [...formData.allowedHours!.days, idx].sort();
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      allowedHours: { ...prev.allowedHours!, days },
+                                    }));
+                                  }}
+                                  data-testid={`button-day-${idx}`}
+                                >
+                                  {day}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Hora início</Label>
+                              <Select
+                                value={String(formData.allowedHours.startHour)}
+                                onValueChange={(v) => setFormData(prev => ({
+                                  ...prev,
+                                  allowedHours: { ...prev.allowedHours!, startHour: parseInt(v) },
+                                }))}
+                              >
+                                <SelectTrigger data-testid="select-start-hour">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: 24 }, (_, i) => (
+                                    <SelectItem key={i} value={String(i)}>{String(i).padStart(2, "0")}:00</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Hora fim</Label>
+                              <Select
+                                value={String(formData.allowedHours.endHour)}
+                                onValueChange={(v) => setFormData(prev => ({
+                                  ...prev,
+                                  allowedHours: { ...prev.allowedHours!, endHour: parseInt(v) },
+                                }))}
+                              >
+                                <SelectTrigger data-testid="select-end-hour">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: 24 }, (_, i) => (
+                                    <SelectItem key={i} value={String(i)}>{String(i).padStart(2, "0")}:00</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {wizardStep === 3 && (
                 <div className="space-y-4">
                   <Card>
@@ -714,6 +849,21 @@ export default function AdminCampaigns() {
                         <div>
                           <span className="text-muted-foreground">Rate Limit:</span>
                           <p className="font-medium">{formData.rateLimit} msgs/ciclo</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Envio:</span>
+                          <p className="font-medium">
+                            {formData.scheduleType === "immediate" ? "Imediato" :
+                             formData.scheduledAt ? new Date(formData.scheduledAt).toLocaleString("pt-BR") : "Não definido"}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Horário comercial:</span>
+                          <p className="font-medium">
+                            {formData.allowedHours
+                              ? `${formData.allowedHours.startHour}h–${formData.allowedHours.endHour}h (${formData.allowedHours.days.map(d => dayLabels[d]).join(", ")})`
+                              : "Sem restrição"}
+                          </p>
                         </div>
                       </div>
                       <div className="pt-2 border-t">

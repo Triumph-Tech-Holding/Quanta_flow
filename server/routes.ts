@@ -2938,9 +2938,7 @@ Return ONLY the JSON array, no markdown.`,
         if (filter.type === "temperature" && filter.value) {
           contacts = contacts.filter(c => c.temperature === filter.value);
         } else if (filter.type === "stage" && filter.value) {
-          contacts = contacts.filter(c => c.stage === filter.value);
-        } else if (filter.type === "channel" && filter.value) {
-          contacts = contacts.filter(c => c.channelType === filter.value);
+          contacts = contacts.filter(c => c.pipelineStage === filter.value);
         }
       }
 
@@ -3000,12 +2998,10 @@ Return ONLY the JSON array, no markdown.`,
         if (segmentFilter.type === "temperature" && segmentFilter.value) {
           contacts = contacts.filter(c => c.temperature === segmentFilter.value);
         } else if (segmentFilter.type === "stage" && segmentFilter.value) {
-          contacts = contacts.filter(c => c.stage === segmentFilter.value);
-        } else if (segmentFilter.type === "channel" && segmentFilter.value) {
-          contacts = contacts.filter(c => c.channelType === segmentFilter.value);
+          contacts = contacts.filter(c => c.pipelineStage === segmentFilter.value);
         }
       }
-      res.json({ count: contacts.length, sample: contacts.slice(0, 5).map(c => ({ id: c.id, name: c.name, phone: c.phone })) });
+      res.json({ count: contacts.length, sample: contacts.slice(0, 5).map(c => ({ id: c.id, name: c.nome, phone: c.telefone })) });
     } catch (err) {
       console.error("[POST /api/admin/campaigns/preview-segment]", err);
       res.status(500).json({ message: "Erro ao pré-visualizar segmento" });
