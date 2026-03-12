@@ -21,6 +21,15 @@ export async function generateAgentTts(agentId: string, text: string): Promise<B
   return Buffer.from(await ttsResponse.arrayBuffer());
 }
 
+export async function generateFlowTts(text: string, voice: string = "nova"): Promise<Buffer> {
+  const ttsResponse = await openai.audio.speech.create({
+    model: "tts-1",
+    voice: (voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
+    input: text.slice(0, 4096),
+  });
+  return Buffer.from(await ttsResponse.arrayBuffer());
+}
+
 export async function generateEscalationSummary(messageContent: string, agentName: string): Promise<string> {
   try {
     const response = await openai.chat.completions.create({

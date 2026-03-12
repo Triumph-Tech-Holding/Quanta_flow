@@ -688,14 +688,16 @@ export default function AdminFlowsPage() {
                             </Badge>
                           )}
                         </div>
-                        {flow.blocks && flow.blocks.length > 0 && (
+                        {flow.thumbnail ? (
+                          <img src={flow.thumbnail} alt="Flow preview" className="rounded border h-20 object-contain bg-muted/50" data-testid={`img-thumbnail-${flow.id}`} />
+                        ) : flow.blocks && flow.blocks.length > 0 ? (
                           <div className="flex gap-1 flex-wrap">
                             {flow.blocks.slice(0, 6).map((b) => (
                               <span key={b.id} className="text-sm" title={b.label || b.type}>{getBlockEmoji(b.type)}</span>
                             ))}
                             {flow.blocks.length > 6 && <span className="text-xs text-muted-foreground">+{flow.blocks.length - 6}</span>}
                           </div>
-                        )}
+                        ) : null}
                         <div className="flex items-center gap-1 pt-1">
                           <Button size="sm" variant="ghost" onClick={() => openEditor(flow)} data-testid={`button-edit-flow-${flow.id}`}>
                             <Pencil className="h-3 w-3 mr-1" /> Editar

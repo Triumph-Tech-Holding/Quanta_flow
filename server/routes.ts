@@ -137,6 +137,45 @@ async function configureZApiWebhooks(
   return { results, failedCount: results.filter(w => !w.success).length };
 }
 
+const BLOCK_COLORS: Record<string, string> = {
+  text: "#3b82f6", audio_tts: "#8b5cf6", image_ai: "#ec4899", delay: "#f59e0b",
+  condition: "#10b981", ai_agent: "#6366f1", webhook: "#64748b", queue_entry: "#ef4444",
+  resolve: "#22c55e", update_lead: "#0ea5e9",
+};
+const BLOCK_EMOJI: Record<string, string> = {
+  text: "💬", audio_tts: "🎵", image_ai: "🖼️", delay: "⏱️", condition: "🔀",
+  ai_agent: "🤖", webhook: "🔗", queue_entry: "🚦", resolve: "✅", update_lead: "📊",
+};
+const VALID_BLOCK_TYPES = Object.keys(BLOCK_COLORS);
+
+function generateFlowThumbnail(blocks: Array<{ type: string; label?: string }>): string {
+  const nodeHeight = 32;
+  const nodeWidth = 140;
+  const gap = 12;
+  const padding = 16;
+  const totalH = blocks.length * (nodeHeight + gap) - gap + padding * 2;
+  const svgW = nodeWidth + padding * 2;
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${totalH}" viewBox="0 0 ${svgW} ${totalH}">`;
+  svg += `<rect width="${svgW}" height="${totalH}" fill="#1e1e2e" rx="8"/>`;
+
+  blocks.forEach((block, i) => {
+    const y = padding + i * (nodeHeight + gap);
+    const color = BLOCK_COLORS[block.type] || "#64748b";
+    const emoji = BLOCK_EMOJI[block.type] || "📦";
+    const lbl = (block.label || block.type).slice(0, 16);
+    svg += `<rect x="${padding}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" fill="${color}" rx="6" opacity="0.9"/>`;
+    svg += `<text x="${padding + 8}" y="${y + 21}" fill="white" font-size="11" font-family="sans-serif">${emoji} ${lbl}</text>`;
+    if (i < blocks.length - 1) {
+      const lineX = padding + nodeWidth / 2;
+      svg += `<line x1="${lineX}" y1="${y + nodeHeight}" x2="${lineX}" y2="${y + nodeHeight + gap}" stroke="#555" stroke-width="2"/>`;
+    }
+  });
+
+  svg += `</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1670,7 +1709,28 @@ Return ONLY the JSON array, no markdown.`,
 
       const content = response.choices[0]?.message?.content || "[]";
       const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const blocks = JSON.parse(cleaned);
+      let blocks: Array<{ id: string; type: string; label?: string; config: Record<string, unknown>; position?: { x: number; y: number }; nextBlockId?: string | null; conditionTrueId?: string | null; conditionFalseId?: string | null }>;
+      try {
+        blocks = JSON.parse(cleaned);
+      } catch {
+        return res.status(422).json({ message: "IA gerou resposta inválida. Tente reformular." });
+      }
+      if (!Array.isArray(blocks)) {
+        return res.status(422).json({ message: "IA não retornou um array de blocos." });
+      }
+      blocks = blocks.filter((b) => b && typeof b.id === "string" && VALID_BLOCK_TYPES.includes(b.type)).map((b) => ({
+        id: b.id,
+        type: b.type,
+        label: b.label || b.type,
+        config: b.config || {},
+        position: b.position || { x: 250, y: 50 },
+        nextBlockId: b.nextBlockId || null,
+        conditionTrueId: b.conditionTrueId || null,
+        conditionFalseId: b.conditionFalseId || null,
+      }));
+      if (blocks.length === 0) {
+        return res.status(422).json({ message: "Nenhum bloco válido gerado. Tente uma descrição mais detalhada." });
+      }
       res.json({ blocks });
     } catch (err) {
       log.error("[POST /api/admin/flows/generate]", err);
@@ -1681,25 +1741,44 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/flows/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const { text, voice } = req.body;
+      const { text, voice, format } = req.body;
       if (!text || typeof text !== "string") {
         return res.status(400).json({ message: "Campo 'text' é obrigatório" });
       }
-      const ttsOpenai = new OpenAI({
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-      });
-      const ttsResponse = await ttsOpenai.audio.speech.create({
-        model: "tts-1",
-        voice: (voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
-        input: text.slice(0, 4096),
-      });
-      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
-      res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
-      res.send(buffer);
+      const { generateFlowTts } = await import("./services/ttsService");
+      const buffer = await generateFlowTts(text, voice || "nova");
+
+      if (format === "url") {
+        const fs = await import("fs");
+        const path = await import("path");
+        const os = await import("os");
+        const filename = `tts_${Date.now()}.mp3`;
+        const filePath = path.default.join(os.default.tmpdir(), filename);
+        fs.default.writeFileSync(filePath, buffer);
+        const baseUrl = req.protocol + "://" + req.get("host");
+        res.json({ audioUrl: `${baseUrl}/api/flows/tts/file/${filename}`, duration: Math.ceil(buffer.length / 16000) });
+        setTimeout(() => { try { fs.default.unlinkSync(filePath); } catch {} }, 300000);
+      } else {
+        res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
+        res.send(buffer);
+      }
     } catch (err) {
       log.error("[POST /api/flows/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
+    }
+  });
+
+  app.get("/api/flows/tts/file/:filename", async (req: Request, res: Response) => {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+      const filePath = path.default.join(os.default.tmpdir(), req.params.filename);
+      if (!fs.default.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
+      res.set({ "Content-Type": "audio/mpeg" });
+      res.sendFile(filePath);
+    } catch {
+      res.status(500).json({ message: "Erro ao servir áudio" });
     }
   });
 
@@ -1853,6 +1932,9 @@ Return ONLY the JSON array, no markdown.`,
           return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
         }
       }
+      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0 && !data.thumbnail) {
+        (data as Record<string, unknown>).thumbnail = generateFlowThumbnail(data.blocks as Array<{ type: string; label?: string }>);
+      }
       const flow = await storage.createAutomationFlow(data);
       res.status(201).json(flow);
     } catch (error) {
@@ -1877,6 +1959,9 @@ Return ONLY the JSON array, no markdown.`,
         if (!agent || agent.userId !== req.user!.userId) {
           return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
         }
+      }
+      if (data.blocks && Array.isArray(data.blocks) && data.blocks.length > 0 && !data.thumbnail) {
+        data.thumbnail = generateFlowThumbnail(data.blocks as Array<{ type: string; label?: string }>);
       }
       const updated = await storage.updateAutomationFlow(id, data);
       res.json(updated);

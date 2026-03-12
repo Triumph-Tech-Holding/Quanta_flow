@@ -129,20 +129,69 @@ async function executeFlowBlocks(
       }
       case "audio_tts": {
         const text = interpolateVars(cfg.message || "", ctx.crmContact);
-        jobQueue.add({
-          type: "send_message",
-          payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-          runAt: ctx.now + ctx.delay + stepDelay,
-        });
+        try {
+          const { generateFlowTts } = await import("./ttsService");
+          const voice = (cfg.voice as string) || "nova";
+          const audioBuffer = await generateFlowTts(text, voice);
+          const fs = await import("fs");
+          const path = await import("path");
+          const os = await import("os");
+          const audioPath = path.default.join(os.default.tmpdir(), `flow_tts_${Date.now()}.mp3`);
+          fs.default.writeFileSync(audioPath, audioBuffer);
+
+          const { getWhatsAppProvider } = await import("./whatsappProvider");
+          const provider = await getWhatsAppProvider(ctx.userId);
+          if (provider && provider.sendAudio) {
+            await provider.sendAudio(ctx.phone, audioPath);
+            log(`Block executor: audio_tts — delivered audio to ${ctx.phone}`, "msg-processor");
+          } else {
+            jobQueue.add({
+              type: "send_message",
+              payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+              runAt: ctx.now + ctx.delay + stepDelay,
+            });
+          }
+          try { fs.default.unlinkSync(audioPath); } catch {}
+        } catch (err) {
+          log(`Block executor: audio_tts error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");
+          jobQueue.add({
+            type: "send_message",
+            payload: { userId: ctx.userId, phone: ctx.phone, message: `🔊 ${text}`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+            runAt: ctx.now + ctx.delay + stepDelay,
+          });
+        }
         currentBlockId = block.nextBlockId || null;
         break;
       }
       case "image_ai": {
-        jobQueue.add({
-          type: "send_message",
-          payload: { userId: ctx.userId, phone: ctx.phone, message: `🖼️ [Imagem gerada: ${cfg.prompt || "imagem"}]`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
-          runAt: ctx.now + ctx.delay + stepDelay,
-        });
+        try {
+          const imgOpenai = new OpenAI({
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+          });
+          const imageResponse = await imgOpenai.images.generate({
+            model: "dall-e-3",
+            prompt: ((cfg.prompt as string) || "abstract art").slice(0, 1000),
+            n: 1,
+            size: "1024x1024",
+          });
+          const imageUrl = imageResponse.data[0]?.url;
+          if (imageUrl) {
+            jobQueue.add({
+              type: "send_message",
+              payload: { userId: ctx.userId, phone: ctx.phone, message: imageUrl, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+              runAt: ctx.now + ctx.delay + stepDelay,
+            });
+            log(`Block executor: image_ai — generated image for ${ctx.phone}`, "msg-processor");
+          }
+        } catch (err) {
+          log(`Block executor: image_ai error — ${err instanceof Error ? err.message : String(err)}`, "msg-processor");
+          jobQueue.add({
+            type: "send_message",
+            payload: { userId: ctx.userId, phone: ctx.phone, message: `🖼️ [Imagem: ${cfg.prompt || "imagem"}]`, conversationId: ctx.conversationId, channel: ctx.channel, channelMetadata: ctx.channelMetadata },
+            runAt: ctx.now + ctx.delay + stepDelay,
+          });
+        }
         currentBlockId = block.nextBlockId || null;
         break;
       }
