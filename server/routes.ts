@@ -2934,20 +2934,25 @@ Return ONLY the JSON array, no markdown.`,
 
       let contacts = await storage.getUnifiedContactsByUser(req.user.userId);
       if (campaign.segmentFilter) {
-        const filter = campaign.segmentFilter as any;
+        const filter = campaign.segmentFilter as { type: string; value?: string };
         if (filter.type === "temperature" && filter.value) {
           contacts = contacts.filter(c => c.temperature === filter.value);
         } else if (filter.type === "stage" && filter.value) {
           contacts = contacts.filter(c => c.pipelineStage === filter.value);
+        } else if (filter.type === "tag" && filter.value) {
+          contacts = contacts.filter(c => c.tags && c.tags.toLowerCase().includes(filter.value!.toLowerCase()));
         }
       }
 
+      const channels = (campaign.channels && campaign.channels.length > 0) ? campaign.channels : ["whatsapp"];
       let newDeliveries = 0;
       for (const contact of contacts) {
-        if (existingContactIds.has(contact.id)) continue;
-        const channel = (campaign.channels && campaign.channels.length > 0) ? campaign.channels[0] : "whatsapp";
-        await storage.createCampaignDelivery({ campaignId: campaign.id, contactId: contact.id, channel });
-        newDeliveries++;
+        for (const channel of channels) {
+          const existing = existingDeliveries.find(d => d.contactId === contact.id && d.channel === channel);
+          if (existing) continue;
+          await storage.createCampaignDelivery({ campaignId: campaign.id, contactId: contact.id, channel });
+          newDeliveries++;
+        }
       }
 
       const totalContacts = existingDeliveries.length + newDeliveries;
@@ -2999,6 +3004,8 @@ Return ONLY the JSON array, no markdown.`,
           contacts = contacts.filter(c => c.temperature === segmentFilter.value);
         } else if (segmentFilter.type === "stage" && segmentFilter.value) {
           contacts = contacts.filter(c => c.pipelineStage === segmentFilter.value);
+        } else if (segmentFilter.type === "tag" && segmentFilter.value) {
+          contacts = contacts.filter(c => c.tags && c.tags.toLowerCase().includes(segmentFilter.value.toLowerCase()));
         }
       }
       res.json({ count: contacts.length, sample: contacts.slice(0, 5).map(c => ({ id: c.id, name: c.nome, phone: c.telefone })) });
@@ -3038,6 +3045,47 @@ Use variáveis {nome} para personalização. Mantenha cada mensagem com no máxi
     } catch (err) {
       console.error("[POST /api/admin/campaigns/generate-copy]", err);
       res.status(500).json({ message: "Erro ao gerar copy" });
+    }
+  });
+
+  app.post("/api/admin/campaigns/generate-sequence", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { objective, tone, channel, steps, productInfo } = req.body;
+      const numSteps = steps || 3;
+      const prompt = `Você é um copywriter profissional brasileiro especializado em sequências de nutrição (drip campaigns). Gere uma sequência de ${numSteps} mensagens para ${channel || "WhatsApp"}.
+
+Objetivo: ${objective || "Nutrição de lead"}
+Tom: ${tone || "amigável"}
+${productInfo ? `Informações do produto/serviço: ${productInfo}` : ""}
+
+Cada mensagem deve ser progressiva:
+1. Primeira mensagem: apresentação e valor
+2. Mensagens intermediárias: educação e engajamento
+3. Última mensagem: call-to-action forte
+
+Use variáveis {nome} para personalização. Mantenha cada mensagem com no máximo 300 caracteres.
+Retorne como JSON: {"messages": [{"content": "mensagem", "delayMinutes": 0}, {"content": "mensagem 2", "delayMinutes": 1440}]}
+delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, depois em minutos).`;
+
+      const completion = await agentOpenai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const text = completion.choices[0]?.message?.content || "{}";
+      let messages: Array<{ content: string; delayMinutes: number }>;
+      try {
+        const parsed = JSON.parse(text);
+        messages = parsed.messages || parsed.sequence || [];
+        if (!Array.isArray(messages)) messages = [];
+      } catch {
+        messages = [];
+      }
+      res.json({ messages: messages.map((m: { content: string; delayMinutes: number }, i: number) => ({ order: i, content: m.content, delayMinutes: m.delayMinutes || 0 })) });
+    } catch (err) {
+      console.error("[POST /api/admin/campaigns/generate-sequence]", err);
+      res.status(500).json({ message: "Erro ao gerar sequência" });
     }
   });
 

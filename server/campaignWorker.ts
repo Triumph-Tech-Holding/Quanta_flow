@@ -1,18 +1,49 @@
 import { storage } from "./storage";
 import { db } from "./db";
 import { campaigns as campaignsTable, campaignDeliveries } from "@shared/schema";
-import { eq, sql as sqlExpr, and, inArray } from "drizzle-orm";
+import { eq, sql as sqlExpr, and, or, lte } from "drizzle-orm";
 import { jobQueue } from "./jobQueue";
 import { log } from "./index";
 
+interface CampaignMessage {
+  order: number;
+  content: string;
+  delayMinutes?: number;
+  channel?: string;
+}
+
+interface AllowedHours {
+  days: number[];
+  startHour: number;
+  endHour: number;
+}
+
+async function activateScheduledCampaigns() {
+  const now = new Date();
+  const scheduled = await db.select().from(campaignsTable)
+    .where(and(
+      eq(campaignsTable.status, "scheduled"),
+      lte(campaignsTable.scheduledAt, now),
+    ));
+
+  for (const campaign of scheduled) {
+    await db.update(campaignsTable)
+      .set({ status: "running", startedAt: now, updatedAt: now })
+      .where(eq(campaignsTable.id, campaign.id));
+    log(`Scheduled campaign "${campaign.name}" activated`, "campaign");
+  }
+}
+
 async function processCampaigns() {
   try {
+    await activateScheduledCampaigns();
+
     const allCampaigns = await db.select().from(campaignsTable)
       .where(eq(campaignsTable.status, "running"));
 
     for (const campaign of allCampaigns) {
       if (campaign.allowedHours) {
-        const hours = campaign.allowedHours as { days: number[]; startHour: number; endHour: number };
+        const hours = campaign.allowedHours as AllowedHours;
         const now = new Date();
         const currentDay = now.getDay();
         const currentHour = now.getHours();
@@ -38,7 +69,7 @@ async function processCampaigns() {
         continue;
       }
 
-      const messages = (campaign.messages as any[]) || [];
+      const messages: CampaignMessage[] = (campaign.messages as CampaignMessage[]) || [];
       for (const delivery of pending) {
         const contact = await storage.getUnifiedContact(delivery.contactId);
         if (!contact || !contact.telefone) {
@@ -86,7 +117,8 @@ async function processCampaigns() {
 
         if (content) {
           const conversations = await storage.getConversationsByUser(campaign.userId);
-          const conv = conversations.find(c => c.remoteJid?.includes(contact.telefone!.replace(/\D/g, "")));
+          const phoneDigits = contact.telefone!.replace(/\D/g, "");
+          const conv = conversations.find(c => c.remoteJid?.includes(phoneDigits));
 
           jobQueue.add({
             type: "send_message",
@@ -111,7 +143,8 @@ async function processCampaigns() {
               try {
                 const current = await db.select().from(campaignDeliveries)
                   .where(eq(campaignDeliveries.id, delivery.id)).limit(1);
-                if (current[0] && !["replied", "converted", "failed"].includes(current[0].status)) {
+                const terminalStatuses = ["replied", "converted", "failed"];
+                if (current[0] && !terminalStatuses.includes(current[0].status)) {
                   await storage.updateCampaignDelivery(delivery.id, { status: "pending" });
                 }
               } catch (e) {

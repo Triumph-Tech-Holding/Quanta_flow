@@ -121,7 +121,7 @@ export default function AdminCampaigns() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/admin/campaigns", data);
       return res.json();
     },
@@ -172,7 +172,7 @@ export default function AdminCampaigns() {
   });
 
   const generateCopyMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/admin/campaigns/generate-copy", data);
       return res.json();
     },
@@ -191,8 +191,21 @@ export default function AdminCampaigns() {
     },
   });
 
+  const generateSequenceMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("POST", "/api/admin/campaigns/generate-sequence", data);
+      return res.json();
+    },
+    onSuccess: (data: { messages: Array<{ order: number; content: string; delayMinutes: number }> }) => {
+      if (data.messages && data.messages.length > 0) {
+        setFormData(prev => ({ ...prev, messages: data.messages }));
+        toast({ title: "Sequência gerada com IA!" });
+      }
+    },
+  });
+
   const createTemplateMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/admin/templates", data);
       return res.json();
     },
@@ -475,7 +488,7 @@ export default function AdminCampaigns() {
                       <Label>Tipo de conteúdo</Label>
                       <Select
                         value={formData.contentType}
-                        onValueChange={(v) => setFormData(prev => ({ ...prev, contentType: v as any }))}
+                        onValueChange={(v) => setFormData(prev => ({ ...prev, contentType: v as "single" | "sequence" | "agent" }))}
                       >
                         <SelectTrigger data-testid="select-content-type">
                           <SelectValue />
@@ -519,6 +532,7 @@ export default function AdminCampaigns() {
                         <SelectItem value="all">Todos os contatos</SelectItem>
                         <SelectItem value="temperature">Por Temperatura</SelectItem>
                         <SelectItem value="stage">Por Estágio Pipeline</SelectItem>
+                        <SelectItem value="tag">Por Tag</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -567,6 +581,20 @@ export default function AdminCampaigns() {
                     </div>
                   )}
 
+                  {formData.segmentFilter.type === "tag" && (
+                    <div>
+                      <Label>Tag</Label>
+                      <Input
+                        value={formData.segmentFilter.value}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev, segmentFilter: { ...prev.segmentFilter, value: e.target.value },
+                        }))}
+                        placeholder="Ex: vip, interessado, newsletter"
+                        data-testid="input-segment-tag"
+                      />
+                    </div>
+                  )}
+
                   {segmentPreview && (
                     <Card>
                       <CardContent className="p-4">
@@ -604,6 +632,23 @@ export default function AdminCampaigns() {
                         <Sparkles className="h-4 w-4 mr-1" />
                         {generateCopyMutation.isPending ? "Gerando..." : "Gerar com IA"}
                       </Button>
+                      {formData.contentType === "sequence" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => generateSequenceMutation.mutate({
+                            objective: formData.name,
+                            tone: "amigavel",
+                            channel: formData.channels[0],
+                            steps: 3,
+                          })}
+                          disabled={generateSequenceMutation.isPending}
+                          data-testid="button-generate-sequence"
+                        >
+                          <Sparkles className="h-4 w-4 mr-1" />
+                          {generateSequenceMutation.isPending ? "Gerando..." : "Gerar Sequência IA"}
+                        </Button>
+                      )}
                       {formData.contentType === "sequence" && (
                         <Button
                           variant="outline"
