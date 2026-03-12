@@ -1636,6 +1636,12 @@ export async function registerRoutes(
   app.post("/api/automation-flows", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const data = insertAutomationFlowSchema.parse({ ...req.body, userId: req.user!.userId });
+      if (data.agentId) {
+        const agent = await storage.getAiAgent(data.agentId);
+        if (!agent || agent.userId !== req.user!.userId) {
+          return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
+        }
+      }
       const flow = await storage.createAutomationFlow(data);
       res.status(201).json(flow);
     } catch (error) {
@@ -1655,6 +1661,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Fluxo de automação não encontrado" });
       }
       const data = updateAutomationFlowSchema.parse(req.body);
+      if (data.agentId) {
+        const agent = await storage.getAiAgent(data.agentId);
+        if (!agent || agent.userId !== req.user!.userId) {
+          return res.status(400).json({ message: "Agente IA não encontrado ou não pertence a este usuário" });
+        }
+      }
       const updated = await storage.updateAutomationFlow(id, data);
       res.json(updated);
     } catch (error) {

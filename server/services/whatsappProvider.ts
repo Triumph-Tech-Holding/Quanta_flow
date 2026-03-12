@@ -18,6 +18,7 @@ export interface ProviderStatus {
 
 export interface IWhatsAppProvider {
   sendMessage(phone: string, text: string): Promise<SendMessageResult>;
+  sendAudio?(phone: string, audioPath: string): Promise<SendMessageResult>;
   getStatus(): Promise<ProviderStatus>;
   connect(config?: Record<string, string>): Promise<void>;
   disconnect(): Promise<void>;

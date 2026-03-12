@@ -148,8 +148,8 @@ class JobQueue {
         fs.default.writeFileSync(audioPath, audioBuffer);
 
         const provider = await getWhatsAppProvider(p.userId);
-        if (provider && typeof (provider as any).sendAudio === "function") {
-          await (provider as any).sendAudio(p.phone, audioPath);
+        if (provider && provider.sendAudio) {
+          await provider.sendAudio(p.phone, audioPath);
           log(`JobQueue: send_audio — delivered audio to ${p.phone} via provider`, "jobqueue");
         } else {
           log(`JobQueue: send_audio — generated ${audioBuffer.length} bytes for ${p.phone} (provider lacks audio support, file: ${audioPath})`, "jobqueue");

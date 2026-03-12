@@ -712,6 +712,19 @@ export const aiAgents = pgTable("ai_agents", {
 
 export const insertAiAgentSchema = createInsertSchema(aiAgents).omit({
   id: true, createdAt: true, updatedAt: true,
+}).extend({
+  name: z.string().min(1),
+  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o-mini"),
+  temperature: z.number().min(0).max(1).default(0.7),
+  tone: z.enum(["formal", "amigavel", "direto", "consultivo", "empatico"]).default("amigavel"),
+  language: z.enum(["pt-BR", "en-US", "es-ES"]).default("pt-BR"),
+  specialty: z.enum(["vendas", "suporte", "sac", "cobranca", "onboarding", "generico"]).default("generico"),
+  ttsVoice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional().nullable(),
+  maxTokens: z.number().int().min(50).max(4000).default(500),
+  escalationRules: z.object({
+    keywords: z.array(z.string()),
+    message: z.string(),
+  }).optional().nullable(),
 });
 
 export const updateAiAgentSchema = z.object({
