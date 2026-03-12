@@ -316,6 +316,7 @@ export const unifiedContacts = pgTable("unified_contacts", {
   slaDeadline: timestamp("sla_deadline"),
   slaBreached: boolean("sla_breached").default(false),
   activeFlowId: varchar("active_flow_id", { length: 36 }),
+  aiSummary: text("ai_summary"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -470,6 +471,7 @@ export const updateUnifiedContactSchema = z.object({
   slaDeadline: z.string().optional().nullable(),
   slaBreached: z.boolean().optional().nullable(),
   activeFlowId: z.string().optional().nullable(),
+  aiSummary: z.string().optional().nullable(),
 });
 
 export const insertContactIdentifierSchema = createInsertSchema(contactIdentifiers).omit({
