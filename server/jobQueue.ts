@@ -1,7 +1,7 @@
 import { log } from "./index";
 import { getWhatsAppProvider } from "./services/whatsappProvider";
 import { storage } from "./storage";
-import OpenAI from "openai";
+
 
 export type JobType = "send_message" | "send_audio" | "check_inactivity" | "check_sla";
 export type JobStatus = "pending" | "running" | "done" | "failed" | "cancelled";
@@ -134,22 +134,12 @@ class JobQueue {
     } else if (job.type === "send_audio") {
       const p = job.payload as SendAudioPayload;
       try {
-        const agent = await storage.getAiAgent(p.agentId);
-        if (!agent) {
-          log(`JobQueue: send_audio — agent ${p.agentId} not found, skipping`, "jobqueue");
+        const { generateAgentTts } = await import("./services/ttsService");
+        const audioBuffer = await generateAgentTts(p.agentId, p.text);
+        if (!audioBuffer) {
+          log(`JobQueue: send_audio — TTS generation failed for agent ${p.agentId}`, "jobqueue");
           return;
         }
-        const ttsOpenai = new OpenAI({
-          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        });
-        const voice = (agent.ttsVoice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova";
-        const ttsResponse = await ttsOpenai.audio.speech.create({
-          model: "tts-1",
-          voice,
-          input: p.text.slice(0, 4096),
-        });
-        const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
 
         const fs = await import("fs");
         const path = await import("path");

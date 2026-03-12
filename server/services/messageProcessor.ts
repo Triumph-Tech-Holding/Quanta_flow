@@ -285,17 +285,25 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
                   const msgLowerEsc = messageContent.toLowerCase();
                   const escalationTriggered = escRules.keywords.some((kw) => msgLowerEsc.includes(kw.toLowerCase()));
                   if (escalationTriggered && crmContact) {
+                    const { generateEscalationSummary } = await import("./ttsService");
+                    const summary = await generateEscalationSummary(messageContent, aiAgent.name);
                     const escalationMsg = escRules.message || "Transferindo para um atendente humano...";
+                    const fullEscalationMsg = summary
+                      ? `${escalationMsg}\n\n📋 Resumo: ${summary}`
+                      : escalationMsg;
                     jobQueue.add({
                       type: "send_message",
-                      payload: { userId, phone, message: escalationMsg, conversationId: conversation.id, channel, channelMetadata },
+                      payload: { userId, phone, message: fullEscalationMsg, conversationId: conversation.id, channel, channelMetadata },
                       runAt: now + delay,
                     });
                     const brandingCfg = await storage.getBrandingConfig(userId);
                     const slaMinutes = brandingCfg?.defaultSlaMinutes ?? 60;
                     await storage.enterQueue(crmContact.id, slaMinutes);
-                    await storage.updateUnifiedContact(crmContact.id, { activeFlowId: null });
-                    log(`Automation: AI Agent "${aiAgent.name}" escalated to human for ${phone} (keyword match)`, "msg-processor");
+                    await storage.updateUnifiedContact(crmContact.id, {
+                      activeFlowId: null,
+                      aiSummary: summary || `Escalação automática por keyword — Agente: ${aiAgent.name}`,
+                    });
+                    log(`Automation: AI Agent "${aiAgent.name}" escalated to human for ${phone} (keyword match, summary: ${summary ? "generated" : "skipped"})`, "msg-processor");
                     return;
                   }
                 }

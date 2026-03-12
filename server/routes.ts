@@ -2523,7 +2523,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/agents/:id/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
+  const ttsHandler = async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const agent = await storage.getAiAgent(req.params.id);
@@ -2534,46 +2534,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Campo 'text' é obrigatório" });
       }
 
-      const ttsResponse = await agentOpenai.audio.speech.create({
-        model: "tts-1",
-        voice: (agent.ttsVoice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
-        input: text.slice(0, 4096),
-      });
+      const { generateAgentTts } = await import("./services/ttsService");
+      const buffer = await generateAgentTts(agent.id, text);
+      if (!buffer) return res.status(500).json({ message: "Falha ao gerar áudio TTS" });
 
-      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
-      res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
-      res.send(buffer);
-    } catch (err) {
-      log.error("[POST /api/admin/agents/:id/tts]", err);
-      res.status(500).json({ message: "Erro ao gerar áudio TTS" });
-    }
-  });
-
-  app.post("/api/agents/:id/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
-    try {
-      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const agent = await storage.getAiAgent(req.params.id);
-      if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
-
-      const { text } = req.body;
-      if (!text || typeof text !== "string") {
-        return res.status(400).json({ message: "Campo 'text' é obrigatório" });
-      }
-
-      const ttsResponse = await agentOpenai.audio.speech.create({
-        model: "tts-1",
-        voice: (agent.ttsVoice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer") || "nova",
-        input: text.slice(0, 4096),
-      });
-
-      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
       res.set({ "Content-Type": "audio/mpeg", "Content-Length": buffer.length.toString() });
       res.send(buffer);
     } catch (err) {
       log.error("[POST /api/agents/:id/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
     }
-  });
+  };
+  app.post("/api/admin/agents/:id/tts", authenticateToken, ttsHandler);
+  app.post("/api/agents/:id/tts", authenticateToken, ttsHandler);
 
   app.post("/api/admin/agents/generate-avatar", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
