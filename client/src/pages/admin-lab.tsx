@@ -1,113 +1,100 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Send, MessageCircle, Instagram, PlayCircle, Volume2, Zap, CheckCircle2 } from "lucide-react";
+import {
+  Loader2, PlayCircle, Volume2, Zap, CheckCircle2, XCircle,
+  Webhook, Smartphone, Image as ImageIcon,
+} from "lucide-react";
 
-interface ChatMessage {
-  id: string;
-  type: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
-
-interface Agent {
-  id: string;
-  name: string;
-}
+type TtsVoice = "alloy" | "echo" | "fable";
 
 interface FlowTrace {
   blockId: string;
   blockType: string;
+  status: "ok" | "skipped" | "condition_true" | "condition_false" | "would_send";
   result: string;
+  wouldSend?: string;
   timestamp: string;
 }
 
-type ChannelType = "whatsapp" | "instagram";
+interface WebhookTestResult {
+  webhookId: string;
+  statusCode: number;
+  responseBody: string;
+  success: boolean;
+}
+
+interface OutboundWebhook {
+  id: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+}
+
+interface AutomationFlow {
+  id: string;
+  name: string;
+}
 
 export default function AdminLab() {
   const { toast } = useToast();
-  const [channel, setChannel] = useState<ChannelType>("whatsapp");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState("");
+
+  // --- Flow Simulator ---
   const [selectedFlowId, setSelectedFlowId] = useState<string>("");
+  const [flowContactName, setFlowContactName] = useState("Maria Silva");
+  const [flowContactPhone, setFlowContactPhone] = useState("11999999999");
+  const [flowTriggerMessage, setFlowTriggerMessage] = useState("Olá, tenho interesse!");
   const [flowTrace, setFlowTrace] = useState<FlowTrace[]>([]);
-  const [ttsText, setTtsText] = useState("Olá! Como posso ajudá-lo?");
-  const [selectedVoice, setSelectedVoice] = useState<"alloy" | "echo" | "fable">("alloy");
-  const [playingAudio, setPlayingAudio] = useState(false);
-  const [webhookList, setWebhookList] = useState<any[]>([]);
+
+  // --- TTS ---
+  const [ttsText, setTtsText] = useState("Olá! Como posso ajudá-lo hoje?");
+  const [ttsVoice, setTtsVoice] = useState<TtsVoice>("alloy");
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+
+  // --- Image AI ---
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+
+  // --- Webhook Test ---
+  const [webhookResults, setWebhookResults] = useState<Record<string, WebhookTestResult>>({});
   const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ["/api/admin/agents"],
-  });
+  // --- WhatsApp Provider Test ---
+  const [wpPhone, setWpPhone] = useState("");
+  const [wpMessage, setWpMessage] = useState("Mensagem de teste do Quanta Flow Lab 🧪");
+  const [wpResult, setWpResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const { data: flows = [] } = useQuery({
+  const { data: flows = [] } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation/flows"],
   });
 
-  const { data: webhooks = [] } = useQuery({
-    queryKey: ["/api/settings/webhooks"],
+  const { data: outboundWebhooks = [] } = useQuery<OutboundWebhook[]>({
+    queryKey: ["/api/webhooks/outbound"],
   });
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
-    setWebhookList(webhooks);
-  }, [webhooks]);
-
-  const sendMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const res = await apiRequest("POST", "/api/admin/lab/simulate-chat", {
-        agentId: selectedAgentId,
-        userMessage: message,
-        channel,
-      });
-      return res.json();
-    },
-    onSuccess: (data: { reply: string }) => {
-      const userMsg: ChatMessage = {
-        id: `user_${Date.now()}`,
-        type: "user",
-        content: inputValue,
-        timestamp: new Date(),
-      };
-      const aiMsg: ChatMessage = {
-        id: `ai_${Date.now()}`,
-        type: "assistant",
-        content: data.reply,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, userMsg, aiMsg]);
-      setInputValue("");
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
-    },
-  });
-
+  // Flow simulation
   const simulateFlowMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/lab/simulate-flow", {
         flowId: selectedFlowId,
-        testData: { nome: "Cliente Teste", telefone: "11999999999", email: "teste@test.com" },
+        contactName: flowContactName,
+        contactPhone: flowContactPhone,
+        triggerMessage: flowTriggerMessage,
       });
-      return res.json();
+      return res.json() as Promise<{ trace: FlowTrace[] }>;
     },
-    onSuccess: (data: { trace: FlowTrace[] }) => {
+    onSuccess: (data) => {
       setFlowTrace(data.trace);
       toast({ title: "Fluxo simulado com sucesso!" });
     },
@@ -116,34 +103,34 @@ export default function AdminLab() {
     },
   });
 
+  // TTS generation
   const ttsMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/lab/generate-tts", {
         text: ttsText,
-        voice: selectedVoice,
+        voice: ttsVoice,
       });
       return res.blob();
     },
     onSuccess: (blob: Blob) => {
-      const audio = new Audio(URL.createObjectURL(blob));
-      setPlayingAudio(true);
-      audio.onended = () => setPlayingAudio(false);
-      audio.play();
-      toast({ title: "Áudio gerado com sucesso!" });
+      if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+      const url = URL.createObjectURL(blob);
+      setTtsAudioUrl(url);
+      toast({ title: "Áudio gerado! Use o player abaixo para ouvir." });
     },
     onError: (err: Error) => {
       toast({ title: "Erro ao gerar TTS", description: err.message, variant: "destructive" });
     },
   });
 
+  // Image generation
   const imageMutation = useMutation({
-    mutationFn: async (prompt: string) => {
-      const res = await apiRequest("POST", "/api/admin/lab/generate-image", {
-        prompt,
-      });
-      return res.json();
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/lab/generate-image", { prompt: imagePrompt });
+      return res.json() as Promise<{ imageUrl: string }>;
     },
-    onSuccess: (data: { imageUrl: string }) => {
+    onSuccess: (data) => {
+      setGeneratedImageUrl(data.imageUrl);
       toast({ title: "Imagem gerada com sucesso!" });
     },
     onError: (err: Error) => {
@@ -151,35 +138,71 @@ export default function AdminLab() {
     },
   });
 
+  // Webhook test
   const testWebhookMutation = useMutation({
     mutationFn: async (webhookId: string) => {
-      const res = await apiRequest("POST", `/api/settings/webhooks/${webhookId}/test`, {
-        testEvent: "lead.created",
-      });
-      return res.json();
+      const res = await apiRequest("POST", `/api/webhooks/outbound/${webhookId}/test`, {});
+      const body = await res.json();
+      return { webhookId, ...body } as WebhookTestResult & { webhookId: string };
     },
-    onSuccess: (data: { status: number; message: string }) => {
-      toast({ 
-        title: "Webhook testado!", 
-        description: `Status: ${data.status}` 
+    onSuccess: (data) => {
+      setWebhookResults((prev) => ({
+        ...prev,
+        [data.webhookId]: data,
+      }));
+      setTestingWebhookId(null);
+      toast({
+        title: data.success ? "Webhook OK!" : "Webhook retornou erro",
+        description: `HTTP ${data.statusCode}`,
+        variant: data.success ? "default" : "destructive",
       });
     },
     onError: (err: Error) => {
+      setTestingWebhookId(null);
       toast({ title: "Erro ao testar webhook", description: err.message, variant: "destructive" });
     },
   });
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim() || !selectedAgentId) return;
-    sendMessageMutation.mutate(inputValue);
-  };
+  // WhatsApp provider test
+  const wpTestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/lab/test-whatsapp", {
+        phone: wpPhone,
+        message: wpMessage,
+      });
+      return res.json() as Promise<{ success: boolean; message: string }>;
+    },
+    onSuccess: (data) => {
+      setWpResult(data);
+      toast({
+        title: data.success ? "Mensagem enviada!" : "Falha no envio",
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao enviar", description: err.message, variant: "destructive" });
+    },
+  });
 
-  const getChannelIcon = () => {
-    return channel === "whatsapp" ? (
-      <MessageCircle className="h-4 w-4" />
-    ) : (
-      <Instagram className="h-4 w-4" />
-    );
+  useEffect(() => {
+    return () => {
+      if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+    };
+  }, []);
+
+  const traceStatusIcon = (status: FlowTrace["status"]) => {
+    switch (status) {
+      case "ok":
+      case "would_send":
+      case "condition_true":
+        return <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />;
+      case "skipped":
+      case "condition_false":
+        return <XCircle className="h-4 w-4 text-yellow-500 shrink-0" />;
+      default:
+        return <CheckCircle2 className="h-4 w-4 text-muted-foreground shrink-0" />;
+    }
   };
 
   return (
@@ -188,273 +211,389 @@ export default function AdminLab() {
       <SidebarInset>
         <header className="flex h-16 items-center gap-4 border-b px-6">
           <SidebarTrigger />
-          <h1 className="text-lg font-semibold">Laboratório de Testes</h1>
+          <div>
+            <h1 className="text-lg font-semibold">Laboratório de Testes</h1>
+            <p className="text-xs text-muted-foreground">
+              Ambiente seguro para testar funcionalidades sem afetar dados reais
+            </p>
+          </div>
         </header>
 
         <main className="flex-1 p-6">
-          <Tabs defaultValue="chat" className="space-y-4">
+          <Tabs defaultValue="flow" className="space-y-4">
             <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="chat">Chat</TabsTrigger>
-              <TabsTrigger value="flow">Flow</TabsTrigger>
-              <TabsTrigger value="tts">TTS</TabsTrigger>
-              <TabsTrigger value="image">Imagem IA</TabsTrigger>
-              <TabsTrigger value="webhook">Webhooks</TabsTrigger>
+              <TabsTrigger value="flow" data-testid="tab-flow">Flow Sim</TabsTrigger>
+              <TabsTrigger value="tts" data-testid="tab-tts">TTS</TabsTrigger>
+              <TabsTrigger value="image" data-testid="tab-image">Imagem IA</TabsTrigger>
+              <TabsTrigger value="webhook" data-testid="tab-webhook">Webhooks</TabsTrigger>
+              <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="chat" className="space-y-4">
-              <Card className="h-[600px] flex flex-col">
-                <CardHeader className="border-b">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      {getChannelIcon()}
-                      {channel === "whatsapp" ? "WhatsApp" : "Instagram"} Chat
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <Select value={channel} onValueChange={(v) => setChannel(v as ChannelType)}>
-                        <SelectTrigger className="w-[120px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          <SelectItem value="instagram">Instagram</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                        <SelectTrigger className="w-[200px]">
-                          <SelectValue placeholder="Selecione um agente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {agents.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <ScrollArea className="flex-1 p-4">
-                  <div className="space-y-4">
-                    {messages.length === 0 && (
-                      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                        Selecione um agente e comece a conversar...
-                      </div>
-                    )}
-                    {messages.map((msg) => (
-                      <div key={msg.id} className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-xs px-4 py-2 rounded-lg ${
-                            msg.type === "user"
-                              ? "bg-green-500 text-white rounded-br-none"
-                              : "bg-gray-200 text-black rounded-bl-none dark:bg-gray-700 dark:text-white"
-                          }`}
-                        >
-                          <p className="text-sm">{msg.content}</p>
-                          <p className="text-xs opacity-70 mt-1">{msg.timestamp.toLocaleTimeString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={scrollRef} />
-                  </div>
-                </ScrollArea>
-
-                <CardContent className="border-t p-4">
-                  <div className="flex gap-2">
-                    <Input
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                      placeholder="Digite uma mensagem..."
-                      disabled={!selectedAgentId || sendMessageMutation.isPending}
-                    />
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!selectedAgentId || !inputValue.trim() || sendMessageMutation.isPending}
-                      size="sm"
-                    >
-                      {sendMessageMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
+            {/* === FLOW SIMULATOR === */}
             <TabsContent value="flow" className="space-y-4">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="h-4 w-4" />
-                    Simulador de Fluxos
+                    Simulador de Fluxos (Dry-Run)
                   </CardTitle>
+                  <CardDescription>
+                    Execute um fluxo sem enviar mensagens reais. Veja o trace bloco a bloco.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
-                    <SelectTrigger>
+                    <SelectTrigger data-testid="select-flow">
                       <SelectValue placeholder="Selecione um fluxo para simular" />
                     </SelectTrigger>
                     <SelectContent>
-                      {flows.map((flow: any) => (
+                      {flows.map((flow) => (
                         <SelectItem key={flow.id} value={flow.id}>
                           {flow.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  
-                  <Button 
-                    onClick={() => simulateFlowMutation.mutate()} 
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Nome do contato (fictício)</label>
+                      <Input
+                        value={flowContactName}
+                        onChange={(e) => setFlowContactName(e.target.value)}
+                        placeholder="Maria Silva"
+                        data-testid="input-flow-contact-name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Telefone (fictício)</label>
+                      <Input
+                        value={flowContactPhone}
+                        onChange={(e) => setFlowContactPhone(e.target.value)}
+                        placeholder="11999999999"
+                        data-testid="input-flow-contact-phone"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Mensagem de trigger (fictícia)</label>
+                    <Input
+                      value={flowTriggerMessage}
+                      onChange={(e) => setFlowTriggerMessage(e.target.value)}
+                      placeholder="Olá, tenho interesse!"
+                      data-testid="input-flow-trigger"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => simulateFlowMutation.mutate()}
                     disabled={!selectedFlowId || simulateFlowMutation.isPending}
                     className="w-full"
+                    data-testid="button-simulate-flow"
                   >
                     {simulateFlowMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <PlayCircle className="h-4 w-4 mr-2" />
                     )}
-                    Simular Fluxo
+                    Simular Fluxo (Dry-Run)
                   </Button>
 
                   {flowTrace.length > 0 && (
-                    <div className="space-y-2 mt-4">
-                      <h3 className="font-semibold text-sm">Trace de Execução:</h3>
-                      {flowTrace.map((trace, idx) => (
-                        <div key={idx} className="bg-muted p-3 rounded text-sm space-y-1">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            <span className="font-medium">{trace.blockType}: {trace.blockId}</span>
-                          </div>
-                          <p className="text-muted-foreground">{trace.result}</p>
-                          <p className="text-xs text-muted-foreground">{trace.timestamp}</p>
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm">Trace de Execução ({flowTrace.length} blocos):</h3>
+                      <ScrollArea className="h-64 border rounded p-2">
+                        <div className="space-y-2">
+                          {flowTrace.map((trace, idx) => (
+                            <div key={idx} className="bg-muted p-3 rounded text-sm space-y-1">
+                              <div className="flex items-center gap-2">
+                                {traceStatusIcon(trace.status)}
+                                <Badge variant="outline" className="text-xs">{trace.blockType}</Badge>
+                                <span className="font-mono text-xs text-muted-foreground">{trace.blockId}</span>
+                              </div>
+                              <p className="text-sm pl-6">{trace.result}</p>
+                              {trace.wouldSend && (
+                                <div className="pl-6 bg-blue-50 dark:bg-blue-950 p-2 rounded text-xs border border-blue-200 dark:border-blue-800">
+                                  <span className="font-medium text-blue-700 dark:text-blue-300">Enviaria: </span>
+                                  {trace.wouldSend}
+                                </div>
+                              )}
+                              <p className="text-xs text-muted-foreground pl-6">{trace.timestamp}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </ScrollArea>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* === TTS === */}
             <TabsContent value="tts" className="space-y-4">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Volume2 className="h-4 w-4" />
-                    Gerador de Áudio (TTS)
+                    Gerador de Áudio TTS
                   </CardTitle>
+                  <CardDescription>
+                    Teste como o agente soará via áudio antes de usar em automações.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <textarea
-                    value={ttsText}
-                    onChange={(e) => setTtsText(e.target.value)}
-                    placeholder="Digite o texto para converter em áudio..."
-                    className="w-full p-3 border rounded min-h-24"
-                  />
-                  
-                  <Select value={selectedVoice} onValueChange={(v) => setSelectedVoice(v as any)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma voz" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="alloy">Alloy (Padrão)</SelectItem>
-                      <SelectItem value="echo">Echo (Grave)</SelectItem>
-                      <SelectItem value="fable">Fable (Narrativa)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Texto para converter em áudio</label>
+                    <Textarea
+                      value={ttsText}
+                      onChange={(e) => setTtsText(e.target.value)}
+                      placeholder="Digite o texto para converter em áudio..."
+                      className="min-h-24"
+                      data-testid="input-tts-text"
+                    />
+                  </div>
 
-                  <Button 
-                    onClick={() => ttsMutation.mutate()} 
-                    disabled={!ttsText.trim() || ttsMutation.isPending || playingAudio}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Voz</label>
+                    <Select value={ttsVoice} onValueChange={(v) => setTtsVoice(v as TtsVoice)}>
+                      <SelectTrigger data-testid="select-tts-voice">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alloy">Alloy (Padrão)</SelectItem>
+                        <SelectItem value="echo">Echo (Grave)</SelectItem>
+                        <SelectItem value="fable">Fable (Narrativa)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    onClick={() => ttsMutation.mutate()}
+                    disabled={!ttsText.trim() || ttsMutation.isPending}
                     className="w-full"
+                    data-testid="button-generate-tts"
                   >
-                    {ttsMutation.isPending || playingAudio ? (
+                    {ttsMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <Volume2 className="h-4 w-4 mr-2" />
                     )}
-                    {playingAudio ? "Reproduzindo..." : "Gerar e Reproduzir Áudio"}
+                    Gerar Áudio
                   </Button>
+
+                  {ttsAudioUrl && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Player de Áudio</label>
+                      <audio
+                        controls
+                        src={ttsAudioUrl}
+                        className="w-full"
+                        data-testid="audio-tts-player"
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* === IMAGE AI === */}
             <TabsContent value="image" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Gerador de Imagens (IA)</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    Gerador de Imagens com IA
+                  </CardTitle>
+                  <CardDescription>
+                    Gere imagens via DALL-E para usar em automações e campanhas.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Input
-                    placeholder="Descreva a imagem que deseja gerar..."
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        imageMutation.mutate((e.target as HTMLInputElement).value);
-                      }
-                    }}
-                  />
-                  
-                  <Button 
-                    onClick={(e) => {
-                      const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement);
-                      if (input?.value) imageMutation.mutate(input.value);
-                    }}
-                    disabled={imageMutation.isPending}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Descrição da imagem (prompt)</label>
+                    <Textarea
+                      value={imagePrompt}
+                      onChange={(e) => setImagePrompt(e.target.value)}
+                      placeholder="Ex: Uma loja moderna de tecnologia com celulares expostos, estilo minimalista, tons de verde e branco"
+                      className="min-h-20"
+                      data-testid="input-image-prompt"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => imageMutation.mutate()}
+                    disabled={!imagePrompt.trim() || imageMutation.isPending}
                     className="w-full"
+                    data-testid="button-generate-image"
                   >
                     {imageMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : null}
+                    ) : (
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                    )}
                     Gerar Imagem
                   </Button>
 
-                  <p className="text-xs text-muted-foreground">
-                    Nota: Geração de imagens utiliza DALL-E 3. Descrições detalhadas geram melhores resultados.
-                  </p>
+                  {generatedImageUrl && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Imagem Gerada</label>
+                      <img
+                        src={generatedImageUrl}
+                        alt="Imagem gerada pela IA"
+                        className="w-full rounded-lg border object-contain max-h-96"
+                        data-testid="img-generated"
+                      />
+                      <a
+                        href={generatedImageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline"
+                      >
+                        Abrir em nova aba
+                      </a>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* === WEBHOOK TEST === */}
             <TabsContent value="webhook" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Teste de Webhooks</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Webhook className="h-4 w-4" />
+                    Teste de Webhooks Outbound
+                  </CardTitle>
+                  <CardDescription>
+                    Dispare um evento de teste para cada webhook configurado e veja o resultado HTTP.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {webhookList.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhum webhook configurado. Configure em Configurações > Webhooks</p>
+                  {outboundWebhooks.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      Nenhum webhook configurado. Configure em Configurações {">"} Webhooks Outbound.
+                    </p>
                   ) : (
-                    <div className="space-y-3">
-                      {webhookList.map((webhook) => (
-                        <div key={webhook.id} className="flex items-center justify-between p-3 border rounded">
-                          <div>
-                            <p className="font-medium text-sm">{webhook.name || webhook.url}</p>
-                            <p className="text-xs text-muted-foreground">{webhook.url}</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setTestingWebhookId(webhook.id);
-                              testWebhookMutation.mutate(webhook.id);
-                            }}
-                            disabled={testingWebhookId === webhook.id && testWebhookMutation.isPending}
-                          >
-                            {testingWebhookId === webhook.id && testWebhookMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Testar"
+                    <div className="space-y-3" data-testid="webhook-list">
+                      {outboundWebhooks.map((webhook) => {
+                        const result = webhookResults[webhook.id];
+                        const isTesting = testingWebhookId === webhook.id && testWebhookMutation.isPending;
+                        return (
+                          <div key={webhook.id} className="border rounded p-3 space-y-2" data-testid={`webhook-item-${webhook.id}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm truncate">{webhook.name || "Sem nome"}</p>
+                                  <Badge variant={webhook.isActive ? "default" : "secondary"} className="text-xs shrink-0">
+                                    {webhook.isActive ? "Ativo" : "Inativo"}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground truncate">{webhook.url}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="ml-2 shrink-0"
+                                onClick={() => {
+                                  setTestingWebhookId(webhook.id);
+                                  testWebhookMutation.mutate(webhook.id);
+                                }}
+                                disabled={isTesting}
+                                data-testid={`button-test-webhook-${webhook.id}`}
+                              >
+                                {isTesting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Testar"
+                                )}
+                              </Button>
+                            </div>
+
+                            {result && (
+                              <div className={`text-xs p-2 rounded border ${result.success ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"}`} data-testid={`webhook-result-${webhook.id}`}>
+                                <div className="flex items-center gap-1 font-medium mb-1">
+                                  {result.success ? (
+                                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                  ) : (
+                                    <XCircle className="h-3 w-3 text-red-600" />
+                                  )}
+                                  HTTP {result.statusCode}
+                                </div>
+                                <pre className="whitespace-pre-wrap break-all font-mono text-xs opacity-80 max-h-24 overflow-y-auto">
+                                  {result.responseBody}
+                                </pre>
+                              </div>
                             )}
-                          </Button>
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* === WHATSAPP PROVIDER TEST === */}
+            <TabsContent value="whatsapp" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4" />
+                    Teste do Provedor WhatsApp
+                  </CardTitle>
+                  <CardDescription>
+                    Envie uma mensagem real para validar se a integração WhatsApp está funcionando.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Número de destino (com DDD e código do país)</label>
+                    <Input
+                      value={wpPhone}
+                      onChange={(e) => setWpPhone(e.target.value)}
+                      placeholder="5511999999999"
+                      data-testid="input-wp-phone"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Mensagem de teste</label>
+                    <Textarea
+                      value={wpMessage}
+                      onChange={(e) => setWpMessage(e.target.value)}
+                      placeholder="Mensagem de teste..."
+                      className="min-h-16"
+                      data-testid="input-wp-message"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => wpTestMutation.mutate()}
+                    disabled={!wpPhone.trim() || !wpMessage.trim() || wpTestMutation.isPending}
+                    className="w-full"
+                    data-testid="button-send-wp-test"
+                  >
+                    {wpTestMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Smartphone className="h-4 w-4 mr-2" />
+                    )}
+                    Enviar Mensagem de Teste
+                  </Button>
+
+                  {wpResult && (
+                    <div className={`text-sm p-3 rounded border ${wpResult.success ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"}`} data-testid="wp-test-result">
+                      <div className="flex items-center gap-2">
+                        {wpResult.success ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-600 shrink-0" />
+                        )}
+                        <span className="font-medium">{wpResult.success ? "Enviado com sucesso!" : "Falha no envio"}</span>
+                      </div>
+                      <p className="text-xs mt-1 text-muted-foreground">{wpResult.message}</p>
                     </div>
                   )}
                 </CardContent>

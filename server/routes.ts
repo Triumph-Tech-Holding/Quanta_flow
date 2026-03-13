@@ -3186,34 +3186,83 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.post("/api/admin/lab/simulate-flow", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const { flowId, testData } = req.body;
+      const { flowId, contactName, contactPhone, triggerMessage } = req.body;
       if (!flowId) return res.status(400).json({ message: "flowId é obrigatório" });
 
       const flow = await storage.getAutomationFlow(flowId);
       if (!flow || flow.userId !== req.user.userId) return res.status(403).json({ message: "Acesso negado" });
 
-      const trace: any[] = [];
+      const vars: Record<string, string> = {
+        nome: contactName || "Contato Teste",
+        telefone: contactPhone || "11999999999",
+        email: "teste@example.com",
+        mensagem: triggerMessage || "Mensagem de teste",
+      };
+
+      const interpolate = (text: string) =>
+        text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`);
+
+      const trace: Array<{
+        blockId: string;
+        blockType: string;
+        status: string;
+        result: string;
+        wouldSend?: string;
+        timestamp: string;
+      }> = [];
+
       let blockCount = 0;
-      
-      if (flow.blocks && Array.isArray(flow.blocks)) {
-        for (const block of flow.blocks) {
-          blockCount++;
-          trace.push({
-            blockId: block.id,
-            blockType: block.type,
-            result: `Bloco executado (${block.type})`,
-            timestamp: new Date().toISOString(),
-          });
-          if (blockCount >= 50) break;
+      const blocks: any[] = Array.isArray(flow.blocks) ? flow.blocks : [];
+
+      for (const block of blocks) {
+        if (blockCount >= 50) {
+          trace.push({ blockId: "limit", blockType: "limit", status: "skipped", result: "Limite de 50 blocos atingido", timestamp: new Date().toISOString() });
+          break;
+        }
+        blockCount++;
+        const ts = new Date().toISOString();
+
+        switch (block.type) {
+          case "text":
+            trace.push({ blockId: block.id, blockType: "text", status: "would_send", result: "Enviaria mensagem de texto", wouldSend: interpolate(block.data?.text || ""), timestamp: ts });
+            break;
+          case "delay":
+            trace.push({ blockId: block.id, blockType: "delay", status: "skipped", result: `Delay ignorado em dry-run (${block.data?.delay || 0}s)`, timestamp: ts });
+            break;
+          case "condition": {
+            const condTrue = Math.random() > 0.5;
+            trace.push({ blockId: block.id, blockType: "condition", status: condTrue ? "condition_true" : "condition_false", result: `Condição avaliada: ${condTrue ? "SIM (branch true)" : "NÃO (branch false)"}`, timestamp: ts });
+            break;
+          }
+          case "audio_tts":
+            trace.push({ blockId: block.id, blockType: "audio_tts", status: "would_send", result: "Enviaria áudio TTS gerado dinamicamente", wouldSend: interpolate(block.data?.text || ""), timestamp: ts });
+            break;
+          case "image_ai":
+            trace.push({ blockId: block.id, blockType: "image_ai", status: "would_send", result: "Enviaria imagem gerada por IA", wouldSend: `Prompt: ${interpolate(block.data?.prompt || "")}`, timestamp: ts });
+            break;
+          case "ai_agent":
+            trace.push({ blockId: block.id, blockType: "ai_agent", status: "would_send", result: "Agente IA geraria resposta para a mensagem do usuário", timestamp: ts });
+            break;
+          case "webhook":
+            trace.push({ blockId: block.id, blockType: "webhook", status: "skipped", result: `Webhook ignorado em dry-run (${block.data?.url || "URL não definida"})`, timestamp: ts });
+            break;
+          case "queue_entry":
+            trace.push({ blockId: block.id, blockType: "queue_entry", status: "ok", result: "Contato seria adicionado à fila de atendimento", timestamp: ts });
+            break;
+          case "resolve":
+            trace.push({ blockId: block.id, blockType: "resolve", status: "ok", result: "Fluxo resolvido/finalizado", timestamp: ts });
+            break;
+          case "update_lead":
+            trace.push({ blockId: block.id, blockType: "update_lead", status: "ok", result: `Lead seria atualizado (campo: ${block.data?.field || "?"}, valor: ${block.data?.value || "?"})`, timestamp: ts });
+            break;
+          default:
+            trace.push({ blockId: block.id, blockType: block.type, status: "ok", result: `Bloco tipo "${block.type}" executado`, timestamp: ts });
         }
       }
 
-      trace.push({
-        blockId: "final",
-        blockType: "resolve",
-        result: "Fluxo finalizado com sucesso",
-        timestamp: new Date().toISOString(),
-      });
+      if (trace.length === 0) {
+        trace.push({ blockId: "empty", blockType: "info", status: "ok", result: "Fluxo não possui blocos configurados", timestamp: new Date().toISOString() });
+      }
 
       res.json({ trace });
     } catch (err) {
@@ -3228,11 +3277,19 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { text, voice } = req.body;
       if (!text) return res.status(400).json({ message: "text é obrigatório" });
 
+      const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+      const selectedVoice = validVoices.includes(voice) ? voice : "alloy";
+
+      const mp3 = await agentOpenai.audio.speech.create({
+        model: "tts-1",
+        voice: selectedVoice as any,
+        input: text,
+      });
+
+      const buffer = Buffer.from(await mp3.arrayBuffer());
       res.setHeader("Content-Type", "audio/mpeg");
       res.setHeader("Content-Disposition", "inline; filename=audio.mp3");
-      
-      const data = Buffer.from(`[TTS Audio - Text: ${text}, Voice: ${voice}]`);
-      res.send(data);
+      res.send(buffer);
     } catch (err) {
       console.error("[POST /api/admin/lab/generate-tts]", err);
       res.status(500).json({ message: "Erro ao gerar TTS" });
@@ -3245,13 +3302,39 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { prompt } = req.body;
       if (!prompt) return res.status(400).json({ message: "prompt é obrigatório" });
 
-      res.json({ 
-        imageUrl: "https://via.placeholder.com/512?text=Generated+Image",
-        message: "Imagem gerada com sucesso"
+      const imageResponse = await agentOpenai.images.generate({
+        model: "dall-e-3",
+        prompt,
+        n: 1,
+        size: "1024x1024",
       });
+
+      const imageUrl = imageResponse.data[0]?.url || null;
+      if (!imageUrl) return res.status(500).json({ message: "Falha ao gerar imagem" });
+
+      res.json({ imageUrl });
     } catch (err) {
       console.error("[POST /api/admin/lab/generate-image]", err);
       res.status(500).json({ message: "Erro ao gerar imagem" });
+    }
+  });
+
+  app.post("/api/admin/lab/test-whatsapp", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { phone, message } = req.body;
+      if (!phone || !message) return res.status(400).json({ message: "phone e message são obrigatórios" });
+
+      const provider = await getWhatsAppProvider(req.user.userId);
+      const result = await provider.sendMessage(phone, message);
+      if (result.success) {
+        res.json({ success: true, message: `Mensagem enviada para ${phone} com sucesso!` });
+      } else {
+        res.json({ success: false, message: (result as any).error || "Falha ao enviar. Verifique a integração WhatsApp em Configurações." });
+      }
+    } catch (err: any) {
+      console.error("[POST /api/admin/lab/test-whatsapp]", err);
+      res.json({ success: false, message: `Erro: ${err.message || "Verifique a integração WhatsApp em Configurações."}` });
     }
   });
 
