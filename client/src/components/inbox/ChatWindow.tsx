@@ -182,7 +182,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
                         isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
                       }`}
                     >
-                      {format(new Date(msg.timestamp), "HH:mm")}
+                      {format(new Date(msg.timestamp), "dd/MM HH:mm")}
                     </p>
                   </div>
                 </div>
