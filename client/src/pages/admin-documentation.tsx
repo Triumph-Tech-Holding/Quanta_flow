@@ -15,7 +15,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -31,7 +30,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Download, Plus, Trash2, Eye, FileText, Loader2 } from "lucide-react";
+import {
+  Download,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  FileText,
+  Loader2,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const createDocSchema = z.object({
@@ -53,60 +63,202 @@ interface DocumentationVersion {
   updatedAt: string;
 }
 
-const UserGuide = () => (
-  <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
-    <CardHeader>
-      <CardTitle className="text-blue-900 dark:text-blue-100">📖 Guia do Usuário</CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-4 text-sm text-blue-800 dark:text-blue-200">
-      <div>
-        <h3 className="font-semibold mb-2">🔍 Visualizar Documentação</h3>
-        <p>Clique no botão "Visualizar" ao lado de qualquer versão para ler a documentação completa no navegador, sem precisar baixar.</p>
+function renderMarkdown(content: string) {
+  const lines = content.split("\n");
+  const elements: JSX.Element[] = [];
+  let key = 0;
+  let inCode = false;
+  let codeLines: string[] = [];
+  let inTable = false;
+  let tableRows: string[][] = [];
+  let isFirstTableRow = true;
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return;
+    elements.push(
+      <div key={key++} className="overflow-x-auto my-4">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-muted">
+              {tableRows[0].map((cell, ci) => (
+                <th key={ci} className="border border-border px-3 py-2 text-left font-semibold">
+                  {cell.trim()}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.slice(2).map((row, ri) => (
+              <tr key={ri} className={ri % 2 === 0 ? "bg-background" : "bg-muted/40"}>
+                {row.map((cell, ci) => (
+                  <td key={ci} className="border border-border px-3 py-2">
+                    {cell.trim()}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div>
-        <h3 className="font-semibold mb-2">📥 Baixar Documentação</h3>
-        <p>Use o botão "Download" para salvar a documentação em formato Markdown (.md) no seu computador.</p>
-      </div>
-      <div>
-        <h3 className="font-semibold mb-2">➕ Criar Nova Versão</h3>
-        <p>Clique em "Nova Versão" para adicionar uma nova versão da documentação quando há mudanças no sistema. Cada versão fica registrada com data de criação.</p>
-      </div>
-      <div>
-        <h3 className="font-semibold mb-2">🗑️ Deletar Versão</h3>
-        <p>Use o botão vermelho "Deletar" para remover versões antigas que não são mais necessárias.</p>
-      </div>
-      <div>
-        <h3 className="font-semibold mb-2">📋 Funcionalidades Principais</h3>
-        <ul className="list-disc list-inside space-y-1 ml-2">
-          <li><strong>Inbox:</strong> Centro de mensagens unificado com WhatsApp, Telegram, Instagram e Email</li>
-          <li><strong>CRM:</strong> Gerenciamento de leads com pipeline Kanban e detecção de IA</li>
-          <li><strong>Automação:</strong> Fluxos multi-etapa com acionadores e condições</li>
-          <li><strong>Microlearning:</strong> Entrega automática de conteúdo por estágio de lead</li>
-          <li><strong>Webhooks:</strong> Integração com Zapier, HubSpot e sistemas externos</li>
-          <li><strong>Google Sheets:</strong> Sincronização automática de leads em planilhas</li>
-        </ul>
-      </div>
-    </CardContent>
-  </Card>
-);
+    );
+    tableRows = [];
+    inTable = false;
+    isFirstTableRow = true;
+  };
+
+  const applyInline = (text: string): (string | JSX.Element)[] => {
+    const parts: (string | JSX.Element)[] = [];
+    let remaining = text;
+    let k = 0;
+    while (remaining.length > 0) {
+      const boldIdx = remaining.indexOf("**");
+      const codeIdx = remaining.indexOf("`");
+      const first =
+        boldIdx === -1 && codeIdx === -1
+          ? -1
+          : boldIdx === -1
+          ? codeIdx
+          : codeIdx === -1
+          ? boldIdx
+          : Math.min(boldIdx, codeIdx);
+      if (first === -1) {
+        parts.push(remaining);
+        break;
+      }
+      if (first > 0) parts.push(remaining.slice(0, first));
+      if (first === boldIdx) {
+        const end = remaining.indexOf("**", first + 2);
+        if (end === -1) { parts.push(remaining); break; }
+        parts.push(<strong key={k++} className="font-semibold">{remaining.slice(first + 2, end)}</strong>);
+        remaining = remaining.slice(end + 2);
+      } else {
+        const end = remaining.indexOf("`", first + 1);
+        if (end === -1) { parts.push(remaining); break; }
+        parts.push(<code key={k++} className="bg-muted px-1 py-0.5 rounded text-xs font-mono text-foreground">{remaining.slice(first + 1, end)}</code>);
+        remaining = remaining.slice(end + 1);
+      }
+    }
+    return parts;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith("```")) {
+      if (!inCode) {
+        inCode = true;
+        codeLines = [];
+        if (inTable) { flushTable(); }
+      } else {
+        inCode = false;
+        elements.push(
+          <pre key={key++} className="bg-muted rounded-lg p-4 my-3 overflow-x-auto text-xs font-mono leading-relaxed border border-border whitespace-pre-wrap break-words">
+            {codeLines.join("\n")}
+          </pre>
+        );
+        codeLines = [];
+      }
+      continue;
+    }
+
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (line.startsWith("|") && line.includes("|")) {
+      inTable = true;
+      const cells = line.split("|").slice(1, -1);
+      tableRows.push(cells);
+      continue;
+    } else if (inTable) {
+      flushTable();
+    }
+
+    if (line.startsWith("# ")) {
+      elements.push(
+        <h1 key={key++} className="text-2xl font-bold mt-8 mb-3 text-foreground border-b border-border pb-2">
+          {applyInline(line.slice(2))}
+        </h1>
+      );
+    } else if (line.startsWith("## ")) {
+      elements.push(
+        <h2 key={key++} className="text-xl font-bold mt-6 mb-2 text-foreground">
+          {applyInline(line.slice(3))}
+        </h2>
+      );
+    } else if (line.startsWith("### ")) {
+      elements.push(
+        <h3 key={key++} className="text-base font-semibold mt-4 mb-1 text-foreground">
+          {applyInline(line.slice(4))}
+        </h3>
+      );
+    } else if (line.startsWith("#### ")) {
+      elements.push(
+        <h4 key={key++} className="text-sm font-semibold mt-3 mb-1 text-muted-foreground uppercase tracking-wide">
+          {applyInline(line.slice(5))}
+        </h4>
+      );
+    } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      elements.push(
+        <li key={key++} className="ml-4 mb-1 text-sm text-foreground flex gap-2">
+          <span className="text-muted-foreground mt-0.5">•</span>
+          <span>{applyInline(line.slice(2))}</span>
+        </li>
+      );
+    } else if (/^\d+\.\s/.test(line)) {
+      const match = line.match(/^(\d+)\.\s(.*)$/);
+      if (match) {
+        elements.push(
+          <li key={key++} className="ml-4 mb-1 text-sm text-foreground flex gap-2">
+            <span className="text-primary font-semibold min-w-[1.2rem]">{match[1]}.</span>
+            <span>{applyInline(match[2])}</span>
+          </li>
+        );
+      }
+    } else if (line.startsWith("---")) {
+      elements.push(<hr key={key++} className="my-5 border-border" />);
+    } else if (line.trim() === "") {
+      elements.push(<div key={key++} className="h-2" />);
+    } else {
+      elements.push(
+        <p key={key++} className="text-sm text-foreground leading-relaxed mb-1">
+          {applyInline(line)}
+        </p>
+      );
+    }
+  }
+
+  if (inTable) flushTable();
+
+  return elements;
+}
 
 export default function AdminDocumentation() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentationVersion | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
   });
 
+  const { data: manualContent, isLoading: loadingManual } = useQuery<string>({
+    queryKey: ["/api/documentation/manual-md"],
+    enabled: showGuide,
+    queryFn: async () => {
+      const res = await fetch("/api/documentation/manual-md");
+      if (!res.ok) throw new Error("Erro ao carregar manual");
+      return res.text();
+    },
+  });
+
   const form = useForm<CreateDocForm>({
     resolver: zodResolver(createDocSchema),
-    defaultValues: {
-      version: "",
-      title: "",
-      description: "",
-    },
+    defaultValues: { version: "", title: "", description: "" },
   });
 
   const createMutation = useMutation({
@@ -138,8 +290,6 @@ export default function AdminDocumentation() {
     },
   });
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-
   const handleDownload = (doc: DocumentationVersion) => {
     const element = document.createElement("a");
     const file = new Blob([doc.content], { type: "text/markdown" });
@@ -153,12 +303,8 @@ export default function AdminDocumentation() {
   const handleDownloadUserManualPdf = async () => {
     try {
       setDownloadingPdf(true);
-      const response = await fetch("/api/documentation/manual-pdf", {
-        method: "GET",
-      });
-      
+      const response = await fetch("/api/documentation/manual-pdf", { method: "GET" });
       if (!response.ok) throw new Error("Erro ao gerar PDF");
-      
       const blob = await response.blob();
       const element = document.createElement("a");
       element.href = URL.createObjectURL(blob);
@@ -166,13 +312,12 @@ export default function AdminDocumentation() {
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
-      
       toast({ title: "Manual baixado com sucesso!" });
     } catch (err) {
-      toast({ 
-        title: "Erro ao baixar PDF", 
+      toast({
+        title: "Erro ao baixar PDF",
         description: err instanceof Error ? err.message : "Tente novamente",
-        variant: "destructive" 
+        variant: "destructive",
       });
     } finally {
       setDownloadingPdf(false);
@@ -184,15 +329,13 @@ export default function AdminDocumentation() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">📚 Documentação</h1>
-          <p className="text-muted-foreground mt-2">Gerencie versões da documentação e visualize online</p>
+          <p className="text-muted-foreground mt-2">Gerencie versões da documentação e visualize o guia completo online</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Nova Versão
-            </Button>
-          </DialogTrigger>
+          <Button className="gap-2" onClick={() => setOpen(true)} data-testid="button-new-version">
+            <Plus className="w-4 h-4" />
+            Nova Versão
+          </Button>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Criar Nova Versão</DialogTitle>
@@ -202,9 +345,7 @@ export default function AdminDocumentation() {
             </DialogHeader>
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit((data) =>
-                  createMutation.mutate(data)
-                )}
+                onSubmit={form.handleSubmit((data) => createMutation.mutate(data))}
                 className="space-y-4"
               >
                 <FormField
@@ -214,7 +355,7 @@ export default function AdminDocumentation() {
                     <FormItem>
                       <FormLabel>Versão (ex: 5.1.0)</FormLabel>
                       <FormControl>
-                        <Input placeholder="5.1.0" {...field} />
+                        <Input placeholder="5.1.0" {...field} data-testid="input-version" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -227,7 +368,7 @@ export default function AdminDocumentation() {
                     <FormItem>
                       <FormLabel>Título</FormLabel>
                       <FormControl>
-                        <Input placeholder="Documentação v5.1.0" {...field} />
+                        <Input placeholder="Documentação v5.1.0" {...field} data-testid="input-title" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -240,16 +381,13 @@ export default function AdminDocumentation() {
                     <FormItem>
                       <FormLabel>Descrição (opcional)</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="Mudanças nesta versão..."
-                          {...field}
-                        />
+                        <Textarea placeholder="Mudanças nesta versão..." {...field} data-testid="input-description" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" disabled={createMutation.isPending}>
+                <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-version">
                   {createMutation.isPending ? "Criando..." : "Criar Versão"}
                 </Button>
               </form>
@@ -258,140 +396,183 @@ export default function AdminDocumentation() {
         </Dialog>
       </div>
 
-      <UserGuide />
-
-      <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+      {/* Manual Completo — destaque principal */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <BookOpen className="w-6 h-6 text-primary" />
+              </div>
               <div>
-                <CardTitle className="text-green-900 dark:text-green-100">📖 Manual de Uso Completo</CardTitle>
-                <CardDescription className="text-green-700 dark:text-green-300">
-                  Guia didático com exemplos práticos para usar todas as funcionalidades
+                <CardTitle className="text-lg">Manual Completo — Quanta Flow</CardTitle>
+                <CardDescription className="mt-1 max-w-xl">
+                  Guia didático com todos os 16 módulos da plataforma: Dashboard, Inbox Omnichannel, CRM/Kanban, Automação com Builder Visual e Simulador, Agentes IA, Campanhas, Fila, Microlearning, Webhooks, Google Sheets, Lab, Configurações, Branding e RBAC — com cenários práticos reais.
                 </CardDescription>
               </div>
             </div>
-            <Button 
-              onClick={handleDownloadUserManualPdf}
-              disabled={downloadingPdf}
-              className="gap-2 bg-green-600 hover:bg-green-700"
-            >
-              {downloadingPdf ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Baixar PDF
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowGuide((v) => !v)}
+                data-testid="button-toggle-guide"
+              >
+                {showGuide ? (
+                  <>
+                    <EyeOff className="w-4 h-4" />
+                    Fechar
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    Visualizar
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleDownloadUserManualPdf}
+                disabled={downloadingPdf}
+                className="gap-2"
+                data-testid="button-download-manual-pdf"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Baixar PDF
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardHeader>
+
+        {showGuide && (
+          <CardContent>
+            <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+              {/* Barra do leitor */}
+              <div className="flex items-center justify-between px-4 py-2 bg-muted/70 border-b border-border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <span>MANUAL_DE_USO.md</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowGuide(false)}
+                  data-testid="button-close-guide"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                  Fechar leitor
+                </Button>
+              </div>
+
+              {/* Conteúdo renderizado */}
+              <div className="max-h-[70vh] overflow-y-auto px-6 py-5" data-testid="guide-reader-content">
+                {loadingManual ? (
+                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Carregando manual...</span>
+                  </div>
+                ) : manualContent ? (
+                  <div className="prose-sm max-w-none">
+                    {renderMarkdown(manualContent)}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-12">
+                    Não foi possível carregar o manual. Tente novamente.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Tabs defaultValue="versions" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="versions">Versões</TabsTrigger>
-          <TabsTrigger value="info">Informações</TabsTrigger>
+          <TabsTrigger value="versions">Versões da Documentação</TabsTrigger>
+          <TabsTrigger value="info">Informações do Sistema</TabsTrigger>
         </TabsList>
-        <TabsContent value="versions" className="space-y-4 mt-4">
 
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">
-          Carregando versões...
-        </div>
-      ) : docs.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground text-center">
-              Nenhuma versão criada ainda. Clique em "Nova Versão" para começar!
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {docs.map((doc) => (
-            <Card key={doc.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      v{doc.version}
-                    </CardTitle>
-                    <CardDescription>{doc.title}</CardDescription>
-                    {doc.description && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {doc.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Dialog open={viewOpen && selectedDoc?.id === doc.id} onOpenChange={(open) => {
-                      setViewOpen(open);
-                      if (!open) setSelectedDoc(null);
-                    }}>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => { setSelectedDoc(doc); setViewOpen(true); }}
-                        className="gap-2"
-                        data-testid={`view-doc-${doc.id}`}
-                      >
-                        <Eye className="w-4 h-4" />
-                        Visualizar
-                      </Button>
-                      {selectedDoc && (
-                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
-                          <DialogHeader>
-                            <DialogTitle>{selectedDoc.title}</DialogTitle>
-                            <DialogDescription>
-                              Versão {selectedDoc.version} • {new Date(selectedDoc.createdAt || '').toLocaleString('pt-BR')}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="flex-1 overflow-y-auto border rounded-lg bg-muted p-4">
-                            <pre className="text-xs whitespace-pre-wrap break-words font-mono">
-                              {selectedDoc.content || 'Conteúdo não disponível'}
-                            </pre>
-                          </div>
-                        </DialogContent>
-                      )}
-                    </Dialog>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(doc)}
-                      className="gap-2"
-                      data-testid={`download-doc-${doc.id}`}
-                    >
-                      <Download className="w-4 h-4" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(doc.id)}
-                      disabled={deleteMutation.isPending}
-                      data-testid={`delete-doc-${doc.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  Criado em {new Date(doc.createdAt).toLocaleString("pt-BR")}
+        <TabsContent value="versions" className="space-y-4 mt-4">
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Carregando versões...
+            </div>
+          ) : docs.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <p className="text-muted-foreground text-center">
+                  Nenhuma versão criada ainda. Clique em "Nova Versão" para começar!
                 </p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="grid gap-4">
+              {docs.map((doc) => (
+                <Card key={doc.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          v{doc.version}
+                        </CardTitle>
+                        <CardDescription>{doc.title}</CardDescription>
+                        {doc.description && (
+                          <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => { setSelectedDoc(doc); setViewOpen(true); }}
+                          className="gap-2"
+                          data-testid={`view-doc-${doc.id}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Visualizar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownload(doc)}
+                          className="gap-2"
+                          data-testid={`download-doc-${doc.id}`}
+                        >
+                          <Download className="w-4 h-4" />
+                          Download
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(doc.id)}
+                          disabled={deleteMutation.isPending}
+                          data-testid={`delete-doc-${doc.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-muted-foreground">
+                      Criado em {new Date(doc.createdAt).toLocaleString("pt-BR")}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
+
         <TabsContent value="info" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
@@ -426,6 +607,25 @@ export default function AdminDocumentation() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de visualização de versão técnica */}
+      <Dialog open={viewOpen} onOpenChange={(open) => { setViewOpen(open); if (!open) setSelectedDoc(null); }}>
+        {selectedDoc && (
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle>{selectedDoc.title}</DialogTitle>
+              <DialogDescription>
+                Versão {selectedDoc.version} • {new Date(selectedDoc.createdAt || "").toLocaleString("pt-BR")}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto border rounded-lg bg-muted p-4">
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+                {selectedDoc.content || "Conteúdo não disponível"}
+              </pre>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }

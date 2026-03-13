@@ -1,509 +1,712 @@
-# 📚 Manual de Uso - Quanta Flow
+# 📚 Manual de Uso — Quanta Flow
 
-Bem-vindo! Este manual vai te ensinar a usar o Quanta Flow de forma simples e prática. Pense no Quanta Flow como um **super assistente** que ajuda seu negócio a vender mais automaticamente! 🚀
+**"Venda no automático."**
 
----
-
-## 🏠 Dashboard - Seu Centro de Controle
-
-O Dashboard é como o **painel de um carro**: aqui você vê tudo o que está acontecendo em tempo real!
-
-### O que você vê aqui?
-- **Total de Contatos**: Quantas pessoas estão na sua base de clientes
-- **Temperatura dos Leads**: Se as pessoas estão "frias" (pouco interessadas), "mornas" (talvez comprem) ou "quentes" (prontas para comprar!)
-- **Pipeline**: Quantos leads estão em cada etapa da venda
-- **Pontuação Média**: Nota de interesse geral dos seus clientes
-- **Leads em Destaque**: Os mais quentes aparecem em destaque!
-
-### 💡 Exemplo Prático:
-Você é uma loja de celulares. No seu Dashboard você vê:
-- 50 contatos no total
-- 10 "quentes" (prontos para comprar) ⭐
-- 20 "mornas" (ainda analisando)
-- 20 "frios" (apenas consultaram)
-
-Assim você sabe **por onde focar seu tempo** - ligando para os "quentes" primeiro!
+Bem-vindo ao Quanta Flow! Esta plataforma transforma a forma como você gerencia leads, conversa com clientes e fecha vendas — tudo de forma automática, inteligente e omnichannel. Este guia cobre todos os módulos com exemplos práticos do mundo real.
 
 ---
 
-## 💬 Inbox - Centro de Mensagens
+## 🏠 1. Dashboard — Visão Geral do Negócio
 
-O Inbox é o seu **telefone e email central**. Todas as mensagens que chegam no WhatsApp, Instagram, Telegram e Email aparecem aqui em um único lugar!
+**O que é:** Painel de controle central com indicadores em tempo real de todo o seu pipeline de vendas.
 
-### Como funciona?
+### Como usar:
+1. Acesse o menu lateral → clique em **Dashboard**
+2. Visualize os indicadores principais: total de contatos, distribuição de temperatura, estágios do pipeline, score médio e leads em destaque
+3. Os leads "quentes" aparecem destacados no topo para ação imediata
 
-1. **Receber mensagens**: Clientes mandam mensagens em qualquer canal
-2. **Responder rápido**: Você responde tudo em um lugar (sem pular entre apps)
-3. **Histórico completo**: Vê toda a conversa com cada cliente
+### 📊 Indicadores disponíveis:
+- **Total de Contatos**: Base total de leads cadastrados
+- **Temperatura**: Distribuição entre Frio 🔵, Morno 🟡 e Quente 🔴
+- **Pipeline**: Contagem por estágio (Novo → Qualificado → Proposta → Fechado)
+- **Score Médio**: Nota de interesse calculada pela IA automaticamente
+- **Leads em Destaque**: Os que têm maior score e engajamento recente
 
-### 🎯 Cenário: Uma conversa real
-
+### 🎯 Cenário Real — Consultório Odontológico:
 ```
-CLIENTE (WhatsApp): Olá! Qual é o preço do iPhone 15?
-↓
-VOCÊ (Inbox): O iPhone 15 sai por R$4.500 à vista
-↓
-CLIENTE (Instagram): E quanto custa parcelado?
-↓
-VOCÊ (Inbox - mesmo lugar): Parcelo em até 12x de R$450!
-```
+Dashboard mostra:
+• 120 contatos totais
+• 18 "quentes" (perguntaram sobre implante, pediram orçamento)
+• 45 "mornos" (consultaram preço, mas sumiram)
+• 57 "frios" (chegaram via anúncio, sem resposta ainda)
 
-**Vantagem**: Não precisa de 10 apps abertos - tudo em um lugar!
-
-### 🔥 Status de Atendimento
-
-Cada conversa tem um status:
-- **🟡 Aguardando**: Cliente escreveu e está esperando resposta
-- **🟢 Respondido**: Você respondeu, agora espera o cliente voltar
-- **🟣 Fila de Atendimento**: Cliente entrou na fila de prioridade
-- **✅ Resolvido**: Conversa finalizada!
-
-### 💡 Timer de SLA
-
-O Quanta Flow avisa se você está **demorando muito** para responder (tipo aquele vigia de piscina que grita "ô atendimento!"). Assim você não deixa cliente esperando!
-
----
-
-## 👥 CRM - Seu Agenda de Clientes (Turbo)
-
-O CRM é como um **caderninho inteligente** onde você anota tudo sobre cada cliente.
-
-### Organizando seus leads
-
-Cada cliente tem:
-- **Nome e telefone**: Dados básicos
-- **Temperatura**: Se está quente ou frio para vender
-- **Estágio**: Aonde está na jornada (novo → qualificado → fechado)
-- **Pontuação**: Nota de interesse (IA calcula automaticamente!)
-- **Tags**: Etiquetas para agrupar (ex: "interessado em celular", "já comprou antes")
-- **Histórico**: Todas as mensagens com esse cliente
-
-### 🎨 Kanban - Painel Visual
-
-Imagina um quadro branco onde você coloca cartaozinhos:
-
-```
-┌─────────────┬──────────────┬──────────────┐
-│   NOVO      │ QUALIFICADO  │    FECHADO   │
-├─────────────┼──────────────┼──────────────┤
-│ João Silva  │ Maria Souza  │ Pedro Costa  │
-│ Teste       │ Ana Lima     │              │
-│ Cliente XYZ │              │              │
-└─────────────┴──────────────┴──────────────┘
-```
-
-**Você arrasta os cartaozinhos (leads) conforme as vendas avançam!**
-
-### 🔥 Filtros Inteligentes
-
-Quer só os leads "quentes"? Clica no filtro!
-Quer só os que chegaram essa semana? Filtra!
-Quer só os da categoria "celulares"? Pronto!
-
-### 📊 Exemplo Completo
-
-**João da Silva**
-- Telefone: 11 98888-7777
-- Temperatura: 🔥 Quente
-- Estágio: Qualificado
-- Pontuação: 18/20
-- Tags: #iPhone #Premium #Pronta-entrega
-- Última mensagem: "Qual é a cor disponível?"
-- IA Summary: "Cliente muito interessado, pronto para fechar"
-
-**Próxima ação**: Enviar cores disponíveis + oferecer desconto progressivo!
-
----
-
-## ⚙️ Automação - Seu Vendedor 24/7
-
-Aqui você cria **fluxos de vendas automáticos**. Pense como um script que o Quanta Flow executa automaticamente, sem você fazer nada!
-
-### Exemplo 1: Bem-vindo automático
-
-```
-Cliente NOVO → Envia mensagem → WhatsApp automático:
-"Oi João! Bem-vindo à nossa loja! 
-Temos os melhores preços em celulares. 
-Posso ajudar? 😊"
-```
-
-### Exemplo 2: Acompanhamento de lead "morno"
-
-```
-Cliente clicou, mas não comprou → Espera 2 dias → Envia:
-"João, tá tudo bem? Voltei a pensar no iPhone que você viu.
-Posso tirar dúvidas sobre ele?"
-```
-
-### Exemplo 3: Ativação de IA
-
-```
-Cliente manda: "Qual é a bateria do iPhone 15?"
-↓
-IA RESPONDE automaticamente:
-"O iPhone 15 tem até 26 horas de bateria! 
-Quer saber mais sobre outras especificações?"
-```
-
-### 🎯 Criando um Fluxo (Passo-a-passo)
-
-1. **Clica em "Automação"** → "Novo Fluxo"
-2. **Define quando ativa**: Quando cliente novo chega? Quando abandona carrinho?
-3. **Desenha as etapas**: "Enviar mensagem" → "Esperar 3 dias" → "Enviar nova mensagem"
-4. **Ativa fluxo**: Agora roda automaticamente!
-
-### 🧠 Blocos de Fluxo
-
-- **Mensagem (Texto)**: "Olá João, tudo bem?"
-- **Imagem**: Envia foto do produto
-- **Áudio**: Mensagem em áudio (tipo voice note)
-- **Delay (Espera)**: Aguarda 2 dias antes de continuar
-- **Condição (SE/ENTÃO)**: Se cliente é quente → manda desconto. Se frio → manda newsletter
-- **Agente IA**: Deixa a IA responder automaticamente
-- **Webhook**: Conecta com sistemas externos (seu ERP, por exemplo)
-- **Fila**: Coloca cliente na fila de atendimento VIP
-- **Resolver**: Finaliza o fluxo
-
-### 💡 Cenário Real: Loja de Roupas
-
-```
-Cliente novo acessa site → Recebe fluxo automático:
-
-Dia 1:
-"Oi! Bem-vindo à nossa loja! 🛍️
-Aproveita nosso DESCONTO DE 15% para primeira compra!
-Use código: BEMVINDO15"
-
-Dia 3 (se não comprou):
-"Maria, tá tudo ok? Ficou em dúvida?
-Posso ajudar a escolher a roupa certa para você?"
-
-Dia 5 (se ainda não comprou):
-"Última chance! Desconto para você expira hoje.
-Aproveita?"
+Ação: Focar hoje nos 18 quentes.
+Automação trata os 45 mornos com reengajamento automático.
 ```
 
 ---
 
-## 🤖 Agentes IA - Seus Vendedores Virtuais
+## 💬 2. Inbox — Central de Mensagens Omnichannel
 
-Os Agentes IA são como **vendedores robôs** que conversam naturalmente com seus clientes!
+**O que é:** Todas as mensagens de todos os canais (WhatsApp, Instagram, Telegram, Email) chegam em um único lugar. Nunca mais perca um cliente entre apps.
 
-### Como funcionam?
+### Como usar:
+1. Acesse **Inbox** no menu lateral
+2. Veja a lista de conversas à esquerda (com data, horário e última mensagem)
+3. Clique em uma conversa para abrir o chat completo
+4. Responda diretamente pelo campo de texto na parte inferior
 
-Você cria um agente com:
-- **Nome**: Ex: "Vendedor de Iphones"
-- **Personalidade**: Como ele fala (profissional, descontraído, entusiasmado)
-- **Especialidade**: Sobre o que ele sabe (celulares, roupas, etc)
-- **Instruções**: O que ele deve fazer e evitar
-- **Voz**: Ele fala em áudio? Com qual voz?
+### 🔧 Recursos do Inbox:
+- **Busca de conversas**: Filtre por nome ou número
+- **Canal identificado**: Ícone de WhatsApp, Instagram, Telegram ou Email ao lado de cada contato
+- **Timestamp completo**: Data + hora de cada mensagem (ex: 13/03 14:42)
+- **Atribuição de agente**: Assign manualmente a conversa para um colaborador
+- **Timer SLA**: Contador de quanto tempo o cliente está esperando — fica vermelho quando passa do prazo configurado
+- **Respostas rápidas**: Atalhos de texto para respostas frequentes (ex: "/preco" expande automaticamente)
+- **Fila de Atendimento**: Coloque conversas em fila VIP com SLA e agente designado
 
-### 💬 Exemplo: Agente "TechGuru"
-
+### 🎯 Cenário Real — E-commerce de Moda:
 ```
-CLIENTE: Oi, qual celular é melhor, Samsung ou iPhone?
+Terça 09:14 — Ana Lima (WhatsApp):
+  "Oi! O vestido azul tem no tamanho P?"
 
-TECHGURU (IA):
-"Ótima pergunta! Depende do seu uso:
-- iPhone: Melhor para quem quer simplicidade
-- Samsung: Melhor para quem quer customização
-Qual seu orçamento? Posso indicar o melhor! 📱"
+Terça 09:14 — Sistema:
+  IA detecta "interesse em produto" → score sobe para 12
+  Inbox recebe a mensagem
+
+Terça 09:15 — Atendente Carla (responde pelo Inbox):
+  "Oi Ana! Temos sim, no P e M. Quer que eu separe para você?"
+
+Terça 09:16 — Ana Lima:
+  "Pode separar sim!"
+
+→ Lead automaticamente marcado como "Quente"
+→ Carla conclui venda pelo Inbox sem sair da plataforma
 ```
 
-### 🎯 Casos de Uso
-
-**Suporte 24/7**: Mesmo à noite, a IA responde dúvidas sobre produtos
-
-**Pré-qualificação**: IA faz perguntas básicas antes de você falar com cliente
-
-**Pós-venda**: IA pergunta se produto chegou bem, se tá feliz
-
-**Geração de conteúdo**: IA cria textos para campanhas de marketing
-
-### 🧪 Testando Agentes
-
-Existe um **Laboratório** onde você:
-1. Seleciona um agente
-2. Manda mensagens para ele
-3. Vê como ele responde **antes de liberar para clientes**
-
-Tipo um teste de direção antes de sair na rua!
+### ⚡ Conexão WhatsApp (Configurações → WhatsApp):
+- **Z-API** (recomendado para produção): Insira URL e token da sua conta Z-API
+- **Baileys** (gratuito, para testes): Clique em "Conectar" e escaneie o QR code com o celular
 
 ---
 
-## 📢 Campanhas - Venda em Massa (Com Respeito)
+## 👥 3. CRM — Gestão de Leads e Contatos
 
-Campanhas permitem enviar mensagens para **muitos clientes ao mesmo tempo**, mas de forma inteligente!
+**O que é:** Banco de dados inteligente de todos os seus leads com pipeline Kanban, scoring por IA e histórico completo de interações.
 
-### Tipos de Campanha
+### Como usar:
+1. Acesse **CRM** no menu lateral
+2. Visualize o **Kanban** (colunas por estágio) ou a **Lista** de contatos
+3. Clique em um lead para abrir o perfil completo
+4. Arraste os cards entre colunas para avançar no pipeline
 
-**1. Broadcast (Mensagem Única)**
-Envia a mesma mensagem para vários clientes:
+### 📋 Perfil de um Lead:
+- **Nome, telefone, email**: Dados básicos
+- **Temperatura**: Frio / Morno / Quente
+- **Estágio no Pipeline**: Novo → Qualificado → Proposta → Negociação → Fechado Ganho / Perdido
+- **Score**: 0 a 20 (calculado pela IA com base nas interações)
+- **Tags**: Etiquetas personalizadas (#iPhone #Urgente #VIP)
+- **Intenção detectada pela IA**: compra_quente, duvida, reclamacao, indefinido
+- **Resumo da IA**: Síntese do que o lead precisa
+- **Histórico**: Todas as mensagens trocadas
+
+### 🔄 Criação Automática de Leads:
+Toda vez que alguém envia uma mensagem para o seu WhatsApp/Instagram/Telegram pela primeira vez, o sistema **cria automaticamente um card no CRM** com temperatura "Frio" e estágio "Novo". Sem precisar de nenhuma ação manual.
+
+### 🎯 Cenário Real — Imobiliária:
+```
+Cliente busca apartamento online
+↓
+Clica no anúncio e manda mensagem no WhatsApp:
+"Quero informações sobre o apto na Rua das Flores"
+↓
+Quanta Flow:
+1. Cria lead "José Pereira" automaticamente no CRM (Estágio: Novo, Temp: Frio)
+2. IA detecta intenção: "interesse_imovel"
+3. Score inicial: 8/20
+4. Automação envia resposta com fotos e link de visita virtual
+↓
+5 dias depois, José pergunta sobre financiamento:
+→ IA recalcula: Score 16/20, Temperatura: Quente
+→ CRM mostra lead destacado para o corretor
+→ Corretor entra em contato pessoalmente para fechar
+```
+
+### 🔍 Filtros do CRM:
+- Por temperatura (frio/morno/quente)
+- Por estágio do pipeline
+- Por intenção da IA
+- Por agente responsável
+- Por tag
+
+---
+
+## ⚙️ 4. Automação — Fluxos de Vendas Automáticos
+
+**O que é:** Motor de automação que executa sequências de ações automaticamente com base em eventos e condições. Seu vendedor 24/7 que nunca falta, nunca atrasa e nunca esquece.
+
+### 4.1 — Builder Visual de Fluxos
+
+Construa fluxos arrastando e conectando blocos em um canvas visual (estilo fluxograma).
+
+**Como criar um fluxo:**
+1. Acesse **Automação** → clique em **Novo Fluxo**
+2. Dê um nome, defina palavras-chave que acionam o fluxo
+3. Clique em **Abrir Builder** para editar visualmente
+4. Arraste blocos da barra lateral para o canvas
+5. Conecte os blocos puxando as setas
+6. Configure cada bloco clicando nele
+7. Salve e ative o fluxo
+
+### 🧱 Tipos de Blocos:
+
+| Bloco | Função | Configuração |
+|-------|--------|-------------|
+| **Texto** | Envia mensagem de texto | Mensagem com variáveis {nome}, {telefone} |
+| **Áudio TTS** | Envia mensagem de voz gerada por IA | Texto a ser narrado + voz selecionada |
+| **Imagem IA** | Gera e envia imagem com IA | Prompt descritivo da imagem |
+| **Delay** | Espera antes de continuar | Tempo em segundos, minutos ou horas |
+| **Condição** | Ramifica por SIM ou NÃO | Tipo: keyword, intenção, temperatura, score |
+| **Agente IA** | Coloca um especialista de IA para responder | Seleciona o agente configurado |
+| **Webhook** | Chama uma URL externa | URL + método HTTP |
+| **Fila** | Coloca lead na fila de atendimento humano | SLA em minutos |
+| **Resolver** | Finaliza o fluxo com sucesso | - |
+| **Atualizar Lead** | Muda estágio, temperatura, tag ou score | Campos a atualizar |
+
+### 🎯 Cenário Real — Clínica de Estética:
 
 ```
-"MEGA PROMOÇÃO! 🎉
-Desconto de 40% em TODOS os celulares!
-Válido até domingo!
-"
+PALAVRAS-CHAVE: "botox", "preenchimento", "harmonização"
+
+FLUXO "Interesse em Harmonização":
+
+[TEXTO] "Oi {nome}! 😊 Vi que você se interessou por harmonização facial.
+Temos horários disponíveis essa semana. Posso te ajudar?"
+
+[DELAY] 30 segundos
+
+[AGENTE IA "Dr. Estética"]
+  → Especialista responde dúvidas sobre procedimentos
+  → Usa systemPrompt com informações da clínica
+
+[CONDIÇÃO: intenção = "compra_quente"]
+  SIM → [ATUALIZAR LEAD: temperatura=quente, estágio=qualificado]
+         [FILA: SLA 30min] — Recepcionista entra em contato
+  NÃO → [TEXTO] "Posso te enviar mais informações por email?"
+         [DELAY: 2 dias]
+         [TEXTO] "Lembrete: sua dúvida sobre harmonização ainda está aqui!"
 ```
 
-**2. Sequência Drip (Campanha em Série)**
-Envia uma série de mensagens ao longo do tempo:
+### 4.2 — Simulador de Conversa Interativo (Lab → Flow Sim)
 
+Antes de ativar para clientes reais, **teste o fluxo você mesmo** através de uma conversa real:
+
+1. Acesse **Lab** → aba **Flow Sim**
+2. Selecione o fluxo que quer testar
+3. Preencha nome e telefone fictícios
+4. Clique em **Iniciar Conversa**
+5. O bot vai responder como faria com um lead real
+6. Você digita como se fosse o cliente e vê exatamente como o fluxo reage
+7. Blocos **Agente IA** chamam a IA de verdade com o prompt configurado
+8. Blocos **Condição** seguem o branch baseado no que você digitou
+9. Clique em **Reiniciar** para testar outro cenário
+
+### 📦 Templates Prontos:
+
+O sistema já vem com 5 templates de fluxo:
+- **Boas-vindas Básico**: Mensagem de boas-vindas + apresentação
+- **Captação de Lead**: Coleta nome, telefone e email
+- **Suporte Automatizado**: FAQ com IA respondendo dúvidas
+- **Reengajamento**: Para leads que sumiram
+- **Pós-Venda**: Acompanhamento após fechamento
+
+---
+
+## 🤖 5. Fábrica de Agentes IA
+
+**O que é:** Crie especialistas virtuais com IA para responder automaticamente por você em qualquer canal. Cada agente tem sua personalidade, especialidade e contexto.
+
+### Como criar um Agente:
+1. Acesse **Agentes IA** no menu lateral → **Novo Agente**
+2. Preencha:
+   - **Nome**: Ex: "Consultora de Beleza", "Atendente Técnico", "Vendedor VIP"
+   - **Especialidade**: O que ele sabe (produtos, área, setor)
+   - **Tom**: Formal, casual, empático, direto
+   - **System Prompt**: Instruções detalhadas do comportamento
+   - **Modelo**: GPT-4o-mini (padrão) ou outro
+   - **Temperatura criativa**: 0 = mais previsível, 1 = mais criativo
+   - **Máx. tokens**: Limite do tamanho das respostas
+   - **Voz TTS**: Para respostas em áudio
+3. Clique em **Salvar**
+4. Teste na aba **Chat de Preview** — converse diretamente com o agente antes de usar
+
+### 📝 Exemplo de System Prompt (Restaurante):
 ```
-Dia 1: "Oi João! Novo produto chegou!"
-Dia 3: "Que tal conhecer o novo modelo?"
-Dia 5: "Últimos dias para aproveitar a promoção"
-Dia 7: "Ainda está disponível para você!"
+Você é Maria, atendente virtual do Restaurante Bella Cucina.
+Você é simpática, usa emojis e fala de forma descontraída.
+Você conhece todo o cardápio: Pizza Margherita R$45, Lasanha R$52, etc.
+Horário: Terça a Domingo, 11h às 23h.
+Aceita: cartão, Pix e dinheiro.
+Quando o cliente quiser fazer pedido, peça: nome, endereço, pedido e forma de pagamento.
+Não ofereça descontos não autorizados.
+Se não souber algo, diga: "Deixa eu verificar com a equipe, te retorno em breve!"
 ```
 
-### 🎯 Segmentação Inteligente
-
-Você escolhe **para quem enviar**:
-- Só clientes "quentes"? ✅
-- Só quem comprou nos últimos 30 dias? ✅
-- Só quem tá no estágio "qualificado"? ✅
-
-Assim você **não enche caixa de entrada** de quem não tá interessado.
-
-### 📊 Métricas
-
-O Quanta Flow conta:
-- **Quantas mensagens foram enviadas**: 500
-- **Quantas foram entregues**: 480 (15 números inválidos)
-- **Quantas foram lidas**: 380
-- **Quantas geraram resposta**: 150
-- **Quantas viraram vendas**: 45 vendas! 💰
-
-### 💡 Exemplo: Black Friday
-
+### 🎯 Cenário Real — E-commerce de Suplementos:
 ```
-CAMPANHA: Black Friday 2026
+CLIENTE (23h45): "Oi! Quero comprar whey protein. Qual é o melhor?"
 
-Alvo: Todos os clientes "mornos" que viram celulares
+AGENTE IA "NutriBot":
+"Olá! 💪 Boa noite! Temos 3 opções incríveis:
 
-Mensagem:
-"🖤 BLACK FRIDAY! 🖤
-iPhone 15 → De R$4.500 por R$3.200! 
-Estoque limitado!
-Link: www.loja.com/blackfriday"
+1. Whey Gold Standard - R$189 (2kg) — o mais vendido!
+2. ISO Whey Zero - R$215 (1,8kg) — para quem é intolerante à lactose
+3. 100% Whey - R$149 (2kg) — melhor custo-benefício
 
-Resultado:
-- 10.000 mensagens enviadas
-- 8.000 abriram (80%)
-- 2.000 clicaram no link
-- 450 compraram (22% de conversão)
+Qual é o seu objetivo? Ganho de massa ou definição?
+Assim indico o melhor para você! 🏋️"
+
+→ Conversa às 23h45 sem nenhum humano envolvido
+→ Lead qualificado e pronto para fechar quando abrir amanhã
+```
+
+### 🎤 Text-to-Speech (TTS):
+Cada agente pode ter uma **voz** configurada. Quando integrado ao WhatsApp, pode enviar mensagens de áudio geradas automaticamente. Teste a voz no **Lab → TTS**.
+
+---
+
+## 📢 6. Campanhas Omnichannel
+
+**O que é:** Envie mensagens em massa para segmentos específicos da sua base, com rastreamento completo de resultados. Ideal para promoções, lançamentos e reengajamento.
+
+### Como criar uma Campanha:
+1. Acesse **Campanhas** → **Nova Campanha**
+2. Siga o assistente de 4 etapas:
+   - **Etapa 1**: Nome, canal (WhatsApp/Instagram), tipo (Broadcast ou Sequência Drip)
+   - **Etapa 2**: Segmentação — quem vai receber (temperatura, estágio, canal)
+   - **Etapa 3**: Mensagem — escreva ou use **Geração por IA** para criar o texto
+   - **Etapa 4**: Agendamento — envie agora ou programe para uma data/hora
+3. Clique em **Iniciar Campanha**
+
+### 📊 Tipos de Campanha:
+
+**Broadcast (Disparo Único):**
+Uma mensagem para todos do segmento ao mesmo tempo.
+```
+Segmento: Leads mornos que viram smartphones
+Mensagem: "🔥 SUPER SALE! Só hoje: todos os iPhones com 20% OFF!
+Clique aqui → bit.ly/sale"
+```
+
+**Sequência Drip (Gotejamento):**
+Série de mensagens ao longo do tempo.
+```
+Dia 1: "Oi {nome}! Sabia que temos novidades incríveis?"
+Dia 3: "Viu nossa nova coleção? Fica o link: ..."
+Dia 5: "Última chance! Promoção termina amanhã!"
+Dia 7: "Perdi você? Posso ajudar com algo?"
+```
+
+### 🎯 Segmentação Disponível:
+- Por temperatura (frio / morno / quente)
+- Por estágio no pipeline
+- Por canal de entrada (WhatsApp / Instagram / Email)
+- Prévia do segmento antes de enviar
+
+### 📈 Métricas em Tempo Real:
+```
+Campanha: "Black Friday 2026"
+Enviadas:  10.000 ✉️
+Entregues:  9.750 ✅ (97,5%)
+Lidas:      7.200 👁️ (73,8%)
+Responderam:1.800 💬 (25%)
+Converteram: 340  💰 (4,7%)
+```
+
+### 🎯 Cenário Real — Academia de Ginástica:
+```
+Situação: Janeiro (mês de resolução de ano novo)
+
+Campanha: "Comece 2026 em Forma!"
+Segmento: Leads frios que consultaram preços em dezembro
+Canal: WhatsApp
+
+Mensagem (gerada por IA):
+"Oi {nome}! 🏋️ Feliz 2026!
+Que tal começar o ano cuidando da saúde?
+Nossa academia tem tudo para você:
+✅ Musculação, Spinning, Yoga e mais
+✅ Instrutores certificados
+✅ Promoção de Janeiro: 1ª mensalidade GRÁTIS!
+Quer conhecer? Responda "SIM" e te mando mais infos 😊"
+
+Resultado: 2.400 enviadas → 312 responderam → 89 matricularam!
+```
+
+### 📝 Biblioteca de Templates:
+Salve mensagens reutilizáveis em **Campanhas → Templates**. Categorize por tipo (promoção, boas-vindas, pós-venda, etc.) para usar rapidamente nas campanhas.
+
+---
+
+## ⏱️ 7. Fila de Atendimento
+
+**O que é:** Sistema para gerenciar quando um atendimento humano é necessário, com SLA definido e atribuição de agente.
+
+### Como funciona:
+1. Um fluxo ou agente IA decide que o cliente precisa de atendimento humano
+2. O bloco **Fila** é acionado — o lead entra na fila com status "Aguardando"
+3. Um atendente recebe a notificação no **Inbox**
+4. O atendente assume a conversa e o status muda para "Em atendimento"
+5. Ao resolver, clica em "Resolver" — status vira "Resolvido"
+
+### ⏰ SLA (Tempo de Resposta):
+Configure o SLA padrão em **Configurações → Branding → SLA Padrão (minutos)**.
+- O timer começa quando o lead entra na fila
+- Se o SLA for ultrapassado, o timer fica **vermelho** no Inbox
+- Relatórios mostram quantas vezes o SLA foi quebrado
+
+### 🎯 Cenário Real — Banco Digital:
+```
+Cliente: "Preciso cancelar meu cartão de crédito urgente"
+↓
+IA detecta: intenção = "urgente_cancelamento"
+↓
+Bloco Fila acionado (SLA: 5 minutos)
+↓
+Notificação para equipe de atendimento
+↓
+Em 3 minutos, atendente Eduardo assume
+↓
+"Oi! Sou o Eduardo, vou te ajudar agora mesmo. 
+Me passa o número do cartão (últimos 4 dígitos)?"
+↓
+Problema resolvido, conversa marcada como "Resolvida"
 ```
 
 ---
 
-## ⚙️ Configurações - Personalizando Tudo
+## 🎓 8. Microlearning — Conteúdo Automático
 
-Aqui você ajusta como o Quanta Flow funciona para seu negócio.
+**O que é:** Entregue conteúdo educativo automaticamente para seus leads baseado no estágio que estão no pipeline. Ideal para nutrição de leads.
 
-### 🎨 Branding (Aparência)
+### Como criar uma Trilha:
+1. Acesse **Microlearning** no menu lateral → **Nova Trilha**
+2. Configure:
+   - **Nome**: Ex: "Trilha Iniciante", "Curso de Finanças"
+   - **Gatilho**: Quando o lead muda para qual estágio (ex: "qualificado")
+   - **Conteúdo**: Módulos sequenciais com textos, links, vídeos
+   - **Intervalo**: A cada quantos dias enviar o próximo módulo
 
-Você customiza:
-- **Logo**: Sua marca aparece no sistema
-- **Cores primárias**: Verde, azul, vermelho?
-- **Nome da empresa**: Aparece em tudo
-- **Favicon**: O ícone da abinha do navegador
-
-**Resultado**: Sistema parece 100% seu! (White-label)
-
-### 📱 Canais de Integração
-
-Conecta seus apps:
-
-**WhatsApp**
-- Via Z-API (paga, mais rápido)
-- Via Baileys (grátis, precisa ler QR code)
-
-**Telegram**: Cria um bot que recebe mensagens
-
-**Instagram**: Recebe mensagens de seguidores
-
-**Email**: Integra com seu email corporativo
-
-Assim todas as mensagens chegam no Inbox em um lugar!
-
-### 🔑 API Keys & Webhooks
-
-Aqui você:
-- Coloca as chaves de segurança dos serviços (WhatsApp, Telegram)
-- Configura webhooks (quando algo aconteça, avisa seu sistema)
-
-**Exemplo**: Quando alguém virar cliente no Quanta Flow, automaticamente adiciona no seu CRM interno.
-
-### 📋 Gerenciamento de Usuários
-
-Você:
-- **Cria colaboradores**: "João tem acesso total", "Maria vê só leads"
-- **Define permissões**: Quem pode fazer o quê
-- **Acompanha atividades**: Quem fez o quê e quando
-
-**Funções disponíveis:**
-- Super Admin: Acesso TOTAL a tudo
-- Admin: Gerencia usuários, campanhas, fluxos
-- Usuário: Só usa Inbox, CRM, Automação
-
----
-
-## 🧪 Laboratório - Testando Antes de Usar
-
-Aqui você testa tudo antes de liberar para seus clientes!
-
-### Chat Simulator
-
-**Simula conversas com seus agentes IA:**
-
-1. Seleciona um agente
-2. Escolhe se é WhatsApp ou Instagram
-3. Manda mensagens
-4. Vê como a IA responde em tempo real
-
-**Exemplo:**
+### 🎯 Cenário Real — Escola de Programação:
 ```
-VOCÊ: "Olá, quanto custa um iPhone 15 Pro?"
-
-IA RESPONDE:
-"Olá! O iPhone 15 Pro custa a partir de R$7.999!
-Quer conhecer as cores disponíveis?"
-```
-
-Se a resposta ficar estranha, você ajusta o agente antes de usar com clientes.
-
----
-
-## 🚀 Fluxo Completo de Uma Venda
-
-Vamos ver tudo funcionando junto em um cenário real!
-
-### Dia 1: Cliente Chega
-
-```
-Maria vê anúncio seu no Instagram
+Lead se torna "Qualificado" (pediu informações sobre o curso)
 ↓
-Entra em contato via WhatsApp: "Oi, quanto custa?"
-↓
-Quanta Flow RECEBE no Inbox ✅
-```
+Trilha "Preview do Curso" é ativada automaticamente:
 
-### Dia 1: Resposta Automática
+Dia 1: "Bem-vindo(a)! 👋 Separei uma mini-aula gratuita para você..."
+Dia 3: "Hoje: variáveis e tipos de dados em Python! (5 minutos)"
+Dia 5: "Você já está no caminho! Veja a aula 3: funções..."
+Dia 7: "Você curtiu? Temos vagas abertas para a próxima turma!"
 
-```
-Quanta Flow ativa fluxo "Lead Novo"
-↓
-AUTOMAÇÃO envia: "Oi Maria! Bem-vinda! 
-iPhone 15 sai por R$4.500 à vista ou 12x de R$450"
-↓
-IA está ativada e responde dúvidas automaticamente:
-"Qual a cor que você prefere?"
-```
-
-### Dia 2: Qualificação
-
-```
-Maria: "Tem verde?"
-↓
-IA: "Temos verde, preto e azul! 
-Qual combina mais com seu estilo?"
-```
-
-### Dia 3: Lead Aquecido
-
-```
-CRM marca Maria como "QUENTE"
-↓
-Você (humano) toma a conversa:
-"Oi Maria! Posso ajudar de forma ainda melhor?
-Posso desbloquear 10% off só para você hoje!"
-```
-
-### Dia 3-4: Fechamento
-
-```
-Maria compra! 🎉
-↓
-Automação ativa fluxo "Pós-Venda":
-"Seu pedido saiu! Rastreamento: ..."
-↓
-5 dias depois:
-"Chegou bem? Curtiu? Avalia para a gente!"
-```
-
-### Resultado na Dashboard
-
-```
-❌ Novo → ✅ Qualificado → 💰 Fechado
-        Maria Silva
+→ Lead educado, aquecido e pronto para a decisão de compra
 ```
 
 ---
 
-## 💡 Dicas de Ouro
+## 🔗 9. Webhooks Outbound
 
-### 1️⃣ Comece Simples
-Não faça 100 fluxos no primeiro dia. Comece com:
-- Bem-vindo automático
-- Acompanhamento após 2 dias
-- Desconto progressivo
+**O que é:** Notifique sistemas externos automaticamente quando eventos acontecem no Quanta Flow. Integre com Zapier, HubSpot, seu próprio CRM ou qualquer sistema via HTTP.
 
-### 2️⃣ Teste Tudo no Laboratório
-Antes de mandar fluxo para 1.000 clientes, teste com você mesmo!
+### Eventos disponíveis:
+- **lead.created**: Quando um novo lead é criado
+- **lead.qualified**: Quando um lead muda para "Qualificado"
+- **flow.success**: Quando um fluxo é concluído com sucesso
+- **flow.interrupt**: Quando um fluxo é interrompido
+- **conversation.closed**: Quando uma conversa é resolvida
 
-### 3️⃣ Qualifique seus Leads
-Coloque notas e tags:
-- "Interessado em X"
-- "Precisa de orçamento"
-- "Já visitou site 3x"
+### Como configurar:
+1. Acesse **Configurações → Webhooks**
+2. Clique em **Novo Webhook**
+3. Preencha URL, evento e headers opcionais
+4. Ative e teste pelo **Lab → Webhooks**
 
-Isso ajuda a automação a tomar melhores decisões.
+### 🔒 Segurança HMAC:
+Cada requisição inclui o header `X-Quanta-Signature` com assinatura HMAC-SHA256. Valide no seu sistema para garantir que veio do Quanta Flow.
 
-### 4️⃣ Use IA Estrategicamente
-IA é ótima para:
-- ✅ Responder perguntas técnicas
-- ✅ Fazer pré-qualificação
-- ✅ Respostas rápidas 24/7
-- ❌ Não é boa para problemas complexos (aí você entra)
+### 🎯 Cenário Real — Integração com CRM Externo:
+```
+Evento: lead.qualified
+URL: https://seu-crm.com/api/leads/import
 
-### 5️⃣ Acompanhe Métricas
-Sempre checke:
-- Taxa de resposta: Está subindo?
-- Taxa de conversão: Quanto de lead vira venda?
-- Tempo de resposta: Está mais rápido?
+Payload enviado:
+{
+  "event": "lead.qualified",
+  "lead": {
+    "nome": "Maria Silva",
+    "telefone": "11999999999",
+    "email": "maria@email.com",
+    "score": 15,
+    "temperature": "quente"
+  }
+}
 
-Se está ruim, ajusta os fluxos!
-
-### 6️⃣ Segmente suas Campanhas
-Não mande a mesma mensagem para quem vai comprar e quem é frio.
-- Lead QUENTE: Desconto maior, urgência
-- Lead MORNO: Educational, mostra valor
-- Lead FRIO: Newsletter, buildando relacionamento
+→ Seu CRM recebe e cria o lead automaticamente
+→ Sem precisar de nenhuma ação manual
+```
 
 ---
 
-## 📞 Suporte Rápido
+## 📊 10. Google Sheets — Sincronização Automática
+
+**O que é:** Exporte dados de leads automaticamente para planilhas Google em tempo real.
+
+### Como configurar:
+1. Acesse **Configurações → Google Sheets**
+2. Faça login com sua conta Google (OAuth)
+3. Selecione a planilha e a aba
+4. Mapeie as colunas (ex: Coluna A = Nome, Coluna B = Telefone)
+5. Escolha o evento que dispara (lead criado, qualificado, etc.)
+6. Ative a integração
+
+### 🎯 Cenário Real — Vendas com Planilha Compartilhada:
+```
+Situação: Equipe de vendas usa Google Sheets para acompanhamento
+
+Configuração: A cada lead "qualificado" → adicionar linha na planilha
+
+Resultado automático na planilha:
+Nome      | Telefone       | Score | Temperatura | Data
+Maria     | 11 9999-7777   | 15    | Quente      | 13/03/2026
+José      | 21 8888-5555   | 12    | Morno       | 13/03/2026
+
+→ Toda a equipe vê os leads qualificados em tempo real
+→ Sem precisar entrar no Quanta Flow
+```
+
+---
+
+## 🧪 11. Lab — Ambiente de Testes
+
+**O que é:** Laboratório para testar todas as funcionalidades antes de colocar em produção. Nunca mais experimente direto com clientes reais.
+
+### Abas disponíveis:
+
+### Aba 1 — Flow Sim (Simulador de Conversa)
+Teste fluxos de automação interativamente:
+- Selecione um fluxo ativo
+- Preencha nome e telefone fictícios
+- Clique em "Iniciar Conversa"
+- Dialogue como um cliente real
+- Blocos de Agente IA chamam a IA de verdade
+- Veja cada etapa sendo executada em tempo real
+
+### Aba 2 — TTS (Texto para Voz)
+Teste como seus agentes vão soar em áudio:
+- Digite o texto
+- Selecione a voz (Alloy, Echo, Fable)
+- Clique em "Gerar Áudio"
+- Ouça o resultado antes de usar com clientes
+
+### Aba 3 — Imagem IA
+Teste geração de imagens para campanhas:
+- Digite o prompt descritivo
+- Clique em "Gerar Imagem"
+- Veja o resultado e ajuste o prompt se necessário
+
+### Aba 4 — Webhooks
+Teste seus webhooks outbound:
+- Lista todos os webhooks configurados
+- Clique em "Testar" para enviar um payload de teste
+- Veja o status da resposta e o corpo retornado
+
+### Aba 5 — WhatsApp
+Teste o envio de mensagens pelo WhatsApp:
+- Digite o número (com DDI: 5511999999999)
+- Digite a mensagem de teste
+- Clique em "Enviar Teste"
+- Confirma que a integração está funcionando
+
+---
+
+## ⚙️ 12. Configurações
+
+### 12.1 — WhatsApp
+
+**Z-API (Recomendado para produção):**
+1. Crie uma conta em z-api.io
+2. Em Configurações → WhatsApp, selecione "Z-API"
+3. Insira a URL da instância e o Token de segurança
+4. Clique em "Salvar" e depois em "Testar Conexão"
+
+**Baileys (Gratuito, para desenvolvimento):**
+1. Em Configurações → WhatsApp, selecione "Baileys"
+2. Clique em "Conectar"
+3. Escaneie o QR code com o celular que vai receber as mensagens
+4. Aguarde a confirmação "Conectado!"
+5. ⚠️ A conexão Baileys é reiniciada com o servidor. Para manter estável, use Z-API em produção.
+
+### 12.2 — Email (SMTP)
+Configure para enviar emails automáticos:
+1. Acesse Configurações → Email
+2. Preencha: Servidor SMTP, porta, usuário e senha
+3. Clique em "Testar Conexão" para validar
+
+### 12.3 — Telegram
+1. Crie um bot em @BotFather no Telegram
+2. Copie o token gerado
+3. Em Configurações → Telegram, insira o token
+4. Clique em "Salvar" e depois em "Registrar Webhook"
+
+### 12.4 — Instagram
+1. Configure um app no Meta Business
+2. Em Configurações → Instagram, insira o Token de Acesso
+3. Configure o webhook no painel Meta apontando para sua URL
+
+### 12.5 — OpenAI
+1. Acesse platform.openai.com e crie uma API Key
+2. Em Configurações → OpenAI, insira a chave
+3. Todos os recursos de IA (agentes, intenção, campanhas) passam a usar
+
+---
+
+## 🎨 13. Branding — White-Label
+
+**O que é:** Customize a aparência do sistema para parecer 100% sua plataforma, com sua marca e suas cores.
+
+### Como personalizar:
+1. Acesse **Configurações → Branding**
+2. Preencha:
+   - **Nome da Empresa**: Aparece no header e login
+   - **Cor Primária**: Cor principal dos botões e destaques (ex: #00A86B)
+   - **Cor Secundária**: Cor secundária de contraste (ex: #1B3A57)
+   - **Logo**: URL da imagem do logo (192x192 recomendado)
+   - **Favicon**: Ícone da aba do navegador
+   - **SLA Padrão**: Tempo (em minutos) para alertar sobre resposta atrasada
+3. Clique em "Salvar" — as mudanças aparecem em tempo real
+
+### 🎯 Cenário: Agência de Marketing Revendendo o Quanta Flow
+```
+Antes: Sistema aparece como "Quanta Flow"
+Depois da configuração:
+  Nome: "AgênciaX — CRM Inteligente"
+  Logo: logo da AgênciaX
+  Cor primária: #FF6B35 (laranja da agência)
+  
+→ Cliente da agência vê o sistema 100% como marca própria
+```
+
+---
+
+## 👤 14. Usuários e Permissões (RBAC)
+
+**O que é:** Controle granular de quem pode acessar o quê na plataforma. Ideal para equipes com diferentes funções.
+
+### Níveis de Acesso:
+
+| Função | O que pode fazer |
+|--------|-----------------|
+| **Super Admin** | Tudo — configurações, usuários, branding, permissões |
+| **Admin** | Gerencia campanhas, fluxos, agentes, relatórios |
+| **Usuário** | Acessa Inbox, CRM, responde mensagens |
+
+### Como adicionar um colaborador:
+1. Acesse **Configurações → Usuários**
+2. Clique em **Convidar Usuário**
+3. Preencha nome, email e senha temporária
+4. Selecione o papel (Super Admin / Admin / Usuário)
+5. Clique em **Criar**
+
+### 📋 Permissões disponíveis (18 no total):
+- Ver, criar, editar, deletar leads
+- Ver, enviar, gerenciar mensagens
+- Gerenciar automações, campanhas, agentes
+- Acessar configurações e relatórios
+- Gerenciar usuários e permissões
+
+### 🎯 Cenário — Time de Vendas:
+```
+Gerente Comercial (Admin):
+→ Cria fluxos e campanhas
+→ Acessa relatórios completos
+→ Gerencia agentes IA
+
+Atendente Ana (Usuário):
+→ Responde no Inbox
+→ Move leads no CRM
+→ Não acessa configurações ou campanhas
+
+→ Cada um vê apenas o que precisa
+→ Sem risco de configurações erradas
+```
+
+---
+
+## 🚀 15. Guia de Início Rápido (30 Minutos para Funcionar)
+
+### Passo 1 — Configurar WhatsApp (10 min)
+```
+Configurações → WhatsApp → Escolha Z-API ou Baileys → Conectar
+```
+
+### Passo 2 — Criar seu Primeiro Agente IA (5 min)
+```
+Agentes IA → Novo Agente → Preencha nome, especialidade e system prompt
+Teste no Chat Preview antes de salvar
+```
+
+### Passo 3 — Montar Fluxo de Boas-Vindas (10 min)
+```
+Automação → Novo Fluxo → Use o template "Boas-vindas Básico"
+Palavra-chave: "oi, olá, hello"
+Blocos: [Texto: Boas-vindas] → [Agente IA] → [Resolver]
+Ative o fluxo
+```
+
+### Passo 4 — Testar no Lab (3 min)
+```
+Lab → Flow Sim → Selecione o fluxo → Iniciar Conversa
+Digite "oi" e veja a magia acontecer!
+```
+
+### Passo 5 — Ativar para Clientes Reais (2 min)
+```
+Automação → Clique no toggle do fluxo → Ativo!
+Agora qualquer mensagem que chegar será atendida automaticamente 24/7
+```
+
+---
+
+## 💡 16. Dicas de Ouro
+
+### ✅ Boas Práticas
+
+**1. Teste sempre no Lab antes de ativar**
+Nunca ative um fluxo sem testá-lo pelo Simulador de Conversa. Identifique bugs antes que seus clientes os encontrem.
+
+**2. Seja específico no System Prompt do Agente IA**
+Quanto mais detalhado o prompt, melhor o agente responde. Inclua: tom de voz, o que pode e não pode dizer, preços atualizados, horário de funcionamento.
+
+**3. Segmente bem suas campanhas**
+Não mande promoção de iPhone para quem está procurando Samsung. Use os filtros de temperatura e estágio para personalizar.
+
+**4. Configure SLA de acordo com sua operação**
+Se você responde em até 1 hora, configure SLA de 60 minutos. Assim você é alertado antes de perder o prazo.
+
+**5. Use variáveis nas mensagens**
+Em vez de "Olá!", use "Olá, {nome}!" — o sistema substitui automaticamente pelo nome do lead.
+
+**6. Monitore o Dashboard diariamente**
+Leads "quentes" com alta pontuação merecem atenção imediata. Não deixe esfriar!
+
+### ❌ Erros Comuns a Evitar
+
+- Criar fluxos sem testar e enviar mensagens erradas para clientes
+- Usar System Prompt vago ("seja útil") sem especificar o contexto
+- Disparar campanhas sem segmentação (spam gera bloqueios)
+- Ignorar o timer de SLA vermelho no Inbox
+- Não configurar palavras-chave nos fluxos (fluxo nunca ativa)
+
+---
+
+## 📞 Suporte
 
 **Precisa de ajuda?**
 - 📧 Email: support@quantaflow.com
-- 💬 WhatsApp: (11) 9XXXX-XXXX
-- 📚 Documentação: /admin/documentation
+- 📚 Documentação online: `/admin/documentation`
+- 🧪 Teste seus fluxos: `/admin/lab`
 
 ---
 
-**Boa sorte vendendo! 🚀 Quanta Flow + Você = Máximo de Vendas!**
+**Boa sorte! O Quanta Flow está pronto para trabalhar por você 24 horas por dia. 🚀**
 
-*Lembre-se: Automação não substitui relacionamento. Use o Quanta para economizar tempo com tarefas repetitivas e focar em relacionamentos que importam.*
-
----
-
-## 🎓 Próximos Passos Recomendados
-
-1. **Criar seu primeiro agente IA** (5 minutos)
-2. **Montar fluxo "Bem-vindo"** (10 minutos)
-3. **Conectar seu WhatsApp** (15 minutos)
-4. **Testar tudo no Laboratório** (5 minutos)
-5. **Ativar para clientes reais** (Let's go! 🚀)
-
+*Automatize o repetitivo. Foque no que importa: relacionamentos.*

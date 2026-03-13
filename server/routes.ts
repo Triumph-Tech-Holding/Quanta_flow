@@ -3098,6 +3098,22 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   // ==================== Documentation ====================
 
+  app.get("/api/documentation/manual-md", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const manualPath = path.join(process.cwd(), "MANUAL_DE_USO.md");
+      if (!fs.existsSync(manualPath)) {
+        return res.status(404).json({ message: "Manual não encontrado" });
+      }
+      const content = fs.readFileSync(manualPath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      console.error("[GET /api/documentation/manual-md]", err);
+      res.status(500).json({ message: "Erro ao carregar manual" });
+    }
+  });
+
   app.get("/api/documentation/manual-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
