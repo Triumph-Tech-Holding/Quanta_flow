@@ -3417,12 +3417,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
       const provider = await getWhatsAppProvider(req.user.userId);
       const result = await provider.sendMessage(phone, message);
-      if (result.success) {
-        res.json({ success: true, message: `Mensagem enviada para ${phone} com sucesso!` });
-      } else {
-        const errorResult = result as { success: false; error?: string };
-        res.json({ success: false, message: errorResult.error || "Falha ao enviar. Verifique a integração WhatsApp em Configurações." });
-      }
+      res.json({ success: true, message: `Mensagem enviada para ${phone} com sucesso! (ID: ${result.messageId})` });
     } catch (err: unknown) {
       console.error("[POST /api/admin/lab/test-whatsapp]", err);
       const errMsg = err instanceof Error ? err.message : "Verifique a integração WhatsApp em Configurações.";
