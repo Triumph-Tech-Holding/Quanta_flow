@@ -289,7 +289,8 @@ export default function SettingsPage() {
     message: string;
   }>({
     queryKey: ["/api/whatsapp-local/qrcode"],
-    refetchInterval: providerData?.activeProvider === "baileys" && !qrData?.connected ? 3000 : false,
+    refetchInterval: (query) =>
+      providerData?.activeProvider === "baileys" && !query.state.data?.connected ? 3000 : false,
     enabled: providerData?.activeProvider === "baileys",
   });
 
