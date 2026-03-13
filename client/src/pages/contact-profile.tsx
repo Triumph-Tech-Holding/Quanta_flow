@@ -31,6 +31,7 @@ import {
   Clock,
   TrendingUp,
   User,
+  Zap,
 } from "lucide-react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -383,6 +384,8 @@ export default function ContactProfile() {
   const [editNotes, setEditNotes] = useState("");
   const [notesInitialized, setNotesInitialized] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFlowModal, setShowFlowModal] = useState(false);
+  const [selectedFlowId, setSelectedFlowId] = useState<string>("");
 
   const contactQuery = useQuery<ContactDetail>({
     queryKey: ["/api/crm/contacts", contactId],
@@ -454,6 +457,26 @@ export default function ContactProfile() {
 
   const agentsQuery = useQuery<Agent[]>({
     queryKey: ["/api/users/agents"],
+  });
+
+  const flowsQuery = useQuery<Array<{ id: string; name: string; isActive: boolean }>>({
+    queryKey: ["/api/automation-flows"],
+    select: (data) => data.filter((f: { isActive: boolean }) => f.isActive),
+  });
+
+  const triggerFlowMutation = useMutation({
+    mutationFn: async (flowId: string) => {
+      await apiRequest("POST", `/api/crm/contacts/${contactId}/trigger-flow`, { flowId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts", contactId] });
+      setShowFlowModal(false);
+      setSelectedFlowId("");
+      toast({ title: "Fluxo enviado com sucesso", description: "O contato entrará no fluxo na próxima mensagem." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao enviar fluxo", description: error.message, variant: "destructive" });
+    },
   });
 
   const assignMutation = useMutation({
@@ -575,15 +598,26 @@ export default function ContactProfile() {
                       </div>
                     </div>
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    data-testid="button-delete-contact"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Excluir
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFlowModal(true)}
+                      data-testid="button-trigger-flow"
+                    >
+                      <Zap className="h-4 w-4 mr-1" />
+                      Enviar Fluxo
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      data-testid="button-delete-contact"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Excluir
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-3">
@@ -860,6 +894,54 @@ export default function ContactProfile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showFlowModal} onOpenChange={setShowFlowModal}>
+        <DialogContent data-testid="dialog-trigger-flow">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" /> Enviar Fluxo para {contact?.nome}
+            </DialogTitle>
+            <DialogDescription>
+              Selecione um fluxo ativo para enviar a este contato. Na próxima mensagem, ele entrará no fluxo automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {flowsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Carregando fluxos...</p>
+            ) : !flowsQuery.data?.length ? (
+              <p className="text-sm text-muted-foreground">Nenhum fluxo ativo encontrado. Crie e ative um fluxo primeiro.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {flowsQuery.data.map((flow) => (
+                  <button
+                    key={flow.id}
+                    onClick={() => setSelectedFlowId(flow.id)}
+                    data-testid={`select-flow-${flow.id}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedFlowId === flow.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap className={`h-4 w-4 ${selectedFlowId === flow.id ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-sm font-medium">{flow.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowFlowModal(false); setSelectedFlowId(""); }}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => triggerFlowMutation.mutate(selectedFlowId)}
+              disabled={!selectedFlowId || triggerFlowMutation.isPending}
+              data-testid="button-confirm-trigger-flow"
+            >
+              {triggerFlowMutation.isPending ? "Enviando..." : "Enviar Fluxo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

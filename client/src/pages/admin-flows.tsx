@@ -36,8 +36,9 @@ import "@xyflow/react/dist/style.css";
 import {
   Plus, Pencil, Trash2, Loader2, Zap, Download, Upload, Sparkles,
   MessageSquare, Music, Image, Clock, GitBranch, Bot, Webhook,
-  Users, CheckCircle, BarChart3, Copy, LayoutGrid, ArrowLeft,
+  Users, CheckCircle, BarChart3, Copy, LayoutGrid, ArrowLeft, Share2, Link as LinkIcon,
 } from "lucide-react";
+import QRCode from "react-qr-code";
 
 interface FlowBlock {
   id: string;
@@ -59,6 +60,7 @@ interface AutomationFlow {
   blocks: FlowBlock[] | null;
   thumbnail: string | null;
   agentId: string | null;
+  shareToken: string | null;
   createdAt: string;
 }
 
@@ -199,6 +201,8 @@ function AdminFlowsInner() {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareFlow, setShareFlow] = useState<AutomationFlow | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -766,6 +770,9 @@ function AdminFlowsInner() {
                           <Button size="sm" variant="ghost" onClick={() => exportFlow(flow)} data-testid={`button-export-flow-${flow.id}`}>
                             <Download className="h-3 w-3" />
                           </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setShareFlow(flow); setShareModalOpen(true); }} data-testid={`button-share-flow-${flow.id}`} title="Compartilhar link / QR Code">
+                            <Share2 className="h-3 w-3" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteMutation.mutate(flow.id)} data-testid={`button-delete-flow-${flow.id}`}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -797,6 +804,56 @@ function AdminFlowsInner() {
               <Upload className="h-4 w-4 mr-1" /> Importar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" /> Compartilhar Fluxo
+            </DialogTitle>
+          </DialogHeader>
+          {shareFlow && (() => {
+            const url = `${window.location.origin}/f/${shareFlow.shareToken}`;
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Qualquer pessoa com este link pode se inscrever no fluxo <strong>{shareFlow.name}</strong>.
+                </p>
+                <div className="flex justify-center p-4 bg-white rounded-lg border">
+                  <QRCode value={url} size={180} id={`qr-svg-flow-${shareFlow.id}`} data-testid="qr-code-flow" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input value={url} readOnly className="text-xs font-mono" data-testid="input-share-url-flow" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); }}
+                    data-testid="button-copy-share-url-flow"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    const svg = document.getElementById(`qr-svg-flow-${shareFlow.id}`) as SVGElement | null;
+                    if (!svg) return;
+                    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `qr-${shareFlow.name.replace(/\s+/g, "-")}.svg`;
+                    a.click();
+                  }}
+                  data-testid="button-download-qr-flow"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Baixar QR Code (SVG)
+                </Button>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </SidebarProvider>

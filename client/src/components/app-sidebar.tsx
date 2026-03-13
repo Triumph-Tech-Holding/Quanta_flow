@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Inbox,
@@ -10,6 +11,7 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  ChevronRight,
   Shield,
   ScrollText,
   Palette,
@@ -21,6 +23,7 @@ import {
   Zap,
   Megaphone,
   FlaskConical,
+  Cpu,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -35,8 +38,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -157,6 +164,9 @@ const adminMenuItems = [
     icon: BookOpen,
     permission: "edit_settings",
   },
+];
+
+const automationSubItems = [
   {
     title: "Agentes IA",
     url: "/admin/agents",
@@ -164,7 +174,7 @@ const adminMenuItems = [
     permission: "edit_settings",
   },
   {
-    title: "Flow Builder",
+    title: "Fluxos",
     url: "/admin/flows",
     icon: Zap,
     permission: "edit_settings",
@@ -182,6 +192,8 @@ const adminMenuItems = [
     permission: "edit_settings",
   },
 ];
+
+const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns", "/admin/lab"];
 
 function getInitials(name: string) {
   return name
@@ -219,6 +231,9 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout, hasPermission, hasRole } = useAuth();
 
+  const isAutomationActive = AUTOMATION_URLS.some((url) => location.startsWith(url));
+  const [automationOpen, setAutomationOpen] = useState(isAutomationActive);
+
   const { data: branding } = useQuery<BrandingData>({
     queryKey: ["/api/branding"],
   });
@@ -230,6 +245,9 @@ export function AppSidebar() {
 
   const isAdmin = user?.tipoAtor === "admin" || hasRole("super_admin") || hasRole("admin");
   const visibleAdminItems = adminMenuItems.filter(
+    (item) => hasPermission(item.permission) || isAdmin
+  );
+  const visibleAutomationItems = automationSubItems.filter(
     (item) => hasPermission(item.permission) || isAdmin
   );
 
@@ -322,7 +340,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {visibleAdminItems.length > 0 && (
+        {(visibleAdminItems.length > 0 || visibleAutomationItems.length > 0) && (
           <>
             <SidebarSeparator />
             <SidebarGroup>
@@ -343,6 +361,44 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+
+                  {visibleAutomationItems.length > 0 && (
+                    <SidebarMenuItem>
+                      <Collapsible open={automationOpen} onOpenChange={setAutomationOpen}>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            isActive={isAutomationActive}
+                            data-testid="nav-admin-automacao"
+                            className="w-full"
+                          >
+                            <Cpu className="h-4 w-4" />
+                            <span>Automação</span>
+                            <ChevronRight
+                              className={`ml-auto h-4 w-4 transition-transform duration-200 ${automationOpen ? "rotate-90" : ""}`}
+                            />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {visibleAutomationItems.map((sub) => (
+                              <SidebarMenuSubItem key={sub.title}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={location === sub.url}
+                                  data-testid={`nav-admin-${sub.title.toLowerCase().replace(/\s/g, "-")}`}
+                                >
+                                  <Link href={sub.url}>
+                                    <sub.icon className="h-4 w-4" />
+                                    <span>{sub.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

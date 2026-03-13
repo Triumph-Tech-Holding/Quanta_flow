@@ -28,6 +28,8 @@ import AdminAgents from "@/pages/admin-agents";
 import AdminFlows from "@/pages/admin-flows";
 import AdminCampaigns from "@/pages/admin-campaigns";
 import AdminLab from "@/pages/admin-lab";
+import FlowPublicEnroll from "@/pages/flow-public-enroll";
+import CampaignPublicEnroll from "@/pages/campaign-public-enroll";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -145,6 +147,8 @@ function Router() {
       <Route path="/admin/lab">
         <ProtectedRoute component={AdminLab} />
       </Route>
+      <Route path="/f/:token" component={FlowPublicEnroll} />
+      <Route path="/c/:token" component={CampaignPublicEnroll} />
       <Route component={NotFound} />
     </Switch>
   );

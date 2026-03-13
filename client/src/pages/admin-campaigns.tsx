@@ -15,9 +15,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import QRCode from "react-qr-code";
 import {
   Plus, Megaphone, Play, Pause, Trash2, BarChart3, Eye,
-  Send, Users, CheckCircle, XCircle, MessageSquare,
+  Send, Users, CheckCircle, XCircle, MessageSquare, Share2, Copy, Download,
   Sparkles, FileText, ChevronRight, ChevronLeft, Clock,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ type Campaign = {
   id: string;
   name: string;
   description: string | null;
+  shareToken: string | null;
   status: "draft" | "scheduled" | "running" | "paused" | "completed";
   contentType: "single" | "sequence" | "agent";
   channels: string[];
@@ -80,6 +82,8 @@ export default function AdminCampaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [shareCampaign, setShareCampaign] = useState<Campaign | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -336,6 +340,15 @@ export default function AdminCampaigns() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { setShareCampaign(campaign); setShareModalOpen(true); }}
+                              data-testid={`button-share-${campaign.id}`}
+                              title="Compartilhar link / QR Code"
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -1037,6 +1050,59 @@ export default function AdminCampaigns() {
           </Dialog>
         </main>
       </div>
+
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" /> Compartilhar Campanha
+            </DialogTitle>
+            <DialogDescription>
+              Compartilhe o link para inscrição nesta campanha
+            </DialogDescription>
+          </DialogHeader>
+          {shareCampaign && (() => {
+            const url = `${window.location.origin}/c/${shareCampaign.shareToken}`;
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Qualquer pessoa com este link pode se inscrever na campanha <strong>{shareCampaign.name}</strong>.
+                </p>
+                <div className="flex justify-center p-4 bg-white rounded-lg border">
+                  <QRCode value={url} size={180} id={`qr-svg-campaign-${shareCampaign.id}`} data-testid="qr-code-campaign" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input value={url} readOnly className="text-xs font-mono" data-testid="input-share-url-campaign" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); }}
+                    data-testid="button-copy-share-url-campaign"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    const svg = document.getElementById(`qr-svg-campaign-${shareCampaign.id}`) as SVGElement | null;
+                    if (!svg) return;
+                    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `qr-${shareCampaign.name.replace(/\s+/g, "-")}.svg`;
+                    a.click();
+                  }}
+                  data-testid="button-download-qr-campaign"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Baixar QR Code (SVG)
+                </Button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

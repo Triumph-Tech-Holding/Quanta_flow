@@ -219,6 +219,88 @@ export async function registerRoutes(
     });
   });
 
+  // ==================== PUBLIC ROUTES (no auth) ====================
+
+  app.get("/api/public/flow/:token", async (req: Request, res: Response) => {
+    try {
+      const flow = await storage.getFlowByShareToken(req.params.token);
+      if (!flow) return res.status(404).json({ message: "Fluxo não encontrado" });
+      res.json({ id: flow.id, name: flow.name, description: flow.initialMessage || "", isActive: flow.isActive });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar fluxo" });
+    }
+  });
+
+  app.post("/api/public/flow/:token/enroll", async (req: Request, res: Response) => {
+    try {
+      const flow = await storage.getFlowByShareToken(req.params.token);
+      if (!flow) return res.status(404).json({ message: "Fluxo não encontrado" });
+      if (!flow.isActive) return res.status(400).json({ message: "Fluxo inativo" });
+      const { name, phone } = req.body;
+      if (!phone) return res.status(400).json({ message: "Telefone é obrigatório" });
+      let contact = await storage.findUnifiedContactByPhoneOrEmail(flow.userId, phone);
+      if (!contact) {
+        contact = await storage.createUnifiedContact({
+          userId: flow.userId,
+          nome: name || phone,
+          telefone: phone,
+          channel: "whatsapp",
+          activeFlowId: flow.id,
+        });
+      } else {
+        await storage.updateUnifiedContact(contact.id, { activeFlowId: flow.id });
+      }
+      res.json({ success: true, message: "Inscrito com sucesso" });
+    } catch (error) {
+      console.error("Error enrolling in flow:", error);
+      res.status(500).json({ message: "Erro ao inscrever no fluxo" });
+    }
+  });
+
+  app.get("/api/public/campaign/:token", async (req: Request, res: Response) => {
+    try {
+      const campaign = await storage.getCampaignByShareToken(req.params.token);
+      if (!campaign) return res.status(404).json({ message: "Campanha não encontrada" });
+      res.json({ id: campaign.id, name: campaign.name, description: campaign.description || "", status: campaign.status });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar campanha" });
+    }
+  });
+
+  app.post("/api/public/campaign/:token/enroll", async (req: Request, res: Response) => {
+    try {
+      const campaign = await storage.getCampaignByShareToken(req.params.token);
+      if (!campaign) return res.status(404).json({ message: "Campanha não encontrada" });
+      if (campaign.status === "completed") return res.status(400).json({ message: "Campanha encerrada" });
+      const { name, phone } = req.body;
+      if (!phone) return res.status(400).json({ message: "Telefone é obrigatório" });
+      let contact = await storage.findUnifiedContactByPhoneOrEmail(campaign.userId, phone);
+      if (!contact) {
+        contact = await storage.createUnifiedContact({
+          userId: campaign.userId,
+          nome: name || phone,
+          telefone: phone,
+          channel: "whatsapp",
+        });
+      }
+      const { db } = await import("./db");
+      const { campaignDeliveries } = await import("@shared/schema");
+      const { v4: uuidv4 } = await import("uuid");
+      await db.insert(campaignDeliveries).values({
+        id: uuidv4(),
+        campaignId: campaign.id,
+        contactId: contact.id,
+        channel: "whatsapp",
+        status: "pending",
+        messageIndex: 0,
+      }).onConflictDoNothing();
+      res.json({ success: true, message: "Inscrito na campanha com sucesso" });
+    } catch (error) {
+      console.error("Error enrolling in campaign:", error);
+      res.status(500).json({ message: "Erro ao inscrever na campanha" });
+    }
+  });
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
@@ -1575,6 +1657,27 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get messages error:", error);
       res.status(500).json({ message: "Erro ao buscar mensagens" });
+    }
+  });
+
+  app.post("/api/crm/contacts/:id/trigger-flow", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const contact = await storage.getUnifiedContact(req.params.id as string);
+      if (!contact || contact.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      const { flowId } = req.body;
+      if (!flowId) return res.status(400).json({ message: "flowId é obrigatório" });
+      const flow = await storage.getAutomationFlow(flowId);
+      if (!flow || flow.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Fluxo não encontrado" });
+      }
+      if (!flow.isActive) return res.status(400).json({ message: "Fluxo inativo" });
+      await storage.updateUnifiedContact(contact.id, { activeFlowId: flow.id });
+      res.json({ success: true, message: `Fluxo "${flow.name}" enviado para ${contact.nome}` });
+    } catch (error) {
+      console.error("Error triggering flow:", error);
+      res.status(500).json({ message: "Erro ao enviar fluxo" });
     }
   });
 

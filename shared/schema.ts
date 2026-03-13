@@ -459,6 +459,7 @@ export const automationFlows = pgTable("automation_flows", {
   agentId: varchar("agent_id", { length: 36 }),
   blocks: jsonb("blocks").$type<FlowBlock[]>(),
   thumbnail: text("thumbnail"),
+  shareToken: varchar("share_token", { length: 36 }).unique().default(sql`gen_random_uuid()`),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -869,6 +870,7 @@ export const campaigns = pgTable("campaigns", {
   failedCount: integer("failed_count").default(0),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  shareToken: varchar("share_token", { length: 36 }).unique().default(sql`gen_random_uuid()`),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

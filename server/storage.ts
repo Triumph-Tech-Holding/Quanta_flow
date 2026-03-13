@@ -92,6 +92,7 @@ export interface IStorage {
   // Automation Flows
   getAutomationFlowsByUser(userId: string): Promise<AutomationFlow[]>;
   getAutomationFlow(id: string): Promise<AutomationFlow | undefined>;
+  getFlowByShareToken(token: string): Promise<AutomationFlow | undefined>;
   createAutomationFlow(data: InsertAutomationFlow): Promise<AutomationFlow>;
   updateAutomationFlow(id: string, data: UpdateAutomationFlow): Promise<AutomationFlow | undefined>;
   deleteAutomationFlow(id: string): Promise<boolean>;
@@ -117,6 +118,7 @@ export interface IStorage {
   // Campaigns
   getCampaignsByUser(userId: string): Promise<Campaign[]>;
   getCampaign(id: string): Promise<Campaign | undefined>;
+  getCampaignByShareToken(token: string): Promise<Campaign | undefined>;
   createCampaign(data: InsertCampaign): Promise<Campaign>;
   updateCampaign(id: string, data: UpdateCampaign): Promise<Campaign | undefined>;
   deleteCampaign(id: string): Promise<boolean>;
@@ -487,6 +489,12 @@ export class DatabaseStorage implements IStorage {
   async getAutomationFlow(id: string): Promise<AutomationFlow | undefined> {
     const [flow] = await db.select().from(automationFlows)
       .where(eq(automationFlows.id, id)).limit(1);
+    return flow;
+  }
+
+  async getFlowByShareToken(token: string): Promise<AutomationFlow | undefined> {
+    const [flow] = await db.select().from(automationFlows)
+      .where(eq(automationFlows.shareToken, token)).limit(1);
     return flow;
   }
 
@@ -881,6 +889,11 @@ export class DatabaseStorage implements IStorage {
 
   async getCampaign(id: string): Promise<Campaign | undefined> {
     const [c] = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
+    return c;
+  }
+
+  async getCampaignByShareToken(token: string): Promise<Campaign | undefined> {
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.shareToken, token)).limit(1);
     return c;
   }
 
