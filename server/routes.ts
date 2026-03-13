@@ -3089,6 +3089,70 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // ==================== Documentation ====================
+
+  app.get("/api/documentation/manual-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      const PDFDocument = require("pdfkit");
+      const fs = require("fs");
+      const path = require("path");
+
+      const manualPath = path.join(process.cwd(), "MANUAL_DE_USO.md");
+      if (!fs.existsSync(manualPath)) {
+        return res.status(404).json({ message: "Manual não encontrado" });
+      }
+
+      const manualContent = fs.readFileSync(manualPath, "utf-8");
+
+      const doc = new PDFDocument({
+        size: "A4",
+        margin: 50,
+        font: "Courier",
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", 'attachment; filename="QUANTA_FLOW_Manual_Completo.pdf"');
+
+      doc.pipe(res);
+
+      doc.font("Courier", 16).text("QUANTA FLOW - Manual de Uso", { align: "center" });
+      doc.moveDown(0.5);
+      doc.font("Courier", 10).text("Guia Didático Completo", { align: "center" });
+      doc.moveDown(1);
+
+      const lines = manualContent.split("\n");
+      let currentFontSize = 10;
+
+      for (const line of lines) {
+        if (line.startsWith("# ")) {
+          doc.font("Courier", 14).text(line.replace("# ", ""));
+          doc.moveDown(0.3);
+        } else if (line.startsWith("## ")) {
+          doc.font("Courier", 12).text(line.replace("## ", ""));
+          doc.moveDown(0.2);
+        } else if (line.startsWith("### ")) {
+          doc.font("Courier", 11).text(line.replace("### ", ""));
+          doc.moveDown(0.2);
+        } else if (line.trim() === "") {
+          doc.moveDown(0.2);
+        } else {
+          doc.font("Courier", 9).text(line, { align: "left", width: 500 });
+        }
+
+        if (doc.y > 750) {
+          doc.addPage();
+        }
+      }
+
+      doc.end();
+    } catch (err) {
+      console.error("[GET /api/documentation/manual-pdf]", err);
+      res.status(500).json({ message: "Erro ao gerar PDF" });
+    }
+  });
+
   // ==================== Lab / Testing ====================
 
   app.post("/api/admin/lab/simulate-chat", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {

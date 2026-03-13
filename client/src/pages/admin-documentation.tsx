@@ -31,7 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Download, Plus, Trash2, Eye } from "lucide-react";
+import { Download, Plus, Trash2, Eye, FileText, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const createDocSchema = z.object({
@@ -138,6 +138,8 @@ export default function AdminDocumentation() {
     },
   });
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const handleDownload = (doc: DocumentationVersion) => {
     const element = document.createElement("a");
     const file = new Blob([doc.content], { type: "text/markdown" });
@@ -146,6 +148,35 @@ export default function AdminDocumentation() {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+  };
+
+  const handleDownloadUserManualPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      const response = await fetch("/api/documentation/manual-pdf", {
+        method: "GET",
+      });
+      
+      if (!response.ok) throw new Error("Erro ao gerar PDF");
+      
+      const blob = await response.blob();
+      const element = document.createElement("a");
+      element.href = URL.createObjectURL(blob);
+      element.download = "QUANTA_FLOW_Manual_Completo.pdf";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      
+      toast({ title: "Manual baixado com sucesso!" });
+    } catch (err) {
+      toast({ 
+        title: "Erro ao baixar PDF", 
+        description: err instanceof Error ? err.message : "Tente novamente",
+        variant: "destructive" 
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
@@ -228,6 +259,39 @@ export default function AdminDocumentation() {
       </div>
 
       <UserGuide />
+
+      <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <div>
+                <CardTitle className="text-green-900 dark:text-green-100">📖 Manual de Uso Completo</CardTitle>
+                <CardDescription className="text-green-700 dark:text-green-300">
+                  Guia didático com exemplos práticos para usar todas as funcionalidades
+                </CardDescription>
+              </div>
+            </div>
+            <Button 
+              onClick={handleDownloadUserManualPdf}
+              disabled={downloadingPdf}
+              className="gap-2 bg-green-600 hover:bg-green-700"
+            >
+              {downloadingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Baixar PDF
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
 
       <Tabs defaultValue="versions" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
