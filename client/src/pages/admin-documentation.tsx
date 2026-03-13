@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Card,
   CardContent,
@@ -250,8 +253,7 @@ export default function AdminDocumentation() {
     queryKey: ["/api/documentation/manual-md"],
     enabled: showGuide,
     queryFn: async () => {
-      const res = await fetch("/api/documentation/manual-md");
-      if (!res.ok) throw new Error("Erro ao carregar manual");
+      const res = await apiRequest("GET", "/api/documentation/manual-md");
       return res.text();
     },
   });
@@ -303,7 +305,7 @@ export default function AdminDocumentation() {
   const handleDownloadUserManualPdf = async () => {
     try {
       setDownloadingPdf(true);
-      const response = await fetch("/api/documentation/manual-pdf", { method: "GET" });
+      const response = await apiRequest("GET", "/api/documentation/manual-pdf");
       if (!response.ok) throw new Error("Erro ao gerar PDF");
       const blob = await response.blob();
       const element = document.createElement("a");
@@ -324,7 +326,21 @@ export default function AdminDocumentation() {
     }
   };
 
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  } as React.CSSProperties;
+
   return (
+    <SidebarProvider style={sidebarStyle}>
+      <div className="flex min-h-screen w-full">
+        <AppSidebar />
+        <SidebarInset className="flex flex-col flex-1">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 p-6">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -627,5 +643,9 @@ export default function AdminDocumentation() {
         )}
       </Dialog>
     </div>
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }
