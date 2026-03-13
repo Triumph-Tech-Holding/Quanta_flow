@@ -20,6 +20,7 @@ import {
   BookOpen,
   Zap,
   Megaphone,
+  FlaskConical,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -172,6 +173,12 @@ const adminMenuItems = [
     title: "Campanhas",
     url: "/admin/campaigns",
     icon: Megaphone,
+    permission: "edit_settings",
+  },
+  {
+    title: "Laboratório",
+    url: "/admin/lab",
+    icon: FlaskConical,
     permission: "edit_settings",
   },
 ];

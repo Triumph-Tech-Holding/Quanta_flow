@@ -27,6 +27,7 @@ import AdminDocumentation from "@/pages/admin-documentation";
 import AdminAgents from "@/pages/admin-agents";
 import AdminFlows from "@/pages/admin-flows";
 import AdminCampaigns from "@/pages/admin-campaigns";
+import AdminLab from "@/pages/admin-lab";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -140,6 +141,9 @@ function Router() {
       </Route>
       <Route path="/admin/campaigns">
         <ProtectedRoute component={AdminCampaigns} />
+      </Route>
+      <Route path="/admin/lab">
+        <ProtectedRoute component={AdminLab} />
       </Route>
       <Route component={NotFound} />
     </Switch>

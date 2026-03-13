@@ -3089,6 +3089,35 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // ==================== Lab / Testing ====================
+
+  app.post("/api/admin/lab/simulate-chat", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { agentId, userMessage, channel } = req.body;
+      if (!agentId || !userMessage) return res.status(400).json({ message: "agentId e userMessage são obrigatórios" });
+
+      const agent = await storage.getAiAgent(agentId);
+      if (!agent) return res.status(404).json({ message: "Agente não encontrado" });
+
+      const completion = await agentOpenai.chat.completions.create({
+        model: agent.model || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: agent.systemPrompt || "You are a helpful assistant." },
+          { role: "user", content: userMessage },
+        ],
+        temperature: agent.temperature ?? 0.7,
+        max_tokens: agent.maxTokens ?? 500,
+      });
+
+      const reply = completion.choices[0]?.message?.content || "Desculpe, não consegui processar sua mensagem.";
+      res.json({ reply });
+    } catch (err) {
+      console.error("[POST /api/admin/lab/simulate-chat]", err);
+      res.status(500).json({ message: "Erro ao processar mensagem" });
+    }
+  });
+
   // ==================== Message Templates ====================
 
   app.get("/api/admin/templates", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
