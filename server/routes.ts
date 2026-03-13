@@ -3193,6 +3193,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
       const flow = await storage.getAutomationFlow(flowId);
       if (!flow || flow.userId !== req.user.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!flow.isActive) return res.status(400).json({ message: "Fluxo inativo — ative-o antes de simular" });
 
       const vars: Record<string, string> = {
         nome: contactName || "Contato Teste",
@@ -3422,9 +3423,10 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
         const errorResult = result as { success: false; error?: string };
         res.json({ success: false, message: errorResult.error || "Falha ao enviar. Verifique a integração WhatsApp em Configurações." });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[POST /api/admin/lab/test-whatsapp]", err);
-      res.json({ success: false, message: `Erro: ${err.message || "Verifique a integração WhatsApp em Configurações."}` });
+      const errMsg = err instanceof Error ? err.message : "Verifique a integração WhatsApp em Configurações.";
+      res.json({ success: false, message: `Erro: ${errMsg}` });
     }
   });
 

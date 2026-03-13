@@ -45,6 +45,7 @@ interface OutboundWebhook {
 interface AutomationFlow {
   id: string;
   name: string;
+  isActive: boolean;
 }
 
 export default function AdminLab() {
@@ -75,9 +76,10 @@ export default function AdminLab() {
   const [wpMessage, setWpMessage] = useState("Mensagem de teste do Quanta Flow Lab 🧪");
   const [wpResult, setWpResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const { data: flows = [] } = useQuery<AutomationFlow[]>({
+  const { data: allFlows = [] } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
   });
+  const flows = allFlows.filter((f) => f.isActive);
 
   const { data: outboundWebhooks = [] } = useQuery<OutboundWebhook[]>({
     queryKey: ["/api/webhooks/outbound"],
