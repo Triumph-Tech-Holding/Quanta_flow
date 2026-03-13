@@ -3190,6 +3190,122 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  app.post("/api/admin/lab/simulate-flow-chat", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { flowId, currentBlockId, userMessage, vars: incomingVars } = req.body;
+      if (!flowId) return res.status(400).json({ message: "flowId é obrigatório" });
+
+      const flow = await storage.getAutomationFlow(flowId);
+      if (!flow || flow.userId !== req.user.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!flow.isActive) return res.status(400).json({ message: "Fluxo inativo — ative-o antes de simular" });
+
+      type FlowBlock = { id: string; type: string; config: Record<string, string | number | boolean | undefined>; nextBlockId?: string; conditionTrueId?: string; conditionFalseId?: string };
+      const blocks: FlowBlock[] = Array.isArray(flow.blocks) ? (flow.blocks as FlowBlock[]) : [];
+      if (blocks.length === 0) return res.json({ outboundMessages: [], nextBlockId: null, awaitingReply: false, done: true });
+
+      const blockMap = new Map(blocks.map((b) => [b.id, b]));
+      const targetIds = new Set<string>();
+      for (const b of blocks) {
+        if (b.nextBlockId) targetIds.add(b.nextBlockId);
+        if (b.conditionTrueId) targetIds.add(b.conditionTrueId);
+        if (b.conditionFalseId) targetIds.add(b.conditionFalseId);
+      }
+      const rootBlock = blocks.find((b) => !targetIds.has(b.id)) || blocks[0];
+      const startBlockId = currentBlockId || rootBlock.id;
+
+      const vars = incomingVars || { nome: "Teste", telefone: "11999999999", email: "teste@example.com", mensagem: userMessage || "" };
+      if (userMessage) vars.mensagem = userMessage;
+      const interpolate = (text: string) => text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`);
+
+      const outboundMessages: Array<{ role: "bot"; type: string; content: string }> = [];
+      let blockId: string | null = startBlockId;
+      const visited = new Set<string>();
+      const MAX_STEPS = 50;
+      let steps = 0;
+      const msgLow = (vars.mensagem || "").toLowerCase();
+
+      while (blockId && steps++ < MAX_STEPS) {
+        if (visited.has(blockId)) break;
+        visited.add(blockId);
+
+        const block = blockMap.get(blockId);
+        if (!block) break;
+        const cfg = block.config || {};
+
+        switch (block.type) {
+          case "text": {
+            const msg = interpolate(String(cfg.message || ""));
+            outboundMessages.push({ role: "bot", type: "text", content: msg });
+            blockId = block.nextBlockId || null;
+            break;
+          }
+          case "ai_agent": {
+            const agentId = String(cfg.agentId || "");
+            const agent = agentId ? await storage.getAiAgent(agentId) : null;
+            if (agent && agent.userId === req.user.userId) {
+              try {
+                const aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+                const completion = await aiClient.chat.completions.create({
+                  model: agent.model || "gpt-4o-mini",
+                  messages: [
+                    { role: "system", content: agent.systemPrompt || "You are a helpful assistant." },
+                    { role: "user", content: vars.mensagem || "Olá" },
+                  ],
+                  temperature: agent.temperature ?? 0.7,
+                  max_tokens: agent.maxTokens ?? 500,
+                });
+                const reply = completion.choices[0]?.message?.content || "Desculpe, não consegui processar.";
+                outboundMessages.push({ role: "bot", type: "ai_agent", content: reply });
+              } catch (aiErr) {
+                outboundMessages.push({ role: "bot", type: "ai_agent", content: "[Erro ao chamar IA]" });
+              }
+            } else {
+              outboundMessages.push({ role: "bot", type: "ai_agent", content: "[Agente não configurado]" });
+            }
+            return res.json({ outboundMessages, nextBlockId: block.nextBlockId || null, awaitingReply: false, done: true });
+          }
+          case "condition": {
+            const condType = String(cfg.conditionType || "keyword");
+            const condVal = String(cfg.conditionValue || "").toLowerCase();
+            let conditionMet = false;
+            if (condType === "keyword") {
+              const keywords = condVal.split(",").map((k) => k.trim()).filter(Boolean);
+              conditionMet = keywords.some((kw) => msgLow.includes(kw));
+            }
+            blockId = conditionMet ? (block.conditionTrueId || null) : (block.conditionFalseId || null);
+            outboundMessages.push({ role: "bot", type: "condition", content: `[Condição: ${conditionMet ? "SIM" : "NÃO"}]` });
+            break;
+          }
+          case "delay": {
+            blockId = block.nextBlockId || null;
+            break;
+          }
+          case "queue_entry":
+          case "resolve": {
+            outboundMessages.push({ role: "bot", type: block.type, content: `[${block.type === "resolve" ? "Fluxo finalizado" : "Contato adicionado à fila"}]` });
+            blockId = null;
+            break;
+          }
+          case "update_lead":
+          case "webhook":
+          case "audio_tts":
+          case "image_ai": {
+            blockId = block.nextBlockId || null;
+            break;
+          }
+          default:
+            blockId = block.nextBlockId || null;
+        }
+      }
+
+      res.json({ outboundMessages, nextBlockId: blockId, awaitingReply: blockId ? true : false, done: !blockId });
+    } catch (err: unknown) {
+      console.error("[POST /api/admin/lab/simulate-flow-chat]", err);
+      res.status(500).json({ message: "Erro ao processar conversa" });
+    }
+  });
+
   app.post("/api/admin/lab/simulate-flow", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });

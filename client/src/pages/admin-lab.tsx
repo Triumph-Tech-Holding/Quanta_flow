@@ -48,14 +48,24 @@ interface AutomationFlow {
   isActive: boolean;
 }
 
+interface ChatMessage {
+  role: "user" | "bot";
+  type: string;
+  content: string;
+}
+
 export default function AdminLab() {
   const { toast } = useToast();
 
-  // --- Flow Simulator ---
+  // --- Flow Simulator Chat ---
   const [selectedFlowId, setSelectedFlowId] = useState<string>("");
   const [flowContactName, setFlowContactName] = useState("Maria Silva");
   const [flowContactPhone, setFlowContactPhone] = useState("11999999999");
-  const [flowTriggerMessage, setFlowTriggerMessage] = useState("Olá, tenho interesse!");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
+  const [chatVars, setChatVars] = useState<Record<string, string>>({});
+  const [chatInput, setChatInput] = useState("");
+  const [chatDone, setChatDone] = useState(false);
   const [flowTrace, setFlowTrace] = useState<FlowTrace[]>([]);
 
   // --- TTS ---
@@ -86,25 +96,42 @@ export default function AdminLab() {
     queryKey: ["/api/webhooks/outbound"],
   });
 
-  // Flow simulation
-  const simulateFlowMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/lab/simulate-flow", {
+  // Flow chat simulation
+  const chatMutation = useMutation({
+    mutationFn: async (msg: string) => {
+      const res = await apiRequest("POST", "/api/admin/lab/simulate-flow-chat", {
         flowId: selectedFlowId,
-        contactName: flowContactName,
-        contactPhone: flowContactPhone,
-        triggerMessage: flowTriggerMessage,
+        currentBlockId: currentBlockId,
+        userMessage: msg,
+        vars: chatVars,
       });
-      return res.json() as Promise<{ trace: FlowTrace[] }>;
+      return res.json() as Promise<{ outboundMessages: ChatMessage[]; nextBlockId: string | null; awaitingReply: boolean; done: boolean }>;
     },
     onSuccess: (data) => {
-      setFlowTrace(data.trace);
-      toast({ title: "Fluxo simulado com sucesso!" });
+      const newMessages = data.outboundMessages.map((m) => ({ ...m, role: "bot" as const }));
+      setChatHistory((prev) => [...prev, { role: "user", type: "text", content: chatInput }, ...newMessages]);
+      setCurrentBlockId(data.nextBlockId);
+      setChatDone(data.done);
+      setChatInput("");
     },
     onError: (err: Error) => {
-      toast({ title: "Erro ao simular fluxo", description: err.message, variant: "destructive" });
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
     },
   });
+
+  const initChat = () => {
+    setChatHistory([]);
+    setChatVars({ nome: flowContactName, telefone: flowContactPhone, email: "teste@example.com", mensagem: "" });
+    setCurrentBlockId(null);
+    setChatDone(false);
+    setChatInput("");
+    chatMutation.mutate("Iniciar");
+  };
+
+  const sendMessage = () => {
+    if (!chatInput.trim() || chatDone || chatMutation.isPending) return;
+    chatMutation.mutate(chatInput);
+  };
 
   // TTS generation
   const ttsMutation = useMutation({
@@ -235,103 +262,118 @@ export default function AdminLab() {
 
             {/* === FLOW SIMULATOR === */}
             <TabsContent value="flow" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
-                    Simulador de Fluxos (Dry-Run)
-                  </CardTitle>
-                  <CardDescription>
-                    Execute um fluxo sem enviar mensagens reais. Veja o trace bloco a bloco.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
-                    <SelectTrigger data-testid="select-flow">
-                      <SelectValue placeholder="Selecione um fluxo para simular" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {flows.map((flow) => (
-                        <SelectItem key={flow.id} value={flow.id}>
-                          {flow.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-4">
+                {/* Config Panel */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Configuração</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Nome do contato (fictício)</label>
+                      <label className="text-xs font-medium">Fluxo</label>
+                      <Select value={selectedFlowId} onValueChange={setSelectedFlowId} disabled={chatHistory.length > 0}>
+                        <SelectTrigger data-testid="select-flow" className="text-xs">
+                          <SelectValue placeholder="Selecione um fluxo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {flows.map((flow) => (
+                            <SelectItem key={flow.id} value={flow.id}>
+                              {flow.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Nome</label>
                       <Input
                         value={flowContactName}
                         onChange={(e) => setFlowContactName(e.target.value)}
                         placeholder="Maria Silva"
+                        className="text-xs"
+                        disabled={chatHistory.length > 0}
                         data-testid="input-flow-contact-name"
                       />
                     </div>
+
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Telefone (fictício)</label>
+                      <label className="text-xs font-medium">Telefone</label>
                       <Input
                         value={flowContactPhone}
                         onChange={(e) => setFlowContactPhone(e.target.value)}
                         placeholder="11999999999"
+                        className="text-xs"
+                        disabled={chatHistory.length > 0}
                         data-testid="input-flow-contact-phone"
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Mensagem de trigger (fictícia)</label>
-                    <Input
-                      value={flowTriggerMessage}
-                      onChange={(e) => setFlowTriggerMessage(e.target.value)}
-                      placeholder="Olá, tenho interesse!"
-                      data-testid="input-flow-trigger"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={() => simulateFlowMutation.mutate()}
-                    disabled={!selectedFlowId || simulateFlowMutation.isPending}
-                    className="w-full"
-                    data-testid="button-simulate-flow"
-                  >
-                    {simulateFlowMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {chatHistory.length === 0 ? (
+                      <Button onClick={initChat} disabled={!selectedFlowId || chatMutation.isPending} className="w-full text-xs" data-testid="button-start-chat">
+                        {chatMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <PlayCircle className="h-3 w-3 mr-1" />}
+                        Iniciar Conversa
+                      </Button>
                     ) : (
-                      <PlayCircle className="h-4 w-4 mr-2" />
+                      <Button onClick={() => { setChatHistory([]); setChatDone(false); setChatInput(""); }} variant="outline" className="w-full text-xs">
+                        Reiniciar
+                      </Button>
                     )}
-                    Simular Fluxo (Dry-Run)
-                  </Button>
+                  </CardContent>
+                </Card>
 
-                  {flowTrace.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm">Trace de Execução ({flowTrace.length} blocos):</h3>
-                      <ScrollArea className="h-64 border rounded p-2">
-                        <div className="space-y-2">
-                          {flowTrace.map((trace, idx) => (
-                            <div key={idx} className="bg-muted p-3 rounded text-sm space-y-1">
-                              <div className="flex items-center gap-2">
-                                {traceStatusIcon(trace.status)}
-                                <Badge variant="outline" className="text-xs">{trace.blockType}</Badge>
-                                <span className="font-mono text-xs text-muted-foreground">{trace.blockId}</span>
+                {/* Chat Area */}
+                <Card className="col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Simulação de Conversa</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 flex flex-col h-96">
+                    <ScrollArea className="flex-1 border rounded p-3">
+                      <div className="space-y-3">
+                        {chatHistory.length === 0 ? (
+                          <p className="text-xs text-muted-foreground text-center py-8">Selecione um fluxo e clique em "Iniciar Conversa"</p>
+                        ) : (
+                          chatHistory.map((msg, idx) => (
+                            <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                              <div
+                                className={`max-w-xs p-2 rounded text-xs ${
+                                  msg.role === "user"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground border"
+                                }`}
+                              >
+                                {msg.type !== "text" && <Badge className="text-xs mb-1">{msg.type}</Badge>}
+                                <p className="whitespace-pre-wrap">{msg.content}</p>
                               </div>
-                              <p className="text-sm pl-6">{trace.result}</p>
-                              {trace.wouldSend && (
-                                <div className="pl-6 bg-blue-50 dark:bg-blue-950 p-2 rounded text-xs border border-blue-200 dark:border-blue-800">
-                                  <span className="font-medium text-blue-700 dark:text-blue-300">Enviaria: </span>
-                                  {trace.wouldSend}
-                                </div>
-                              )}
-                              <p className="text-xs text-muted-foreground pl-6">{trace.timestamp}</p>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+
+                    {!chatDone && chatHistory.length > 0 && (
+                      <div className="flex gap-2">
+                        <Input
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                          placeholder="Digite sua resposta..."
+                          className="text-xs"
+                          disabled={chatMutation.isPending}
+                          data-testid="input-chat-message"
+                        />
+                        <Button onClick={sendMessage} disabled={!chatInput.trim() || chatMutation.isPending} className="text-xs" data-testid="button-send-message">
+                          {chatMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Enviar"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {chatDone && chatHistory.length > 0 && (
+                      <p className="text-xs text-center text-muted-foreground py-2">✓ Conversa finalizada</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             {/* === TTS === */}
