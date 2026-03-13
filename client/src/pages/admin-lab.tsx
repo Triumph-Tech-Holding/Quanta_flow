@@ -62,6 +62,7 @@ export default function AdminLab() {
   const [ttsText, setTtsText] = useState("Olá! Como posso ajudá-lo hoje?");
   const [ttsVoice, setTtsVoice] = useState<TtsVoice>("alloy");
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const ttsAudioUrlRef = useRef<string | null>(null);
 
   // --- Image AI ---
   const [imagePrompt, setImagePrompt] = useState("");
@@ -115,8 +116,9 @@ export default function AdminLab() {
       return res.blob();
     },
     onSuccess: (blob: Blob) => {
-      if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+      if (ttsAudioUrlRef.current) URL.revokeObjectURL(ttsAudioUrlRef.current);
       const url = URL.createObjectURL(blob);
+      ttsAudioUrlRef.current = url;
       setTtsAudioUrl(url);
       toast({ title: "Áudio gerado! Use o player abaixo para ouvir." });
     },
@@ -189,7 +191,7 @@ export default function AdminLab() {
 
   useEffect(() => {
     return () => {
-      if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+      if (ttsAudioUrlRef.current) URL.revokeObjectURL(ttsAudioUrlRef.current);
     };
   }, []);
 
