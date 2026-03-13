@@ -2447,8 +2447,10 @@ Return ONLY the JSON array, no markdown.`,
       try {
         const response = await fetch(wh.url, { method: "POST", headers, body: payload, signal: controller.signal });
         clearTimeout(timeout);
+        let responseBody = "";
+        try { responseBody = await response.text(); } catch { responseBody = ""; }
         await storage.updateOutboundWebhookStatus(wh.id, response.ok ? "success" : `error:${response.status}`);
-        res.json({ ok: response.ok, status: response.status });
+        res.json({ ok: response.ok, status: response.status, responseBody: responseBody.slice(0, 500) });
       } catch (fetchErr) {
         clearTimeout(timeout);
         const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
@@ -3202,69 +3204,152 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const interpolate = (text: string) =>
         text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`);
 
-      const trace: Array<{
-        blockId: string;
-        blockType: string;
-        status: string;
-        result: string;
-        wouldSend?: string;
-        timestamp: string;
-      }> = [];
-
-      let blockCount = 0;
-      type FlowBlock = { id: string; type: string; config: Record<string, string>; nextBlockId?: string; conditionTrueId?: string; conditionFalseId?: string };
+      type FlowBlock = {
+        id: string;
+        type: string;
+        config: Record<string, string | number | boolean | undefined>;
+        nextBlockId?: string;
+        conditionTrueId?: string;
+        conditionFalseId?: string;
+      };
       const blocks: FlowBlock[] = Array.isArray(flow.blocks) ? (flow.blocks as FlowBlock[]) : [];
 
-      for (const block of blocks) {
-        if (blockCount >= 50) {
+      type TraceEntry = { blockId: string; blockType: string; status: string; result: string; wouldSend?: string; timestamp: string };
+      const trace: TraceEntry[] = [];
+
+      if (blocks.length === 0) {
+        trace.push({ blockId: "empty", blockType: "info", status: "ok", result: "Fluxo não possui blocos configurados", timestamp: new Date().toISOString() });
+        return res.json({ trace });
+      }
+
+      // Graph traversal: find root block (not pointed to by any other block)
+      const blockMap = new Map(blocks.map((b) => [b.id, b]));
+      const targetIds = new Set<string>();
+      for (const b of blocks) {
+        if (b.nextBlockId) targetIds.add(b.nextBlockId);
+        if (b.conditionTrueId) targetIds.add(b.conditionTrueId);
+        if (b.conditionFalseId) targetIds.add(b.conditionFalseId);
+      }
+      const rootBlock = blocks.find((b) => !targetIds.has(b.id)) || blocks[0];
+
+      let currentBlockId: string | null = rootBlock.id;
+      const visited = new Set<string>();
+      const MAX_STEPS = 50;
+      let steps = 0;
+      const msgLow = vars.mensagem.toLowerCase();
+
+      while (currentBlockId) {
+        if (steps++ >= MAX_STEPS) {
           trace.push({ blockId: "limit", blockType: "limit", status: "skipped", result: "Limite de 50 blocos atingido", timestamp: new Date().toISOString() });
           break;
         }
-        blockCount++;
+        if (visited.has(currentBlockId)) {
+          trace.push({ blockId: currentBlockId, blockType: "cycle", status: "skipped", result: "Ciclo detectado — execução interrompida", timestamp: new Date().toISOString() });
+          break;
+        }
+        visited.add(currentBlockId);
+
+        const block = blockMap.get(currentBlockId);
+        if (!block) break;
+        const cfg = block.config || {};
         const ts = new Date().toISOString();
 
         switch (block.type) {
-          case "text":
-            trace.push({ blockId: block.id, blockType: "text", status: "would_send", result: "Enviaria mensagem de texto", wouldSend: interpolate(block.config?.text || ""), timestamp: ts });
-            break;
-          case "delay":
-            trace.push({ blockId: block.id, blockType: "delay", status: "skipped", result: `Delay ignorado em dry-run (${block.config?.delay || 0}s)`, timestamp: ts });
-            break;
-          case "condition": {
-            const field = block.config?.field || "campo";
-            const operator = block.config?.operator || "equals";
-            const value = block.config?.value || "";
-            trace.push({ blockId: block.id, blockType: "condition", status: "condition_true", result: `Condição avaliada: se ${field} ${operator} "${value}" → SIM (branch true simulado)`, timestamp: ts });
+          case "text": {
+            const msg = interpolate(String(cfg.message || ""));
+            trace.push({ blockId: block.id, blockType: "text", status: "would_send", result: "Enviaria mensagem de texto", wouldSend: msg, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
           }
-          case "audio_tts":
-            trace.push({ blockId: block.id, blockType: "audio_tts", status: "would_send", result: "Enviaria áudio TTS gerado dinamicamente", wouldSend: interpolate(block.config?.text || ""), timestamp: ts });
+          case "audio_tts": {
+            const ttsText = interpolate(String(cfg.message || ""));
+            const ttsVoice = String(cfg.voice || "nova");
+            trace.push({ blockId: block.id, blockType: "audio_tts", status: "would_send", result: `Enviaria áudio TTS (voz: ${ttsVoice})`, wouldSend: ttsText, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
-          case "image_ai":
-            trace.push({ blockId: block.id, blockType: "image_ai", status: "would_send", result: "Enviaria imagem gerada por IA", wouldSend: `Prompt: ${interpolate(block.config?.prompt || "")}`, timestamp: ts });
+          }
+          case "image_ai": {
+            const prompt = interpolate(String(cfg.prompt || "abstract art"));
+            trace.push({ blockId: block.id, blockType: "image_ai", status: "would_send", result: "Enviaria imagem gerada por IA", wouldSend: `Prompt: ${prompt}`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
-          case "ai_agent":
-            trace.push({ blockId: block.id, blockType: "ai_agent", status: "would_send", result: `Agente IA (id: ${block.config?.agentId || "?"}) geraria resposta para: "${vars.mensagem}"`, timestamp: ts });
+          }
+          case "delay": {
+            const delaySec = Number(cfg.delaySeconds || 30);
+            const unit = String(cfg.delayUnit || "seconds");
+            trace.push({ blockId: block.id, blockType: "delay", status: "skipped", result: `Delay ignorado em dry-run (${delaySec} ${unit})`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
-          case "webhook":
-            trace.push({ blockId: block.id, blockType: "webhook", status: "skipped", result: `Webhook ignorado em dry-run (${block.config?.url || "URL não definida"})`, timestamp: ts });
+          }
+          case "condition": {
+            const condType = String(cfg.conditionType || "keyword");
+            const condVal = String(cfg.conditionValue || "").toLowerCase();
+            let conditionMet = false;
+            let evalDesc = "";
+            if (condType === "keyword") {
+              const keywords = condVal.split(",").map((k) => k.trim()).filter(Boolean);
+              conditionMet = keywords.some((kw) => msgLow.includes(kw));
+              evalDesc = `keyword [${condVal}] ${conditionMet ? "encontrado" : "não encontrado"} em "${vars.mensagem}"`;
+            } else if (condType === "intent") {
+              conditionMet = false; // intent not yet resolved in dry-run
+              evalDesc = `intent = "${condVal}" (não resolvido em dry-run → NÃO)`;
+            } else if (condType === "temperature") {
+              conditionMet = false;
+              evalDesc = `temperature = "${condVal}" (contato simulado sem temperatura → NÃO)`;
+            } else if (condType === "score") {
+              conditionMet = false;
+              evalDesc = `score >= ${condVal} (contato simulado com score 0 → NÃO)`;
+            } else {
+              conditionMet = false;
+              evalDesc = `condição "${condType}" não reconhecida → NÃO`;
+            }
+            trace.push({
+              blockId: block.id,
+              blockType: "condition",
+              status: conditionMet ? "condition_true" : "condition_false",
+              result: `Condição avaliada: ${evalDesc} → ${conditionMet ? "SIM (branch true)" : "NÃO (branch false)"}`,
+              timestamp: ts,
+            });
+            currentBlockId = conditionMet ? (block.conditionTrueId || null) : (block.conditionFalseId || null);
             break;
-          case "queue_entry":
-            trace.push({ blockId: block.id, blockType: "queue_entry", status: "ok", result: `Contato "${vars.nome}" seria adicionado à fila de atendimento`, timestamp: ts });
+          }
+          case "ai_agent": {
+            const agentId = String(cfg.agentId || "?");
+            trace.push({ blockId: block.id, blockType: "ai_agent", status: "would_send", result: `Agente IA (id: ${agentId}) geraria resposta para: "${vars.mensagem}"`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
-          case "resolve":
+          }
+          case "webhook": {
+            const url = String(cfg.webhookUrl || cfg.url || "URL não definida");
+            trace.push({ blockId: block.id, blockType: "webhook", status: "skipped", result: `Webhook ignorado em dry-run (${url})`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
+            break;
+          }
+          case "queue_entry": {
+            const slaMin = Number(cfg.slaMinutes || 60);
+            trace.push({ blockId: block.id, blockType: "queue_entry", status: "ok", result: `Contato "${vars.nome}" seria adicionado à fila (SLA: ${slaMin}min)`, timestamp: ts });
+            currentBlockId = null;
+            break;
+          }
+          case "resolve": {
             trace.push({ blockId: block.id, blockType: "resolve", status: "ok", result: "Fluxo resolvido/finalizado com sucesso", timestamp: ts });
+            currentBlockId = null;
             break;
-          case "update_lead":
-            trace.push({ blockId: block.id, blockType: "update_lead", status: "ok", result: `Lead seria atualizado (campo: ${block.config?.field || "?"}, valor: ${block.config?.value || "?"})`, timestamp: ts });
+          }
+          case "update_lead": {
+            const parts: string[] = [];
+            if (cfg.leadStage) parts.push(`estágio="${cfg.leadStage}"`);
+            if (cfg.leadTemperature) parts.push(`temperatura="${cfg.leadTemperature}"`);
+            if (cfg.leadTag) parts.push(`tag="${cfg.leadTag}"`);
+            if (cfg.leadScore !== undefined) parts.push(`score=${cfg.leadScore}`);
+            trace.push({ blockId: block.id, blockType: "update_lead", status: "ok", result: `Lead seria atualizado: ${parts.join(", ") || "(nenhum campo configurado)"}`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
             break;
+          }
           default:
             trace.push({ blockId: block.id, blockType: block.type, status: "ok", result: `Bloco tipo "${block.type}" executado`, timestamp: ts });
+            currentBlockId = block.nextBlockId || null;
         }
-      }
-
-      if (trace.length === 0) {
-        trace.push({ blockId: "empty", blockType: "info", status: "ok", result: "Fluxo não possui blocos configurados", timestamp: new Date().toISOString() });
       }
 
       res.json({ trace });
@@ -3280,12 +3365,13 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { text, voice } = req.body;
       if (!text) return res.status(400).json({ message: "text é obrigatório" });
 
-      const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
-      const selectedVoice = validVoices.includes(voice) ? voice : "alloy";
+      type TtsVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
+      const validVoices: TtsVoice[] = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+      const selectedVoice: TtsVoice = validVoices.includes(voice as TtsVoice) ? (voice as TtsVoice) : "alloy";
 
       const mp3 = await agentOpenai.audio.speech.create({
         model: "tts-1",
-        voice: selectedVoice as any,
+        voice: selectedVoice,
         input: text,
       });
 

@@ -32,6 +32,7 @@ interface WebhookTestResult {
   webhookId: string;
   ok: boolean;
   status: number;
+  responseBody?: string;
 }
 
 interface OutboundWebhook {
@@ -141,8 +142,8 @@ export default function AdminLab() {
   const testWebhookMutation = useMutation({
     mutationFn: async (webhookId: string): Promise<WebhookTestResult> => {
       const res = await apiRequest("POST", `/api/webhooks/outbound/${webhookId}/test`, {});
-      const body = await res.json() as { ok: boolean; status: number };
-      return { webhookId, ok: body.ok, status: body.status };
+      const body = await res.json() as { ok: boolean; status: number; responseBody?: string };
+      return { webhookId, ok: body.ok, status: body.status, responseBody: body.responseBody };
     },
     onSuccess: (data) => {
       setWebhookResults((prev) => ({
@@ -512,7 +513,7 @@ export default function AdminLab() {
 
                             {result && (
                               <div className={`text-xs p-2 rounded border ${result.ok ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"}`} data-testid={`webhook-result-${webhook.id}`}>
-                                <div className="flex items-center gap-1 font-medium">
+                                <div className="flex items-center gap-1 font-medium mb-1">
                                   {result.ok ? (
                                     <CheckCircle2 className="h-3 w-3 text-green-600" />
                                   ) : (
@@ -520,6 +521,11 @@ export default function AdminLab() {
                                   )}
                                   HTTP {result.status} — {result.ok ? "Sucesso" : "Erro"}
                                 </div>
+                                {result.responseBody && (
+                                  <pre className="whitespace-pre-wrap break-all font-mono text-xs opacity-75 max-h-20 overflow-y-auto mt-1 bg-black/5 dark:bg-white/5 p-1 rounded">
+                                    {result.responseBody}
+                                  </pre>
+                                )}
                               </div>
                             )}
                           </div>
