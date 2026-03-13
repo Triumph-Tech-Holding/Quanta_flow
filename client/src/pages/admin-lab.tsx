@@ -30,9 +30,8 @@ interface FlowTrace {
 
 interface WebhookTestResult {
   webhookId: string;
-  statusCode: number;
-  responseBody: string;
-  success: boolean;
+  ok: boolean;
+  status: number;
 }
 
 interface OutboundWebhook {
@@ -76,7 +75,7 @@ export default function AdminLab() {
   const [wpResult, setWpResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const { data: flows = [] } = useQuery<AutomationFlow[]>({
-    queryKey: ["/api/automation/flows"],
+    queryKey: ["/api/automation-flows"],
   });
 
   const { data: outboundWebhooks = [] } = useQuery<OutboundWebhook[]>({
@@ -105,7 +104,7 @@ export default function AdminLab() {
 
   // TTS generation
   const ttsMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<Blob> => {
       const res = await apiRequest("POST", "/api/admin/lab/generate-tts", {
         text: ttsText,
         voice: ttsVoice,
@@ -140,10 +139,10 @@ export default function AdminLab() {
 
   // Webhook test
   const testWebhookMutation = useMutation({
-    mutationFn: async (webhookId: string) => {
+    mutationFn: async (webhookId: string): Promise<WebhookTestResult> => {
       const res = await apiRequest("POST", `/api/webhooks/outbound/${webhookId}/test`, {});
-      const body = await res.json();
-      return { webhookId, ...body } as WebhookTestResult & { webhookId: string };
+      const body = await res.json() as { ok: boolean; status: number };
+      return { webhookId, ok: body.ok, status: body.status };
     },
     onSuccess: (data) => {
       setWebhookResults((prev) => ({
@@ -152,9 +151,9 @@ export default function AdminLab() {
       }));
       setTestingWebhookId(null);
       toast({
-        title: data.success ? "Webhook OK!" : "Webhook retornou erro",
-        description: `HTTP ${data.statusCode}`,
-        variant: data.success ? "default" : "destructive",
+        title: data.ok ? "Webhook OK!" : "Webhook retornou erro",
+        description: `HTTP ${data.status}`,
+        variant: data.ok ? "default" : "destructive",
       });
     },
     onError: (err: Error) => {
@@ -512,18 +511,15 @@ export default function AdminLab() {
                             </div>
 
                             {result && (
-                              <div className={`text-xs p-2 rounded border ${result.success ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"}`} data-testid={`webhook-result-${webhook.id}`}>
-                                <div className="flex items-center gap-1 font-medium mb-1">
-                                  {result.success ? (
+                              <div className={`text-xs p-2 rounded border ${result.ok ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"}`} data-testid={`webhook-result-${webhook.id}`}>
+                                <div className="flex items-center gap-1 font-medium">
+                                  {result.ok ? (
                                     <CheckCircle2 className="h-3 w-3 text-green-600" />
                                   ) : (
                                     <XCircle className="h-3 w-3 text-red-600" />
                                   )}
-                                  HTTP {result.statusCode}
+                                  HTTP {result.status} — {result.ok ? "Sucesso" : "Erro"}
                                 </div>
-                                <pre className="whitespace-pre-wrap break-all font-mono text-xs opacity-80 max-h-24 overflow-y-auto">
-                                  {result.responseBody}
-                                </pre>
                               </div>
                             )}
                           </div>

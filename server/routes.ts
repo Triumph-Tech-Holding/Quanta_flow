@@ -3212,7 +3212,8 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       }> = [];
 
       let blockCount = 0;
-      const blocks: any[] = Array.isArray(flow.blocks) ? flow.blocks : [];
+      type FlowBlock = { id: string; type: string; config: Record<string, string>; nextBlockId?: string; conditionTrueId?: string; conditionFalseId?: string };
+      const blocks: FlowBlock[] = Array.isArray(flow.blocks) ? (flow.blocks as FlowBlock[]) : [];
 
       for (const block of blocks) {
         if (blockCount >= 50) {
@@ -3224,36 +3225,38 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
         switch (block.type) {
           case "text":
-            trace.push({ blockId: block.id, blockType: "text", status: "would_send", result: "Enviaria mensagem de texto", wouldSend: interpolate(block.data?.text || ""), timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "text", status: "would_send", result: "Enviaria mensagem de texto", wouldSend: interpolate(block.config?.text || ""), timestamp: ts });
             break;
           case "delay":
-            trace.push({ blockId: block.id, blockType: "delay", status: "skipped", result: `Delay ignorado em dry-run (${block.data?.delay || 0}s)`, timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "delay", status: "skipped", result: `Delay ignorado em dry-run (${block.config?.delay || 0}s)`, timestamp: ts });
             break;
           case "condition": {
-            const condTrue = Math.random() > 0.5;
-            trace.push({ blockId: block.id, blockType: "condition", status: condTrue ? "condition_true" : "condition_false", result: `Condição avaliada: ${condTrue ? "SIM (branch true)" : "NÃO (branch false)"}`, timestamp: ts });
+            const field = block.config?.field || "campo";
+            const operator = block.config?.operator || "equals";
+            const value = block.config?.value || "";
+            trace.push({ blockId: block.id, blockType: "condition", status: "condition_true", result: `Condição avaliada: se ${field} ${operator} "${value}" → SIM (branch true simulado)`, timestamp: ts });
             break;
           }
           case "audio_tts":
-            trace.push({ blockId: block.id, blockType: "audio_tts", status: "would_send", result: "Enviaria áudio TTS gerado dinamicamente", wouldSend: interpolate(block.data?.text || ""), timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "audio_tts", status: "would_send", result: "Enviaria áudio TTS gerado dinamicamente", wouldSend: interpolate(block.config?.text || ""), timestamp: ts });
             break;
           case "image_ai":
-            trace.push({ blockId: block.id, blockType: "image_ai", status: "would_send", result: "Enviaria imagem gerada por IA", wouldSend: `Prompt: ${interpolate(block.data?.prompt || "")}`, timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "image_ai", status: "would_send", result: "Enviaria imagem gerada por IA", wouldSend: `Prompt: ${interpolate(block.config?.prompt || "")}`, timestamp: ts });
             break;
           case "ai_agent":
-            trace.push({ blockId: block.id, blockType: "ai_agent", status: "would_send", result: "Agente IA geraria resposta para a mensagem do usuário", timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "ai_agent", status: "would_send", result: `Agente IA (id: ${block.config?.agentId || "?"}) geraria resposta para: "${vars.mensagem}"`, timestamp: ts });
             break;
           case "webhook":
-            trace.push({ blockId: block.id, blockType: "webhook", status: "skipped", result: `Webhook ignorado em dry-run (${block.data?.url || "URL não definida"})`, timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "webhook", status: "skipped", result: `Webhook ignorado em dry-run (${block.config?.url || "URL não definida"})`, timestamp: ts });
             break;
           case "queue_entry":
-            trace.push({ blockId: block.id, blockType: "queue_entry", status: "ok", result: "Contato seria adicionado à fila de atendimento", timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "queue_entry", status: "ok", result: `Contato "${vars.nome}" seria adicionado à fila de atendimento`, timestamp: ts });
             break;
           case "resolve":
-            trace.push({ blockId: block.id, blockType: "resolve", status: "ok", result: "Fluxo resolvido/finalizado", timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "resolve", status: "ok", result: "Fluxo resolvido/finalizado com sucesso", timestamp: ts });
             break;
           case "update_lead":
-            trace.push({ blockId: block.id, blockType: "update_lead", status: "ok", result: `Lead seria atualizado (campo: ${block.data?.field || "?"}, valor: ${block.data?.value || "?"})`, timestamp: ts });
+            trace.push({ blockId: block.id, blockType: "update_lead", status: "ok", result: `Lead seria atualizado (campo: ${block.config?.field || "?"}, valor: ${block.config?.value || "?"})`, timestamp: ts });
             break;
           default:
             trace.push({ blockId: block.id, blockType: block.type, status: "ok", result: `Bloco tipo "${block.type}" executado`, timestamp: ts });
@@ -3330,7 +3333,8 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       if (result.success) {
         res.json({ success: true, message: `Mensagem enviada para ${phone} com sucesso!` });
       } else {
-        res.json({ success: false, message: (result as any).error || "Falha ao enviar. Verifique a integração WhatsApp em Configurações." });
+        const errorResult = result as { success: false; error?: string };
+        res.json({ success: false, message: errorResult.error || "Falha ao enviar. Verifique a integração WhatsApp em Configurações." });
       }
     } catch (err: any) {
       console.error("[POST /api/admin/lab/test-whatsapp]", err);
