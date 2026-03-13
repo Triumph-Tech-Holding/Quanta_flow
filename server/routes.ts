@@ -793,7 +793,12 @@ export async function registerRoutes(
       const userId = req.user!.userId;
       const config = await storage.getEvolutionConfig(userId);
       const activeProvider = config?.activeProvider || "none";
-      res.json({ activeProvider, connected: config?.status === "connected" });
+      let connected = config?.status === "connected";
+      if (activeProvider === "baileys") {
+        const baileysInst = getBaileysInstance(userId);
+        connected = baileysInst?.connected === true;
+      }
+      res.json({ activeProvider, connected });
     } catch (error) {
       console.error("Get provider error:", error);
       res.status(500).json({ message: "Erro interno" });
@@ -3415,7 +3420,24 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { phone, message } = req.body;
       if (!phone || !message) return res.status(400).json({ message: "phone e message são obrigatórios" });
 
-      const provider = await getWhatsAppProvider(req.user.userId);
+      const userId = req.user.userId;
+      const waCfg = await storage.getEvolutionConfig(userId);
+      if (!waCfg) {
+        return res.json({ success: false, message: "WhatsApp não configurado. Vá em Configurações → WhatsApp." });
+      }
+
+      const provider = await getWhatsAppProvider(userId);
+
+      if (waCfg.activeProvider === "baileys") {
+        const baileysInst = getBaileysInstance(userId);
+        if (!baileysInst?.connected) {
+          return res.json({
+            success: false,
+            message: "Baileys não está conectado. Vá em Configurações → WhatsApp → Conectar e escaneie o QR Code.",
+          });
+        }
+      }
+
       const result = await provider.sendMessage(phone, message);
       res.json({ success: true, message: `Mensagem enviada para ${phone} com sucesso! (ID: ${result.messageId})` });
     } catch (err: unknown) {
