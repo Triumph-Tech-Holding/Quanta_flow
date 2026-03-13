@@ -4,8 +4,8 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocket } from "./socket";
 import { db } from "./db";
-import { users, roles, permissions, rolePermissions, userRoles, flowTemplates } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, roles, permissions, rolePermissions, userRoles, flowTemplates, documentationVersions } from "@shared/schema";
+import { eq, gte, like } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
 import { startLearningWorker } from "./learningWorker";
@@ -212,6 +212,147 @@ async function seedFlowTemplates() {
   }
 }
 
+async function seedDocumentationVersions() {
+  try {
+    const adminUser = await db.select({ id: users.id }).from(users).where(eq(users.email, "admin@quantaflow.com")).limit(1);
+    if (adminUser.length === 0) return;
+    const adminId = adminUser[0].id;
+
+    await db.delete(documentationVersions).where(eq(documentationVersions.version, "1.0.0"));
+
+    const v6exists = await db.select({ id: documentationVersions.id }).from(documentationVersions).where(gte(documentationVersions.version, "6.0.0")).limit(1);
+    if (v6exists.length === 0) {
+      await db.insert(documentationVersions).values({
+        userId: adminId,
+        version: "6.0.0",
+        title: "Quanta Flow — Documentação Técnica Completa v6.0.0",
+        description: "Versão completa com todos os módulos: Inbox Omnichannel, CRM/Kanban, Automação + Builder Visual + Simulador de Conversa, Fábrica de Agentes IA, Campanhas Omnichannel + Drip, Fila de Atendimento + SLA, Microlearning, Webhooks Outbound + HMAC, Google Sheets OAuth2, Lab (5 abas), Branding White-label, RBAC (18 permissões), Manual Completo com visualizador inline.",
+        content: `# Quanta Flow v6.0.0 — Documentação Técnica
+
+## Stack
+- Frontend: React 18 + Vite + TypeScript + Tailwind CSS + Shadcn UI
+- Backend: Node.js + Express.js + TypeScript
+- Banco: PostgreSQL + Drizzle ORM
+- Auth: JWT (24h) + bcrypt + tokenVersion
+- Real-time: Socket.io (/inbox namespace)
+- IA: OpenAI gpt-4o-mini via Replit AI Integrations
+
+## Módulos
+
+### Inbox Omnichannel
+- Canais: WhatsApp (Z-API / Baileys), Telegram, Instagram, Email
+- Real-time: Socket.io emite message_received, instance_connected
+- Fila de Atendimento: queueStatus (waiting/assigned/resolved), SLA timer
+- Timestamp completo nas mensagens (dd/MM HH:mm)
+
+### CRM / Pipeline Kanban
+- Leads criados automaticamente na 1ª mensagem recebida
+- Score 0-20 calculado por IA (OpenAI)
+- Temperatura: cold/warm/hot | Intenção: compra_quente/duvida/reclamacao/indefinido
+- Kanban drag-and-drop com filtros por temperatura, intenção, agente
+
+### Automação — Builder Visual
+- React Flow canvas com 10 tipos de blocos: text, audio_tts, image_ai, delay, condition, ai_agent, webhook, queue_entry, resolve, update_lead
+- Variáveis: {nome}, {telefone}, {email}
+- Detecção de ciclos (máx 50 passos), root-node auto-detection
+- 5 templates built-in | Export/Import JSON
+- Geração de fluxo via GPT-4o-mini
+
+### Simulador de Conversa Interativo
+- Endpoint: POST /api/admin/lab/simulate-flow-chat
+- Executa blocos reais do fluxo: ai_agent chama OpenAI com systemPrompt real
+- Condições avaliadas em tempo real | Estado mantido no frontend (stateless backend)
+
+### Fábrica de Agentes IA
+- CRUD: GET/POST/PUT/DELETE /api/admin/agents
+- Campos: model, temperature, tone, specialty, systemPrompt, ttsVoice, maxTokens
+- Chat preview: POST /api/admin/agents/:id/chat
+- TTS: POST /api/admin/agents/:id/tts
+- Avatar IA: POST /api/admin/agents/generate-avatar
+
+### Campanhas Omnichannel
+- Tipos: broadcast e drip sequence
+- Segmentação: temperatura, estágio, canal
+- Geração de copy: POST /api/admin/campaigns/generate-copy
+- Prévia de segmento: POST /api/admin/campaigns/preview-segment
+- CampaignWorker: executa a cada 60s, respeita rate limits e allowed hours
+- Métricas: sent/delivered/read/replied/converted
+- Templates: CRUD /api/admin/templates
+
+### Fila de Atendimento
+- queueStatus: waiting → assigned → resolved
+- SLA deadline configurável (Branding.defaultSlaMinutes)
+- Timer vermelho no Inbox quando SLA ultrapassado
+
+### Microlearning
+- Trilhas com gatilho por estágio do lead
+- LearningWorker: executa a cada 5min
+- Rastreamento de entrega por lead
+
+### Webhooks Outbound
+- Eventos: lead.created, lead.qualified, flow.success, flow.interrupt, conversation.closed
+- HMAC-SHA256 no header X-Quanta-Signature
+- Timeout 5s por chamada | WebhookDispatcher assíncrono
+
+### Google Sheets
+- OAuth2 com Google | Append de linha por evento
+- Mapeamento configurável de colunas
+
+### Lab (5 abas)
+- Flow Sim: simulador de conversa interativo
+- TTS: teste de voz dos agentes
+- Imagem IA: geração e preview de imagens
+- Webhooks: teste de disparo de webhooks
+- WhatsApp: teste de envio de mensagem real
+
+### Branding White-label
+- companyName, primaryColor, secondaryColor, logoUrl, faviconUrl, defaultSlaMinutes
+
+### RBAC
+- Roles: super_admin, admin, user
+- 18 permissões em 7 recursos: settings, users, audit_logs, inbox, leads, automation, campaigns
+- Middleware: checkRole([...roles])
+
+### Documentação
+- Manual de uso: MANUAL_DE_USO.md (712 linhas, 16 módulos)
+- GET /api/documentation/manual-md — serve markdown para visualizador inline
+- GET /api/documentation/manual-pdf — gera PDF via pdfkit
+- Visualizador inline sem bibliotecas externas (renderMarkdown custom)
+
+## Tabelas Principais
+users, leads, conversations, messages, unified_contacts, agent_assignments,
+automation_flows, ai_agents, campaigns, campaign_deliveries, message_templates,
+learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations,
+email_configs, api_configs, settings, roles, permissions, role_permissions,
+user_roles, audit_logs, documentation_versions
+
+## JobQueue (5s interval)
+- send_message, check_inactivity, check_sla
+
+## Endpoints principais
+- POST /api/auth/login | GET /api/auth/me
+- GET/POST/PUT/DELETE /api/leads
+- GET/POST /api/messages/:conversationId
+- GET/POST/PUT/DELETE /api/admin/automation-flows
+- POST /api/admin/automation-flows/:id/execute
+- GET/POST/PUT/DELETE /api/admin/agents
+- GET/POST/PUT/DELETE /api/admin/campaigns
+- POST /api/admin/campaigns/:id/start | /pause
+- GET /api/admin/campaigns/:id/metrics
+- GET/POST/PUT/DELETE /api/admin/users
+- GET /api/admin/audit-logs
+- GET/POST /api/admin/settings
+- GET /api/health
+`,
+        format: "markdown",
+      });
+    }
+    log("Documentation versions seed OK (v6.0.0)", "seed");
+  } catch (err) {
+    console.error("Error seeding documentation versions:", err);
+  }
+}
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -279,6 +420,7 @@ app.use((req, res, next) => {
   await ensureRBAC();
   await ensureAdminUser();
   await seedFlowTemplates();
+  await seedDocumentationVersions();
   jobQueue.start();
   startLearningWorker();
   startCampaignWorker();
