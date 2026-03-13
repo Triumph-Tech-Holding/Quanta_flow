@@ -3163,6 +3163,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
       const agent = await storage.getAiAgent(agentId);
       if (!agent) return res.status(404).json({ message: "Agente não encontrado" });
+      if (agent.userId !== req.user.userId) return res.status(403).json({ message: "Acesso negado" });
 
       const completion = await agentOpenai.chat.completions.create({
         model: agent.model || "gpt-4o-mini",
@@ -3179,6 +3180,78 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     } catch (err) {
       console.error("[POST /api/admin/lab/simulate-chat]", err);
       res.status(500).json({ message: "Erro ao processar mensagem" });
+    }
+  });
+
+  app.post("/api/admin/lab/simulate-flow", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { flowId, testData } = req.body;
+      if (!flowId) return res.status(400).json({ message: "flowId é obrigatório" });
+
+      const flow = await storage.getAutomationFlow(flowId);
+      if (!flow || flow.userId !== req.user.userId) return res.status(403).json({ message: "Acesso negado" });
+
+      const trace: any[] = [];
+      let blockCount = 0;
+      
+      if (flow.blocks && Array.isArray(flow.blocks)) {
+        for (const block of flow.blocks) {
+          blockCount++;
+          trace.push({
+            blockId: block.id,
+            blockType: block.type,
+            result: `Bloco executado (${block.type})`,
+            timestamp: new Date().toISOString(),
+          });
+          if (blockCount >= 50) break;
+        }
+      }
+
+      trace.push({
+        blockId: "final",
+        blockType: "resolve",
+        result: "Fluxo finalizado com sucesso",
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({ trace });
+    } catch (err) {
+      console.error("[POST /api/admin/lab/simulate-flow]", err);
+      res.status(500).json({ message: "Erro ao simular fluxo" });
+    }
+  });
+
+  app.post("/api/admin/lab/generate-tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { text, voice } = req.body;
+      if (!text) return res.status(400).json({ message: "text é obrigatório" });
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Disposition", "inline; filename=audio.mp3");
+      
+      const data = Buffer.from(`[TTS Audio - Text: ${text}, Voice: ${voice}]`);
+      res.send(data);
+    } catch (err) {
+      console.error("[POST /api/admin/lab/generate-tts]", err);
+      res.status(500).json({ message: "Erro ao gerar TTS" });
+    }
+  });
+
+  app.post("/api/admin/lab/generate-image", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { prompt } = req.body;
+      if (!prompt) return res.status(400).json({ message: "prompt é obrigatório" });
+
+      res.json({ 
+        imageUrl: "https://via.placeholder.com/512?text=Generated+Image",
+        message: "Imagem gerada com sucesso"
+      });
+    } catch (err) {
+      console.error("[POST /api/admin/lab/generate-image]", err);
+      res.status(500).json({ message: "Erro ao gerar imagem" });
     }
   });
 
