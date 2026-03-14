@@ -3279,6 +3279,21 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // ==================== Presentation PPTX ====================
+
+  app.get("/api/documentation/presentation-pptx", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { generatePresentation } = await import("./generatePpt");
+      const buffer = await generatePresentation();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+      res.setHeader("Content-Disposition", 'attachment; filename="Quanta_Flow_Apresentacao.pptx"');
+      res.send(buffer);
+    } catch (err) {
+      console.error("[GET /api/documentation/presentation-pptx]", err);
+      res.status(500).json({ message: "Erro ao gerar apresentação" });
+    }
+  });
+
   // ==================== Lab / Testing ====================
 
   app.post("/api/admin/lab/simulate-chat", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {

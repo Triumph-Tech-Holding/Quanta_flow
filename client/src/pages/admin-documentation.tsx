@@ -44,6 +44,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  Presentation,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -244,6 +245,7 @@ export default function AdminDocumentation() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentationVersion | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingPptx, setDownloadingPptx] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
@@ -323,6 +325,30 @@ export default function AdminDocumentation() {
       });
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadPptx = async () => {
+    try {
+      setDownloadingPptx(true);
+      const response = await apiRequest("GET", "/api/documentation/presentation-pptx");
+      if (!response.ok) throw new Error("Erro ao gerar apresentação");
+      const blob = await response.blob();
+      const element = document.createElement("a");
+      element.href = URL.createObjectURL(blob);
+      element.download = "Quanta_Flow_Apresentacao.pptx";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast({ title: "Apresentação baixada com sucesso!" });
+    } catch (err) {
+      toast({
+        title: "Erro ao baixar apresentação",
+        description: err instanceof Error ? err.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingPptx(false);
     }
   };
 
@@ -461,6 +487,25 @@ export default function AdminDocumentation() {
                   <>
                     <Download className="w-4 h-4" />
                     Baixar PDF
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleDownloadPptx}
+                disabled={downloadingPptx}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-download-pptx"
+              >
+                {downloadingPptx ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Presentation className="w-4 h-4" />
+                    Baixar PPT
                   </>
                 )}
               </Button>
