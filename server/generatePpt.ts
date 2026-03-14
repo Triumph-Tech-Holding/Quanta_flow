@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { captureScreenshots } from "./screenshotCapture";
 const _require = createRequire(import.meta.url);
 const PptxGenJS = _require("pptxgenjs");
 
@@ -237,6 +238,14 @@ function addBackground(slide: PptxGenJS.Slide) {
 }
 
 export async function generatePresentation(): Promise<Buffer> {
+  let screenshots: Record<string, string> = {};
+  try {
+    screenshots = await captureScreenshots();
+    console.log(`[pptx] captured ${Object.keys(screenshots).length} screenshots`);
+  } catch (err) {
+    console.warn("[pptx] screenshot capture failed, generating without images:", err);
+  }
+
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
   pptx.author = "Quanta Flow";
@@ -246,6 +255,7 @@ export async function generatePresentation(): Promise<Buffer> {
   for (let i = 0; i < SLIDES.length; i++) {
     const data = SLIDES[i];
     const slide = pptx.addSlide();
+    const hasScreenshot = !!screenshots[data.title];
 
     if (i === 0) {
       slide.background = { color: NAVY };
@@ -323,132 +333,186 @@ export async function generatePresentation(): Promise<Buffer> {
 
     addBackground(slide);
 
-    const titleText = data.icon ? `${data.icon}  ${data.title}` : data.title;
-    slide.addText(titleText, {
-      x: 0.5,
-      y: 0.3,
-      w: 12.3,
-      h: 0.7,
-      fontSize: 26,
-      bold: true,
-      color: NAVY,
-      fontFace: "Arial",
-    });
-
-    slide.addShape("rect", {
-      x: 0.5,
-      y: 1.0,
-      w: 2,
-      h: 0.04,
-      fill: { color: GREEN },
-    });
-
-    let bulletY = 1.3;
-
-    if (data.bullets && data.bullets.length > 0) {
-      const bulletRows: PptxGenJS.TextProps[] = data.bullets.map((b) => ({
-        text: b,
-        options: {
-          fontSize: 13,
-          color: DARK_TEXT,
-          fontFace: "Arial",
-          bullet: { type: "bullet" as const, color: GREEN },
-          paraSpaceAfter: 6,
-        },
-      }));
-
-      const bulletH = data.highlights ? 2.2 : 3.5;
-      slide.addText(bulletRows, {
-        x: 0.5,
-        y: bulletY,
-        w: data.highlights ? 7.5 : 12.3,
-        h: bulletH,
-        valign: "top",
-      });
-      bulletY += bulletH + 0.1;
-    }
-
-    if (data.highlights && data.highlights.length > 0) {
-      const hlX = data.bullets ? 8.5 : 0.5;
-      const hlY = data.bullets ? 1.3 : bulletY;
-      const hlW = data.bullets ? 4.3 : 12.3;
-
-      slide.addShape("roundRect", {
-        x: hlX,
-        y: hlY,
-        w: hlW,
-        h: data.highlights.length * 0.55 + 0.5,
-        fill: { color: LIGHT_BG },
-        line: { color: "E5E7EB", width: 1 },
-        rectRadius: 0.1,
-      });
-
-      data.highlights.forEach((hl, idx) => {
-        const rowY = hlY + 0.2 + idx * 0.55;
-        slide.addText(hl.label, {
-          x: hlX + 0.2,
-          y: rowY,
-          w: hlW - 0.4,
-          h: 0.22,
-          fontSize: 10,
-          bold: true,
-          color: GREEN,
-          fontFace: "Arial",
-        });
-        slide.addText(hl.value, {
-          x: hlX + 0.2,
-          y: rowY + 0.2,
-          w: hlW - 0.4,
-          h: 0.22,
-          fontSize: 10,
-          color: GRAY_TEXT,
-          fontFace: "Arial",
-        });
-      });
-    }
-
-    if (!data.highlights && data.bullets) {
-      const mockY = 3.9;
-      slide.addShape("roundRect", {
-        x: 0.5,
-        y: mockY,
-        w: 12.3,
-        h: 1.2,
-        fill: { color: LIGHT_BG },
-        line: { color: "D1D5DB", width: 1 },
-        rectRadius: 0.08,
-      });
-      slide.addShape("rect", {
-        x: 0.5,
-        y: mockY,
-        w: 12.3,
-        h: 0.25,
-        fill: { color: "E5E7EB" },
-      });
-      slide.addShape("ellipse", { x: 0.7, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: "EF4444" } });
-      slide.addShape("ellipse", { x: 0.9, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: "F59E0B" } });
-      slide.addShape("ellipse", { x: 1.1, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: GREEN } });
-      slide.addText(`Quanta Flow — ${data.title}`, {
-        x: 1.4,
-        y: mockY + 0.02,
-        w: 10,
-        h: 0.2,
-        fontSize: 8,
-        color: GRAY_TEXT,
+    if (hasScreenshot) {
+      const titleText = data.icon ? `${data.icon}  ${data.title}` : data.title;
+      slide.addText(titleText, {
+        x: 0.3,
+        y: 0.2,
+        w: 5.5,
+        h: 0.6,
+        fontSize: 22,
+        bold: true,
+        color: NAVY,
         fontFace: "Arial",
       });
-      slide.addText("[ Prévia da tela — insira screenshot aqui ]", {
+
+      slide.addShape("rect", {
+        x: 0.3,
+        y: 0.8,
+        w: 1.5,
+        h: 0.04,
+        fill: { color: GREEN },
+      });
+
+      if (data.bullets && data.bullets.length > 0) {
+        const bulletRows: any[] = data.bullets.map((b: string) => ({
+          text: b,
+          options: {
+            fontSize: 11,
+            color: DARK_TEXT,
+            fontFace: "Arial",
+            bullet: { type: "bullet" as const, color: GREEN },
+            paraSpaceAfter: 4,
+          },
+        }));
+
+        slide.addText(bulletRows, {
+          x: 0.3,
+          y: 1.0,
+          w: 5.2,
+          h: 3.6,
+          valign: "top",
+        });
+      }
+
+      if (data.highlights && data.highlights.length > 0) {
+        const hlY = data.bullets ? 3.6 : 1.0;
+        slide.addShape("roundRect", {
+          x: 0.3,
+          y: hlY,
+          w: 5.2,
+          h: data.highlights.length * 0.45 + 0.3,
+          fill: { color: LIGHT_BG },
+          line: { color: "E5E7EB", width: 1 },
+          rectRadius: 0.08,
+        });
+        data.highlights.forEach((hl, idx) => {
+          const rowY = hlY + 0.15 + idx * 0.45;
+          slide.addText(hl.label, {
+            x: 0.5,
+            y: rowY,
+            w: 4.8,
+            h: 0.2,
+            fontSize: 9,
+            bold: true,
+            color: GREEN,
+            fontFace: "Arial",
+          });
+          slide.addText(hl.value, {
+            x: 0.5,
+            y: rowY + 0.18,
+            w: 4.8,
+            h: 0.2,
+            fontSize: 9,
+            color: GRAY_TEXT,
+            fontFace: "Arial",
+          });
+        });
+      }
+
+      slide.addShape("roundRect", {
+        x: 5.8,
+        y: 0.3,
+        w: 7.2,
+        h: 4.55,
+        fill: { color: "F1F5F9" },
+        line: { color: "CBD5E1", width: 1 },
+        rectRadius: 0.1,
+        shadow: { type: "outer", blur: 6, offset: 2, color: "000000", opacity: 0.15 },
+      });
+
+      slide.addImage({
+        data: `image/png;base64,${screenshots[data.title]}`,
+        x: 5.9,
+        y: 0.4,
+        w: 7.0,
+        h: 4.35,
+        rounding: true,
+      });
+    } else {
+      const titleText = data.icon ? `${data.icon}  ${data.title}` : data.title;
+      slide.addText(titleText, {
         x: 0.5,
-        y: mockY + 0.35,
+        y: 0.3,
         w: 12.3,
         h: 0.7,
-        fontSize: 11,
-        color: "9CA3AF",
-        align: "center",
-        valign: "middle",
+        fontSize: 26,
+        bold: true,
+        color: NAVY,
         fontFace: "Arial",
-        italic: true,
       });
+
+      slide.addShape("rect", {
+        x: 0.5,
+        y: 1.0,
+        w: 2,
+        h: 0.04,
+        fill: { color: GREEN },
+      });
+
+      let bulletY = 1.3;
+
+      if (data.bullets && data.bullets.length > 0) {
+        const bulletRows: any[] = data.bullets.map((b: string) => ({
+          text: b,
+          options: {
+            fontSize: 13,
+            color: DARK_TEXT,
+            fontFace: "Arial",
+            bullet: { type: "bullet" as const, color: GREEN },
+            paraSpaceAfter: 6,
+          },
+        }));
+
+        const bulletH = data.highlights ? 2.2 : 3.5;
+        slide.addText(bulletRows, {
+          x: 0.5,
+          y: bulletY,
+          w: data.highlights ? 7.5 : 12.3,
+          h: bulletH,
+          valign: "top",
+        });
+        bulletY += bulletH + 0.1;
+      }
+
+      if (data.highlights && data.highlights.length > 0) {
+        const hlX = data.bullets ? 8.5 : 0.5;
+        const hlY = data.bullets ? 1.3 : bulletY;
+        const hlW = data.bullets ? 4.3 : 12.3;
+
+        slide.addShape("roundRect", {
+          x: hlX,
+          y: hlY,
+          w: hlW,
+          h: data.highlights.length * 0.55 + 0.5,
+          fill: { color: LIGHT_BG },
+          line: { color: "E5E7EB", width: 1 },
+          rectRadius: 0.1,
+        });
+
+        data.highlights.forEach((hl, idx) => {
+          const rowY = hlY + 0.2 + idx * 0.55;
+          slide.addText(hl.label, {
+            x: hlX + 0.2,
+            y: rowY,
+            w: hlW - 0.4,
+            h: 0.22,
+            fontSize: 10,
+            bold: true,
+            color: GREEN,
+            fontFace: "Arial",
+          });
+          slide.addText(hl.value, {
+            x: hlX + 0.2,
+            y: rowY + 0.2,
+            w: hlW - 0.4,
+            h: 0.22,
+            fontSize: 10,
+            color: GRAY_TEXT,
+            fontFace: "Arial",
+          });
+        });
+      }
     }
   }
 
