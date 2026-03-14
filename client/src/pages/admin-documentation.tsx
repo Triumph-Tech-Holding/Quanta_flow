@@ -490,25 +490,6 @@ export default function AdminDocumentation() {
                   </>
                 )}
               </Button>
-              <Button
-                onClick={handleDownloadPptx}
-                disabled={downloadingPptx}
-                variant="outline"
-                className="gap-2"
-                data-testid="button-download-pptx"
-              >
-                {downloadingPptx ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <Presentation className="w-4 h-4" />
-                    Baixar Apresentação (.pptx)
-                  </>
-                )}
-              </Button>
             </div>
           </div>
         </CardHeader>
@@ -554,6 +535,45 @@ export default function AdminDocumentation() {
             </div>
           </CardContent>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-muted">
+                <Presentation className="w-6 h-6 text-foreground" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Apresentação Comercial</CardTitle>
+                <CardDescription className="mt-1">
+                  Slides do Quanta Flow com identidade visual para apresentações e demos. Arquivo .pptx compatível com PowerPoint e Google Slides.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="shrink-0">
+              <Button
+                onClick={handleDownloadPptx}
+                disabled={downloadingPptx}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-download-pptx"
+              >
+                {downloadingPptx ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Baixar Apresentação (.pptx)
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
       </Card>
 
       <Tabs defaultValue="versions" className="w-full">
