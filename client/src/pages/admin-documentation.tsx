@@ -448,7 +448,7 @@ export default function AdminDocumentation() {
               </div>
               <div>
                 <CardTitle className="text-lg">Manual Completo — Quanta Flow</CardTitle>
-                <CardDescription className="mt-1 max-w-xl">
+                <CardDescription className="mt-1 text-justify">
                   Guia didático com todos os 16 módulos da plataforma: Dashboard, Inbox Omnichannel, CRM/Kanban, Automação com Builder Visual e Simulador, Agentes IA, Campanhas, Fila, Microlearning, Webhooks, Google Sheets, Lab, Configurações, Branding e RBAC — com cenários práticos reais.
                 </CardDescription>
               </div>
@@ -546,7 +546,7 @@ export default function AdminDocumentation() {
               </div>
               <div>
                 <CardTitle className="text-lg">Apresentação Comercial</CardTitle>
-                <CardDescription className="mt-1">
+                <CardDescription className="mt-1 text-justify">
                   Slides do Quanta Flow com identidade visual para apresentações e demos. Arquivo .pptx compatível com PowerPoint e Google Slides.
                 </CardDescription>
               </div>
