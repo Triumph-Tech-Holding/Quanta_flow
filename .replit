@@ -46,6 +46,8 @@ waitForPort = 5000
 [userenv]
 
 [userenv.shared]
+SCREENSHOT_ADMIN_EMAIL = "admin@quantaflow.com"
+SCREENSHOT_ADMIN_PASSWORD = "Admin@123"
 
 [userenv.production]
 WEBHOOK_BASE_URL = "https://code-companion-31maurosergio.replit.app"

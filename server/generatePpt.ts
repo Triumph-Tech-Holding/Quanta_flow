@@ -240,7 +240,12 @@ function addBackground(slide: PptxGenJS.Slide) {
 export async function generatePresentation(): Promise<Buffer> {
   let screenshots: Record<string, string> = {};
   try {
-    screenshots = await captureScreenshots();
+    const CAPTURE_TIMEOUT_MS = 90_000;
+    const capturePromise = captureScreenshots();
+    const timeoutPromise = new Promise<Record<string, string>>((_, reject) =>
+      setTimeout(() => reject(new Error("Screenshot capture timed out")), CAPTURE_TIMEOUT_MS)
+    );
+    screenshots = await Promise.race([capturePromise, timeoutPromise]);
     console.log(`[pptx] captured ${Object.keys(screenshots).length} screenshots`);
   } catch (err) {
     console.warn("[pptx] screenshot capture failed, generating without images:", err);
@@ -355,7 +360,7 @@ export async function generatePresentation(): Promise<Buffer> {
       });
 
       if (data.bullets && data.bullets.length > 0) {
-        const bulletRows: any[] = data.bullets.map((b: string) => ({
+        const bulletRows = data.bullets.map((b: string) => ({
           text: b,
           options: {
             fontSize: 11,
@@ -366,7 +371,7 @@ export async function generatePresentation(): Promise<Buffer> {
           },
         }));
 
-        slide.addText(bulletRows, {
+        slide.addText(bulletRows as PptxGenJS.TextProps[], {
           x: 0.3,
           y: 1.0,
           w: 5.2,
@@ -453,7 +458,7 @@ export async function generatePresentation(): Promise<Buffer> {
       let bulletY = 1.3;
 
       if (data.bullets && data.bullets.length > 0) {
-        const bulletRows: any[] = data.bullets.map((b: string) => ({
+        const bulletRows = data.bullets.map((b: string) => ({
           text: b,
           options: {
             fontSize: 13,
@@ -465,7 +470,7 @@ export async function generatePresentation(): Promise<Buffer> {
         }));
 
         const bulletH = data.highlights ? 2.2 : 3.5;
-        slide.addText(bulletRows, {
+        slide.addText(bulletRows as PptxGenJS.TextProps[], {
           x: 0.5,
           y: bulletY,
           w: data.highlights ? 7.5 : 12.3,

@@ -3281,7 +3281,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   // ==================== Presentation PPTX ====================
 
-  app.get("/api/documentation/presentation-pptx", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.get("/api/documentation/presentation-pptx", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { generatePresentation } = await import("./generatePpt");
       const buffer = await generatePresentation();

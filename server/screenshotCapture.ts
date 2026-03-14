@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
+import type { Browser, Page } from "puppeteer-core";
 const _require = createRequire(import.meta.url);
 
 interface ScreenshotMap {
@@ -14,8 +15,8 @@ const ROUTES_TO_CAPTURE: { slideTitle: string; route: string }[] = [
   { slideTitle: "Campanhas Omnichannel", route: "/admin/campaigns" },
   { slideTitle: "Fábrica de Agentes IA", route: "/admin/agents" },
   { slideTitle: "Laboratório de Testes", route: "/admin/lab" },
-  { slideTitle: "Microlearning & Webhooks", route: "/admin/learning-tracks" },
-  { slideTitle: "Configurações & Integrações", route: "/admin/settings" },
+  { slideTitle: "Microlearning & Webhooks", route: "/learning-tracks" },
+  { slideTitle: "Configurações & Integrações", route: "/settings" },
   { slideTitle: "Branding White-label", route: "/admin/branding" },
 ];
 
@@ -29,8 +30,11 @@ function findChromiumPath(): string | null {
 }
 
 async function loginAndGetToken(baseUrl: string): Promise<string> {
-  const email = process.env.SCREENSHOT_ADMIN_EMAIL || "admin@quantaflow.com";
-  const password = process.env.SCREENSHOT_ADMIN_PASSWORD || "Admin@123";
+  const email = process.env.SCREENSHOT_ADMIN_EMAIL;
+  const password = process.env.SCREENSHOT_ADMIN_PASSWORD;
+  if (!email || !password) {
+    throw new Error("SCREENSHOT_ADMIN_EMAIL and SCREENSHOT_ADMIN_PASSWORD env vars are required");
+  }
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -52,16 +56,12 @@ export async function captureScreenshots(): Promise<ScreenshotMap> {
     return screenshots;
   }
 
-  let puppeteer: any;
+  let puppeteer: typeof import("puppeteer-core");
   try {
     puppeteer = _require("puppeteer-core");
   } catch {
-    try {
-      puppeteer = _require("puppeteer");
-    } catch {
-      console.warn("[screenshots] puppeteer not available, skipping captures");
-      return screenshots;
-    }
+    console.warn("[screenshots] puppeteer-core not available, skipping captures");
+    return screenshots;
   }
 
   let token: string;
@@ -72,7 +72,7 @@ export async function captureScreenshots(): Promise<ScreenshotMap> {
     return screenshots;
   }
 
-  let browser: any;
+  let browser: Browser | null = null;
   try {
     browser = await puppeteer.launch({
       executablePath: chromiumPath,
@@ -88,7 +88,7 @@ export async function captureScreenshots(): Promise<ScreenshotMap> {
       ],
     });
 
-    const page = await browser.newPage();
+    const page: Page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
 
     await page.goto(baseUrl, { waitUntil: "networkidle2", timeout: 15000 });
@@ -110,6 +110,8 @@ export async function captureScreenshots(): Promise<ScreenshotMap> {
         console.warn(`[screenshots] failed to capture ${slideTitle}:`, err);
       }
     }
+
+    await page.close();
   } catch (err) {
     console.warn("[screenshots] browser launch failed:", err);
   } finally {
