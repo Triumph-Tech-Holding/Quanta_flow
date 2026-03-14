@@ -336,7 +336,7 @@ export default function AdminDocumentation() {
       const blob = await response.blob();
       const element = document.createElement("a");
       element.href = URL.createObjectURL(blob);
-      element.download = "Quanta_Flow_Apresentacao.pptx";
+      element.download = "quanta-flow-apresentacao.pptx";
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
@@ -505,7 +505,7 @@ export default function AdminDocumentation() {
                 ) : (
                   <>
                     <Presentation className="w-4 h-4" />
-                    Baixar PPT
+                    Baixar Apresentação (.pptx)
                   </>
                 )}
               </Button>

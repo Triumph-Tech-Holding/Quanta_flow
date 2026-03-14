@@ -406,6 +406,50 @@ export async function generatePresentation(): Promise<Buffer> {
         });
       });
     }
+
+    if (!data.highlights && data.bullets) {
+      const mockY = 3.9;
+      slide.addShape("roundRect", {
+        x: 0.5,
+        y: mockY,
+        w: 12.3,
+        h: 1.2,
+        fill: { color: LIGHT_BG },
+        line: { color: "D1D5DB", width: 1 },
+        rectRadius: 0.08,
+      });
+      slide.addShape("rect", {
+        x: 0.5,
+        y: mockY,
+        w: 12.3,
+        h: 0.25,
+        fill: { color: "E5E7EB" },
+      });
+      slide.addShape("ellipse", { x: 0.7, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: "EF4444" } });
+      slide.addShape("ellipse", { x: 0.9, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: "F59E0B" } });
+      slide.addShape("ellipse", { x: 1.1, y: mockY + 0.06, w: 0.12, h: 0.12, fill: { color: GREEN } });
+      slide.addText(`Quanta Flow — ${data.title}`, {
+        x: 1.4,
+        y: mockY + 0.02,
+        w: 10,
+        h: 0.2,
+        fontSize: 8,
+        color: GRAY_TEXT,
+        fontFace: "Arial",
+      });
+      slide.addText("[ Prévia da tela — insira screenshot aqui ]", {
+        x: 0.5,
+        y: mockY + 0.35,
+        w: 12.3,
+        h: 0.7,
+        fontSize: 11,
+        color: "9CA3AF",
+        align: "center",
+        valign: "middle",
+        fontFace: "Arial",
+        italic: true,
+      });
+    }
   }
 
   const output = await pptx.write({ outputType: "nodebuffer" });

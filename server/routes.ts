@@ -3286,7 +3286,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { generatePresentation } = await import("./generatePpt");
       const buffer = await generatePresentation();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
-      res.setHeader("Content-Disposition", 'attachment; filename="Quanta_Flow_Apresentacao.pptx"');
+      res.setHeader("Content-Disposition", 'attachment; filename="quanta-flow-apresentacao.pptx"');
       res.send(buffer);
     } catch (err) {
       console.error("[GET /api/documentation/presentation-pptx]", err);
