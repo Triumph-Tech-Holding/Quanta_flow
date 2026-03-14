@@ -20,7 +20,7 @@ const ROUTES_TO_CAPTURE: { slideTitle: string; route: string }[] = [
   { slideTitle: "Branding White-label", route: "/admin/branding" },
 ];
 
-function findChromiumPath(): string | null {
+function findSystemChromiumPath(): string | null {
   try {
     const result = execSync("which chromium 2>/dev/null || which chromium-browser 2>/dev/null || which google-chrome 2>/dev/null", { encoding: "utf-8" }).trim();
     return result || null;
@@ -29,12 +29,24 @@ function findChromiumPath(): string | null {
   }
 }
 
+function resolveChromiumPath(): string | null {
+  const systemPath = findSystemChromiumPath();
+  if (systemPath) return systemPath;
+
+  try {
+    const puppeteerFull = _require("puppeteer");
+    if (puppeteerFull.executablePath) {
+      const bundledPath = puppeteerFull.executablePath();
+      if (bundledPath) return bundledPath;
+    }
+  } catch {}
+
+  return null;
+}
+
 async function loginAndGetToken(baseUrl: string): Promise<string> {
-  const email = process.env.SCREENSHOT_ADMIN_EMAIL;
-  const password = process.env.SCREENSHOT_ADMIN_PASSWORD;
-  if (!email || !password) {
-    throw new Error("SCREENSHOT_ADMIN_EMAIL and SCREENSHOT_ADMIN_PASSWORD env vars are required");
-  }
+  const email = process.env.SCREENSHOT_ADMIN_EMAIL || "admin@quantaflow.com";
+  const password = process.env.SCREENSHOT_ADMIN_PASSWORD || "Admin@123";
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -50,11 +62,12 @@ export async function captureScreenshots(): Promise<ScreenshotMap> {
   const port = process.env.PORT || "5000";
   const baseUrl = `http://localhost:${port}`;
 
-  const chromiumPath = findChromiumPath();
+  const chromiumPath = resolveChromiumPath();
   if (!chromiumPath) {
-    console.warn("[screenshots] chromium not found in system, skipping captures");
+    console.warn("[screenshots] no chromium found (bundled or system), skipping captures");
     return screenshots;
   }
+  console.log(`[screenshots] using chromium at: ${chromiumPath}`);
 
   let puppeteer: typeof import("puppeteer-core");
   try {
