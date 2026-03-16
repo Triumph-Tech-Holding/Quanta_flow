@@ -437,19 +437,19 @@ export class MetaProvider implements IWhatsAppProvider {
 
   async sendAudio(phone: string, audioPath: string): Promise<SendMessageResult> {
     const cleanPhone = phone.replace(/\D/g, "");
-    const fs = await import("fs");
+    const fsModule = await import("fs");
     const filename = audioPath.split("/").pop() || "audio.ogg";
-    const audioBuffer = fs.default.readFileSync(audioPath);
-    const FormData = (await import("form-data")).default;
-    const form = new FormData();
-    form.append("messaging_product", "whatsapp");
-    form.append("file", audioBuffer, { filename, contentType: "audio/ogg" });
+    const audioBuffer = fsModule.default.readFileSync(audioPath);
+    const blob = new Blob([audioBuffer], { type: "audio/ogg" });
+    const formData = new FormData();
+    formData.append("messaging_product", "whatsapp");
+    formData.append("file", blob, filename);
     const uploadRes = await fetch(
       `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}/media`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${this.accessToken}`, ...form.getHeaders() },
-        body: form.getBuffer(),
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+        body: formData,
       },
     );
     if (!uploadRes.ok) throw new Error(`Meta media upload error: ${uploadRes.status}`);
