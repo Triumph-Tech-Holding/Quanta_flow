@@ -45,7 +45,7 @@ export const apiConfigs = pgTable("api_configs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const whatsappProviderEnum = pgEnum("whatsapp_provider", ["zapi", "baileys", "evolution", "none"]);
+export const whatsappProviderEnum = pgEnum("whatsapp_provider", ["zapi", "baileys", "evolution", "meta", "none"]);
 
 export const evolutionConfigs = pgTable("evolution_configs", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),

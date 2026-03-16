@@ -11,7 +11,7 @@ export interface SendMessageResult {
 
 export interface ProviderStatus {
   connected: boolean;
-  provider: "zapi" | "baileys" | "evolution" | "none";
+  provider: "zapi" | "baileys" | "evolution" | "meta" | "none";
   qrCode?: string | null;
   phoneNumber?: string | null;
 }
@@ -374,6 +374,135 @@ export class BaileysProvider implements IWhatsAppProvider {
   }
 }
 
+// ─── Meta (Cloud API) Provider ───────────────────────────────────────────────
+
+export class MetaProvider implements IWhatsAppProvider {
+  private static readonly GRAPH_URL = "https://graph.facebook.com/v19.0";
+
+  constructor(
+    private phoneNumberId: string,
+    private accessToken: string,
+    private userId: string,
+  ) {}
+
+  async sendMessage(phone: string, text: string): Promise<SendMessageResult> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    const response = await fetch(
+      `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: cleanPhone,
+          type: "text",
+          text: { body: text },
+        }),
+      },
+    );
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Meta Cloud API send error: ${response.status} — ${errBody}`);
+    }
+    const result = await response.json() as { messages?: { id: string }[] };
+    return { messageId: result.messages?.[0]?.id || `meta_${Date.now()}` };
+  }
+
+  async sendImage(phone: string, imageUrl: string, caption?: string): Promise<SendMessageResult> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    const response = await fetch(
+      `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: cleanPhone,
+          type: "image",
+          image: { link: imageUrl, caption: caption || "" },
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`Meta send-image error: ${response.status}`);
+    const result = await response.json() as { messages?: { id: string }[] };
+    return { messageId: result.messages?.[0]?.id || `meta_img_${Date.now()}` };
+  }
+
+  async sendAudio(phone: string, audioPath: string): Promise<SendMessageResult> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    const fs = await import("fs");
+    const filename = audioPath.split("/").pop() || "audio.ogg";
+    const audioBuffer = fs.default.readFileSync(audioPath);
+    const FormData = (await import("form-data")).default;
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("file", audioBuffer, { filename, contentType: "audio/ogg" });
+    const uploadRes = await fetch(
+      `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}/media`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.accessToken}`, ...form.getHeaders() },
+        body: form.getBuffer(),
+      },
+    );
+    if (!uploadRes.ok) throw new Error(`Meta media upload error: ${uploadRes.status}`);
+    const uploaded = await uploadRes.json() as { id: string };
+    const response = await fetch(
+      `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: cleanPhone,
+          type: "audio",
+          audio: { id: uploaded.id },
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`Meta send-audio error: ${response.status}`);
+    const result = await response.json() as { messages?: { id: string }[] };
+    return { messageId: result.messages?.[0]?.id || `meta_audio_${Date.now()}` };
+  }
+
+  async getStatus(): Promise<ProviderStatus> {
+    if (!this.phoneNumberId || !this.accessToken) {
+      return { connected: false, provider: "meta" };
+    }
+    try {
+      const res = await fetch(
+        `${MetaProvider.GRAPH_URL}/${this.phoneNumberId}?fields=display_phone_number`,
+        { headers: { Authorization: `Bearer ${this.accessToken}` } },
+      );
+      if (!res.ok) return { connected: false, provider: "meta" };
+      const data = await res.json() as { display_phone_number?: string };
+      return {
+        connected: true,
+        provider: "meta",
+        phoneNumber: data.display_phone_number || null,
+      };
+    } catch {
+      return { connected: false, provider: "meta" };
+    }
+  }
+
+  async connect(): Promise<void> {}
+  async disconnect(): Promise<void> {
+    await storage.updateEvolutionConfig(this.userId, { status: "disconnected" });
+  }
+
+  getQRCode(): null { return null; }
+}
+
 // ─── Provider Router ──────────────────────────────────────────────────────────
 
 export async function getWhatsAppProvider(userId: string): Promise<IWhatsAppProvider> {
@@ -384,6 +513,13 @@ export async function getWhatsAppProvider(userId: string): Promise<IWhatsAppProv
 
   if (provider === "baileys") {
     return new BaileysProvider(userId);
+  }
+
+  if (provider === "meta") {
+    const settings = await storage.getSettings(userId);
+    const phoneNumberId = settings.find((s) => s.key === "meta_phone_number_id")?.value || "";
+    const accessToken = settings.find((s) => s.key === "meta_access_token")?.value || "";
+    return new MetaProvider(phoneNumberId, accessToken, userId);
   }
 
   if (provider === "zapi" && config.evolutionUrl.includes("z-api.io")) {
