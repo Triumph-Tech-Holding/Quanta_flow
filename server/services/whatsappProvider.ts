@@ -2,6 +2,7 @@ import { storage } from "../storage";
 import { log } from "../index";
 import { processIncomingWhatsAppMessage } from "./messageProcessor";
 import { emitInstanceConnected } from "../socket";
+import { configService } from "./configService";
 import fs from "fs";
 import path from "path";
 
@@ -516,9 +517,8 @@ export async function getWhatsAppProvider(userId: string): Promise<IWhatsAppProv
   }
 
   if (provider === "meta") {
-    const settings = await storage.getSettings(userId);
-    const phoneNumberId = settings.find((s) => s.key === "meta_phone_number_id")?.value || "";
-    const accessToken = settings.find((s) => s.key === "meta_access_token")?.value || "";
+    const phoneNumberId = await configService.getSetting("meta_phone_number_id") || "";
+    const accessToken = await configService.getSetting("meta_access_token") || "";
     return new MetaProvider(phoneNumberId, accessToken, userId);
   }
 

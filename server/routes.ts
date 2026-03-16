@@ -890,8 +890,8 @@ export async function registerRoutes(
   app.post("/api/whatsapp-provider/switch", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
-      const { provider } = req.body as { provider: "zapi" | "baileys" | "none" };
-      if (!["zapi", "baileys", "none"].includes(provider)) {
+      const { provider } = req.body as { provider: "zapi" | "baileys" | "evolution" | "meta" | "none" };
+      if (!["zapi", "baileys", "evolution", "meta", "none"].includes(provider)) {
         return res.status(400).json({ message: "Provider inválido" });
       }
       await storage.updateEvolutionConfig(userId, {
@@ -2743,6 +2743,71 @@ Return ONLY the JSON array, no markdown.`,
       const info = await verifyRes.json() as { name?: string; id?: string };
       res.json({ ok: true, name: info.name, id: info.id });
     } catch { res.status(500).json({ message: "Erro ao verificar token do Instagram" }); }
+  });
+
+  // ─── Meta (WhatsApp Cloud API) Webhook ──────────────────────────────────────
+
+  app.get("/api/webhooks/meta", async (req: Request, res: Response) => {
+    const mode = req.query["hub.mode"] as string;
+    const token = req.query["hub.verify_token"] as string;
+    const challenge = req.query["hub.challenge"] as string;
+
+    if (mode === "subscribe") {
+      const verifyToken = await configService.getSetting("meta_verify_token") || "quanta_flow_meta";
+      if (token === verifyToken) {
+        log(`Meta webhook verified successfully`, "meta-webhook");
+        return res.status(200).send(challenge);
+      }
+    }
+    log(`Meta webhook verification failed`, "meta-webhook");
+    res.status(403).send("Forbidden");
+  });
+
+  app.post("/api/webhooks/meta", async (req: Request, res: Response) => {
+    try {
+      res.json({ ok: true });
+
+      const entries = req.body?.entry;
+      if (!Array.isArray(entries)) return;
+
+      for (const entry of entries) {
+        const changes = entry.changes;
+        if (!Array.isArray(changes)) continue;
+
+        for (const change of changes) {
+          const value = change.value;
+          if (!value || value.messaging_product !== "whatsapp") continue;
+
+          const messages = value.messages;
+          if (!Array.isArray(messages)) continue;
+
+          for (const msg of messages) {
+            if (msg.type !== "text" || !msg.text?.body) continue;
+
+            const phone = msg.from;
+            const text = msg.text.body;
+            const contactName = value.contacts?.[0]?.profile?.name || phone;
+
+            const allUsers = await db.execute(sqlExpr`SELECT id FROM users LIMIT 1`);
+            const firstUserId = (allUsers.rows[0] as { id: string })?.id;
+            if (!firstUserId) continue;
+
+            log(`Meta webhook: message from ${phone}: ${text.substring(0, 50)}`, "meta-webhook");
+
+            await processIncomingMessage({
+              userId: firstUserId,
+              phone,
+              contactName,
+              messageContent: text,
+              channel: "whatsapp",
+              provider: "meta",
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[meta webhook]", err);
+    }
   });
 
   // ─── Documentation Versions ────────────────────────────────────────────────────

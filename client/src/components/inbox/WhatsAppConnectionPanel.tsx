@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Loader2, Wifi, WifiOff, Copy, Check, ExternalLink, RefreshCw, QrCode, Smartphone, Cloud,
+  Loader2, Wifi, WifiOff, Copy, Check, ExternalLink, RefreshCw, QrCode, Smartphone, Cloud, Globe,
 } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -342,8 +342,46 @@ function BaileysSection() {
   );
 }
 
+function MetaSection() {
+  const { data: providerData } = useQuery<ProviderStatus>({
+    queryKey: ["/api/whatsapp-provider"],
+  });
+
+  const isMeta = providerData?.activeProvider === "meta";
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-muted rounded-md text-sm space-y-1">
+        <p className="font-medium">WhatsApp Business Cloud API — API oficial da Meta</p>
+        <p className="text-muted-foreground text-xs">
+          {isMeta
+            ? "A Meta Oficial está ativa. Configure as credenciais na página de Configurações."
+            : "Para usar a Meta Oficial, selecione \"Meta Oficial (Cloud API)\" no seletor de provedor em Configurações."}
+        </p>
+      </div>
+
+      {isMeta && (
+        <div className="flex items-center gap-2 text-green-600">
+          <Wifi className="h-5 w-5" />
+          <span className="font-medium">Meta Oficial ativa</span>
+        </div>
+      )}
+
+      <a
+        href="https://developers.facebook.com/apps/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+        data-testid="link-meta-developers"
+      >
+        Abrir Meta Developers Console <ExternalLink className="h-3 w-3" />
+      </a>
+    </div>
+  );
+}
+
 export function WhatsAppConnectionPanel() {
-  const [activeMethod, setActiveMethod] = useState<"baileys" | "zapi">("baileys");
+  const [activeMethod, setActiveMethod] = useState<"baileys" | "zapi" | "meta">("baileys");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -361,7 +399,8 @@ export function WhatsAppConnectionPanel() {
 
   const isZapiConnected = zapiStatus?.status === "connected";
   const isBaileysConnected = qrData?.connected;
-  const isAnyConnected = isZapiConnected || isBaileysConnected;
+  const isMetaActive = providerData?.activeProvider === "meta";
+  const isAnyConnected = isZapiConnected || isBaileysConnected || isMetaActive;
 
   return (
     <div className="space-y-4" data-testid="panel-whatsapp-connection">
@@ -387,7 +426,7 @@ export function WhatsAppConnectionPanel() {
         </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => setActiveMethod("baileys")}
           className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-left ${
@@ -425,11 +464,30 @@ export function WhatsAppConnectionPanel() {
             <div className="h-2 w-2 rounded-full bg-green-500 absolute top-2 right-2" />
           )}
         </button>
+
+        <button
+          onClick={() => setActiveMethod("meta")}
+          className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-left ${
+            activeMethod === "meta"
+              ? "border-primary bg-primary/5"
+              : "border-muted hover:border-muted-foreground/30"
+          }`}
+          data-testid="button-select-meta"
+        >
+          <Globe className={`h-8 w-8 ${activeMethod === "meta" ? "text-primary" : "text-muted-foreground"}`} />
+          <div>
+            <p className="font-medium text-sm">Meta Oficial</p>
+            <p className="text-xs text-muted-foreground">Cloud API</p>
+          </div>
+          {isMetaActive && (
+            <div className="h-2 w-2 rounded-full bg-green-500 absolute top-2 right-2" />
+          )}
+        </button>
       </div>
 
       <Separator />
 
-      {activeMethod === "baileys" ? <BaileysSection /> : <ZApiSection />}
+      {activeMethod === "baileys" ? <BaileysSection /> : activeMethod === "zapi" ? <ZApiSection /> : <MetaSection />}
     </div>
   );
 }

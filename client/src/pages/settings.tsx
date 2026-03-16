@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon, Wifi, WifiOff, QrCode, Smartphone } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon, Wifi, WifiOff, QrCode, Smartphone, Copy, ExternalLink, Globe, Save, Check } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -58,6 +58,155 @@ const TYPES = [
   { value: "id", label: "ID" },
   { value: "secret", label: "Segredo" },
 ];
+
+function MetaConfigPanel() {
+  const { toast } = useToast();
+  const [metaPhoneNumberId, setMetaPhoneNumberId] = useState("");
+  const [metaAccessToken, setMetaAccessToken] = useState("");
+  const [metaVerifyToken, setMetaVerifyToken] = useState("");
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const webhookUrl = `${window.location.origin}/api/webhooks/meta`;
+
+  const copyWebhookUrl = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopiedWebhook(true);
+    setTimeout(() => setCopiedWebhook(false), 2000);
+    toast({ title: "URL do webhook copiada!" });
+  };
+
+  const saveMeta = async () => {
+    if (!metaPhoneNumberId || !metaAccessToken || !metaVerifyToken) {
+      toast({ title: "Preencha todos os campos", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const keys = [
+        { key: "meta_phone_number_id", value: metaPhoneNumberId, description: "Phone Number ID da Meta Cloud API" },
+        { key: "meta_access_token", value: metaAccessToken, description: "Access Token da Meta Cloud API" },
+        { key: "meta_verify_token", value: metaVerifyToken, description: "Verify Token para webhook da Meta" },
+      ];
+      for (const item of keys) {
+        await apiRequest("POST", "/api/admin/settings", {
+          key: item.key,
+          value: item.value,
+          type: "api_key",
+          category: "whatsapp",
+          description: item.description,
+          isActive: true,
+          isEncrypted: true,
+        }).catch(async () => {
+          await apiRequest("PUT", `/api/admin/settings/${item.key}`, { value: item.value });
+        });
+      }
+      toast({ title: "Credenciais Meta salvas com sucesso!" });
+      setMetaPhoneNumberId("");
+      setMetaAccessToken("");
+      setMetaVerifyToken("");
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar credenciais", description: error.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border rounded-lg p-4 space-y-4" data-testid="panel-meta-config">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p className="font-medium text-sm flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Meta Oficial (Cloud API)
+          </p>
+          <p className="text-xs text-muted-foreground">
+            WhatsApp Business Cloud API — API oficial da Meta para envio e recebimento de mensagens.
+          </p>
+        </div>
+        <a
+          href="https://developers.facebook.com/apps/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          data-testid="link-meta-console"
+        >
+          Meta Developers Console <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+
+      <div className="p-3 bg-muted rounded-md text-sm space-y-1">
+        <p className="font-medium text-xs">Como configurar:</p>
+        <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-xs">
+          <li>Acesse o Meta Developers Console e crie/selecione seu App</li>
+          <li>No painel do WhatsApp, copie o <strong>Phone Number ID</strong></li>
+          <li>Gere um <strong>Access Token</strong> permanente (System User Token)</li>
+          <li>Defina um <strong>Verify Token</strong> (qualquer texto que você escolher)</li>
+          <li>Configure o Webhook no Meta apontando para a URL abaixo</li>
+        </ol>
+      </div>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Phone Number ID</label>
+          <Input
+            placeholder="Ex: 123456789012345"
+            value={metaPhoneNumberId}
+            onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+            data-testid="input-meta-phone-number-id"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Access Token</label>
+          <Input
+            type="password"
+            placeholder="EAAxxxxxxxxxxxxxxxx..."
+            value={metaAccessToken}
+            onChange={(e) => setMetaAccessToken(e.target.value)}
+            data-testid="input-meta-access-token"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Verify Token</label>
+          <Input
+            placeholder="Seu token de verificação do webhook"
+            value={metaVerifyToken}
+            onChange={(e) => setMetaVerifyToken(e.target.value)}
+            data-testid="input-meta-verify-token"
+          />
+          <p className="text-xs text-muted-foreground">
+            Mesmo token que você configurou no Meta Developers Console
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm font-medium">URL do Webhook</label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 text-xs bg-muted p-2 rounded-md break-all" data-testid="text-meta-webhook-url">
+            {webhookUrl}
+          </code>
+          <Button size="icon" variant="outline" onClick={copyWebhookUrl} data-testid="button-copy-meta-webhook">
+            {copiedWebhook ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Cole esta URL no campo "Callback URL" do webhook no Meta Developers Console
+        </p>
+      </div>
+
+      <Button
+        onClick={saveMeta}
+        disabled={saving}
+        className="w-full"
+        data-testid="button-save-meta"
+      >
+        {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+        Salvar Configurações Meta
+      </Button>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -402,6 +551,8 @@ export default function SettingsPage() {
                     ? "WhatsApp Local (Baileys)"
                     : providerData?.activeProvider === "evolution"
                     ? "Evolution API"
+                    : providerData?.activeProvider === "meta"
+                    ? "Meta Oficial"
                     : "Nenhum"}
                 </Badge>
               </div>
@@ -417,6 +568,7 @@ export default function SettingsPage() {
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
                   <SelectItem value="zapi">Z-API (Nuvem)</SelectItem>
+                  <SelectItem value="meta">Meta Oficial (Cloud API)</SelectItem>
                   <SelectItem value="evolution">Evolution API</SelectItem>
                   <SelectItem value="baileys">WhatsApp Local (Baileys)</SelectItem>
                 </SelectContent>
@@ -493,6 +645,10 @@ export default function SettingsPage() {
                   </p>
                 )}
               </div>
+            )}
+
+            {providerData?.activeProvider === "meta" && (
+              <MetaConfigPanel />
             )}
           </CardContent>
         </Card>
