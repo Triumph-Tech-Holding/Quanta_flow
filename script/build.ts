@@ -32,6 +32,7 @@ const allowlist = [
   "xlsx",
   "zod",
   "zod-validation-error",
+  "form-data",
 ];
 
 async function buildAll() {
@@ -54,7 +55,7 @@ async function buildAll() {
     bundle: true,
     format: "esm",
     outfile: "dist/index.js",
-    banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
+    banner: { js: "import { createRequire } from 'module'; import { fileURLToPath as __fu } from 'url'; import { dirname as __dn } from 'path'; const require = createRequire(import.meta.url); const __filename = __fu(import.meta.url); const __dirname = __dn(__filename);" },
     define: {
       "process.env.NODE_ENV": '"production"',
     },
