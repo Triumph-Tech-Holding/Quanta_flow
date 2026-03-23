@@ -4036,7 +4036,7 @@ Ideia: "${idea.trim()}"`;
 
   app.post("/api/admin/social/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const { projectId, idea, channel, tone } = req.body;
+      const { projectId, idea, channel, tone, ideaArea: prefilledIdeaArea, ideaSources: prefilledIdeaSources } = req.body;
       if (!idea) return res.status(400).json({ message: "Ideia é obrigatória" });
 
       // Load project brand/leadership style if provided
@@ -4107,8 +4107,8 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
         userId,
         projectId: projectId || null,
         sourceIdea: idea,
-        ideaArea: generated.ideaArea || null,
-        ideaSources: generated.ideaSources || null,
+        ideaArea: prefilledIdeaArea || generated.ideaArea || null,
+        ideaSources: prefilledIdeaSources || generated.ideaSources || null,
         formats: {
           headlines: generated.headlines || [],
           article: generated.article || "",

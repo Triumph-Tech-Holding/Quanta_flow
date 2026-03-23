@@ -36,6 +36,8 @@ interface GeneratePayload {
   idea: string;
   channel: string;
   tone: string;
+  ideaArea?: string;
+  ideaSources?: string;
 }
 interface UpdateAssetPayload {
   status?: string;
@@ -326,8 +328,9 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
 
   // Chat Wizard state
   const [wizardPhase, setWizardPhase] = useState<WizardPhase>("intro");
+  const INITIAL_BOT_MSG = "Olá! Sou o Assistente MFORTE 🚀\n\nVou transformar sua ideia em um pacote completo de conteúdo — artigo, podcast, reels, live e anúncio — pronto para publicar.\n\nQual a sua ideia de poder hoje?";
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "bot", content: "Olá! Sou o Assistente MFORTE 🚀\n\nCompartilhe sua ideia de poder e vou transformá-la em um pacote completo de conteúdo — artigo, podcast, reels, live e anúncio — pronto para publicar.\n\nQual é o tema ou insight que você quer explorar hoje?" },
+    { role: "bot", content: INITIAL_BOT_MSG },
   ]);
   const [wizardInput, setWizardInput] = useState("");
   const [rawIdea, setRawIdea] = useState("");
@@ -396,12 +399,14 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
       { role: "bot", content: "Perfeito! Gerando seu pacote completo de conteúdo... 🚀\n\nIsso pode levar alguns segundos." },
     ]);
     setWizardPhase("generating");
-    const enrichedIdea = `${headline}\n\nContexto: ${rawIdea}${wizardData?.ideaArea ? `\nÁrea: ${wizardData.ideaArea}` : ""}${wizardData?.ideaSources ? `\nReferências: ${wizardData.ideaSources}` : ""}`;
+    const enrichedIdea = `${headline}\n\nContexto: ${rawIdea}`;
     generateMutation.mutate({
       projectId: projectId === "_none_" ? undefined : projectId,
       idea: enrichedIdea,
       channel,
       tone,
+      ideaArea: wizardData?.ideaArea || undefined,
+      ideaSources: wizardData?.ideaSources || undefined,
     });
   };
 
@@ -462,7 +467,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
     setWizardData(null);
     setWizardInput("");
     setCustomHeadline("");
-    setChatMessages([{ role: "bot", content: "Olá! Sou o Assistente MFORTE 🚀\n\nCompartilhe sua ideia de poder e vou transformá-la em um pacote completo de conteúdo — artigo, podcast, reels, live e anúncio — pronto para publicar.\n\nQual é o tema ou insight que você quer explorar hoje?" }]);
+    setChatMessages([{ role: "bot", content: INITIAL_BOT_MSG }]);
   };
 
   if (!isAdmin) return (
