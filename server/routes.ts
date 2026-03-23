@@ -3893,8 +3893,13 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.post("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const userId = req.user!.userId;
+      if (req.body.projectId) {
+        const ownerProject = await storage.getSocialProject(req.body.projectId, userId);
+        if (!ownerProject) return res.status(403).json({ message: "Projeto não encontrado ou acesso negado" });
+      }
       const { insertContentAssetSchema } = await import("@shared/schema");
-      const parsed = insertContentAssetSchema.parse({ ...req.body, userId: req.user!.userId });
+      const parsed = insertContentAssetSchema.parse({ ...req.body, userId });
       const asset = await storage.createContentAsset(parsed);
       res.status(201).json(asset);
     } catch (err) {
@@ -3961,6 +3966,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       let leadershipStyle = "";
       if (projectId) {
         const project = await storage.getSocialProject(projectId, userId);
+        if (!project) return res.status(403).json({ message: "Projeto não encontrado ou acesso negado" });
         if (project?.brand?.leadershipStyle) {
           const styleMap: Record<string, string> = {
             hormozi: "Alex Hormozi (foco em ofertas irresistíveis, resultados mensuráveis e linguagem direta e provocativa)",

@@ -29,7 +29,7 @@ interface ProjectPayload {
   name: string;
   clientName: string | null;
   description: string | null;
-  brand: { tone: string; niche: string; leadershipStyle?: string };
+  brand: { tone: string; niche: string; leadershipStyle?: string; colors?: string[] };
 }
 interface GeneratePayload {
   projectId?: string;
@@ -143,7 +143,7 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<SocialProject | null>(null);
-  const [form, setForm] = useState({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none" });
+  const [form, setForm] = useState({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none", colors: "" });
 
   const { data: projects = [], isLoading } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
@@ -167,16 +167,17 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
     onError: () => toast({ title: "Erro ao excluir projeto", variant: "destructive" }),
   });
 
-  const openNew = () => { setEditing(null); setForm({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none" }); setShowModal(true); };
+  const openNew = () => { setEditing(null); setForm({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none", colors: "" }); setShowModal(true); };
   const openEdit = (p: SocialProject) => {
     setEditing(p);
-    setForm({ name: p.name, clientName: p.clientName || "", description: p.description || "", tone: p.brand?.tone || "", niche: p.brand?.niche || "", leadershipStyle: p.brand?.leadershipStyle || "none" });
+    setForm({ name: p.name, clientName: p.clientName || "", description: p.description || "", tone: p.brand?.tone || "", niche: p.brand?.niche || "", leadershipStyle: p.brand?.leadershipStyle || "none", colors: (p.brand?.colors || []).join(", ") });
     setShowModal(true);
   };
 
   const handleSubmit = () => {
     const ls = form.leadershipStyle === "none" ? undefined : form.leadershipStyle;
-    const payload = { name: form.name, clientName: form.clientName || null, description: form.description || null, brand: { tone: form.tone, niche: form.niche, leadershipStyle: ls } };
+    const colors = form.colors ? form.colors.split(",").map(c => c.trim()).filter(c => c) : undefined;
+    const payload = { name: form.name, clientName: form.clientName || null, description: form.description || null, brand: { tone: form.tone, niche: form.niche, leadershipStyle: ls, colors } };
     if (editing) updateMutation.mutate({ id: editing.id, data: payload });
     else createMutation.mutate(payload);
   };
@@ -270,6 +271,11 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">Influencia o estilo de linguagem e abordagem da IA na geração de conteúdo.</p>
+            </div>
+            <div>
+              <Label>Cores da Marca (hex, separadas por vírgula)</Label>
+              <Input value={form.colors} onChange={e => setForm(f => ({ ...f, colors: e.target.value }))} placeholder="Ex: #00A86B, #1B3A57, #FFFFFF" data-testid="input-brand-colors" />
+              <p className="text-xs text-muted-foreground mt-1">Opcional. Cores em hex para referência de identidade visual.</p>
             </div>
           </div>
           <DialogFooter>
