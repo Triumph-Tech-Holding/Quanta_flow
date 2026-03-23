@@ -30,6 +30,9 @@ import {
   type Campaign, type InsertCampaign, type UpdateCampaign,
   type CampaignDelivery,
   type MessageTemplate, type InsertMessageTemplate, type UpdateMessageTemplate,
+  socialProjects, contentAssets,
+  type SocialProject, type InsertSocialProject, type UpdateSocialProject,
+  type ContentAsset, type InsertContentAsset, type UpdateContentAsset,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -134,6 +137,19 @@ export interface IStorage {
   createMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate>;
   updateMessageTemplate(id: string, data: UpdateMessageTemplate): Promise<MessageTemplate | undefined>;
   deleteMessageTemplate(id: string): Promise<boolean>;
+  // Social/Ads
+  getSocialProjects(): Promise<SocialProject[]>;
+  getSocialProject(id: string): Promise<SocialProject | undefined>;
+  createSocialProject(data: InsertSocialProject): Promise<SocialProject>;
+  updateSocialProject(id: string, data: UpdateSocialProject): Promise<SocialProject | undefined>;
+  deleteSocialProject(id: string): Promise<boolean>;
+  getContentAssets(filters?: { projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]>;
+  getContentAsset(id: string): Promise<ContentAsset | undefined>;
+  createContentAsset(data: InsertContentAsset): Promise<ContentAsset>;
+  updateContentAsset(id: string, data: UpdateContentAsset): Promise<ContentAsset | undefined>;
+  deleteContentAsset(id: string): Promise<boolean>;
+  getCalendarAssets(month: string): Promise<ContentAsset[]>;
+  countAssetsPerProject(): Promise<{ projectId: string; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1010,6 +1026,95 @@ export class DatabaseStorage implements IStorage {
   async deleteMessageTemplate(id: string): Promise<boolean> {
     const result = await db.delete(messageTemplates).where(eq(messageTemplates.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ==================== Social/Ads ====================
+
+  async getSocialProjects(): Promise<SocialProject[]> {
+    return db.select().from(socialProjects).orderBy(desc(socialProjects.createdAt));
+  }
+
+  async getSocialProject(id: string): Promise<SocialProject | undefined> {
+    const [p] = await db.select().from(socialProjects).where(eq(socialProjects.id, id)).limit(1);
+    return p;
+  }
+
+  async createSocialProject(data: InsertSocialProject): Promise<SocialProject> {
+    const [p] = await db.insert(socialProjects).values(data).returning();
+    return p;
+  }
+
+  async updateSocialProject(id: string, data: UpdateSocialProject): Promise<SocialProject | undefined> {
+    const [p] = await db.update(socialProjects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(socialProjects.id, id))
+      .returning();
+    return p;
+  }
+
+  async deleteSocialProject(id: string): Promise<boolean> {
+    const result = await db.delete(socialProjects).where(eq(socialProjects.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getContentAssets(filters?: { projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]> {
+    const conditions = [];
+    if (filters?.projectId) conditions.push(eq(contentAssets.projectId, filters.projectId));
+    if (filters?.status) conditions.push(eq(contentAssets.status, filters.status as any));
+    if (filters?.channel) conditions.push(eq(contentAssets.channel, filters.channel as any));
+    const query = conditions.length > 0
+      ? db.select().from(contentAssets).where(and(...conditions)).orderBy(desc(contentAssets.createdAt))
+      : db.select().from(contentAssets).orderBy(desc(contentAssets.createdAt));
+    return query;
+  }
+
+  async getContentAsset(id: string): Promise<ContentAsset | undefined> {
+    const [a] = await db.select().from(contentAssets).where(eq(contentAssets.id, id)).limit(1);
+    return a;
+  }
+
+  async createContentAsset(data: InsertContentAsset): Promise<ContentAsset> {
+    const [a] = await db.insert(contentAssets).values(data).returning();
+    return a;
+  }
+
+  async updateContentAsset(id: string, data: UpdateContentAsset): Promise<ContentAsset | undefined> {
+    const updateData: any = { ...data, updatedAt: new Date() };
+    if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
+    if (data.publishedAt !== undefined) updateData.publishedAt = data.publishedAt ? new Date(data.publishedAt) : null;
+    const [a] = await db.update(contentAssets)
+      .set(updateData)
+      .where(eq(contentAssets.id, id))
+      .returning();
+    return a;
+  }
+
+  async deleteContentAsset(id: string): Promise<boolean> {
+    const result = await db.delete(contentAssets).where(eq(contentAssets.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getCalendarAssets(month: string): Promise<ContentAsset[]> {
+    const [year, m] = month.split("-").map(Number);
+    const start = new Date(year, m - 1, 1);
+    const end = new Date(year, m, 1);
+    return db.select().from(contentAssets)
+      .where(and(
+        isNotNull(contentAssets.scheduledAt),
+        gte(contentAssets.scheduledAt, start),
+        lte(contentAssets.scheduledAt, end),
+      ))
+      .orderBy(asc(contentAssets.scheduledAt));
+  }
+
+  async countAssetsPerProject(): Promise<{ projectId: string; count: number }[]> {
+    const rows = await db.select({
+      projectId: contentAssets.projectId,
+      count: sqlExpr<number>`count(*)::int`,
+    })
+      .from(contentAssets)
+      .groupBy(contentAssets.projectId);
+    return rows.filter(r => r.projectId !== null) as { projectId: string; count: number }[];
   }
 }
 

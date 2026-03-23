@@ -97,7 +97,7 @@ const modulesMenuItems = [
     url: "/social",
     icon: Share2,
     module: 4,
-    badge: "Em breve",
+    enabled: true,
   },
   {
     title: "IA Brain",

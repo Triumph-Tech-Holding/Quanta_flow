@@ -3814,6 +3814,236 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // ==================== Social/Ads Routes ====================
+
+  app.get("/api/admin/social/projects", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const projects = await storage.getSocialProjects();
+      const counts = await storage.countAssetsPerProject();
+      const countMap = Object.fromEntries(counts.map(c => [c.projectId, c.count]));
+      res.json(projects.map(p => ({ ...p, assetCount: countMap[p.id] || 0 })));
+    } catch (err) {
+      console.error("[GET /api/admin/social/projects]", err);
+      res.status(500).json({ message: "Erro ao listar projetos" });
+    }
+  });
+
+  app.post("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { insertSocialProjectSchema } = await import("@shared/schema");
+      const parsed = insertSocialProjectSchema.parse(req.body);
+      const project = await storage.createSocialProject(parsed);
+      res.status(201).json(project);
+    } catch (err) {
+      console.error("[POST /api/admin/social/projects]", err);
+      res.status(400).json({ message: "Erro ao criar projeto", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.patch("/api/admin/social/projects/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { updateSocialProjectSchema } = await import("@shared/schema");
+      const parsed = updateSocialProjectSchema.parse(req.body);
+      const project = await storage.updateSocialProject(req.params.id, parsed);
+      if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
+      res.json(project);
+    } catch (err) {
+      console.error("[PATCH /api/admin/social/projects/:id]", err);
+      res.status(400).json({ message: "Erro ao atualizar projeto" });
+    }
+  });
+
+  app.delete("/api/admin/social/projects/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      await storage.deleteSocialProject(req.params.id);
+      res.json({ message: "Projeto excluído" });
+    } catch (err) {
+      console.error("[DELETE /api/admin/social/projects/:id]", err);
+      res.status(500).json({ message: "Erro ao excluir projeto" });
+    }
+  });
+
+  app.get("/api/admin/social/assets", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const filters: { projectId?: string; status?: string; channel?: string } = {};
+      if (req.query.projectId) filters.projectId = req.query.projectId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.channel) filters.channel = req.query.channel as string;
+      const assets = await storage.getContentAssets(filters);
+      res.json(assets);
+    } catch (err) {
+      console.error("[GET /api/admin/social/assets]", err);
+      res.status(500).json({ message: "Erro ao listar ativos" });
+    }
+  });
+
+  app.get("/api/admin/social/assets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      res.json(asset);
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao buscar ativo" });
+    }
+  });
+
+  app.patch("/api/admin/social/assets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { updateContentAssetSchema } = await import("@shared/schema");
+      const parsed = updateContentAssetSchema.parse(req.body);
+      const asset = await storage.updateContentAsset(req.params.id, parsed);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      res.json(asset);
+    } catch (err) {
+      console.error("[PATCH /api/admin/social/assets/:id]", err);
+      res.status(400).json({ message: "Erro ao atualizar ativo" });
+    }
+  });
+
+  app.delete("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      await storage.deleteContentAsset(req.params.id);
+      res.json({ message: "Ativo excluído" });
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao excluir ativo" });
+    }
+  });
+
+  app.get("/api/admin/social/calendar", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+      const assets = await storage.getCalendarAssets(month);
+      res.json(assets);
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao carregar calendário" });
+    }
+  });
+
+  app.post("/api/admin/social/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { projectId, idea, channel, tone } = req.body;
+      if (!idea) return res.status(400).json({ message: "Ideia é obrigatória" });
+
+      const openai = new OpenAI();
+      const systemPrompt = `Você é um estrategista de conteúdo especializado em marketing digital e construção de autoridade. 
+Tom de voz: ${tone || "inspirador e profissional"}.
+Canal principal: ${channel || "instagram"}.
+Responda SOMENTE em JSON válido, sem markdown, sem texto fora do JSON.`;
+
+      const userPrompt = `Ideia central: "${idea}"
+
+Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
+{
+  "ideaArea": "área do conhecimento identificada (ex: Filosofia - Estoicismo)",
+  "ideaSources": "2-3 autores ou referências que validam esta ideia",
+  "headlines": ["headline 1", "headline 2", "headline 3", "headline 4", "headline 5"],
+  "article": "artigo completo para blog/LinkedIn com 400-600 palavras, focado em SEO e autoridade B2B",
+  "podcastScript": "roteiro estruturado de podcast de 15-30 minutos com: ABERTURA (gancho + apresentação do tema), DESENVOLVIMENTO (3 pontos principais com exemplos), CONCLUSÃO (resumo + CTA)",
+  "reelScript": "roteiro de Reels/TikTok de 30-60 segundos: GANCHO (primeiros 3s para parar o scroll), DESENVOLVIMENTO (valor rápido), CTA (ação final)",
+  "liveScript": "roadmap de Live com: ABERTURA (apresentação + expectativas), 3-4 BLOCOS DE CONTEÚDO (com ganchos de retenção e momentos de interação), ENCERRAMENTO (resumo + oferta/CTA)"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.8,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0].message.content || "{}";
+      let generated: any;
+      try {
+        generated = JSON.parse(content);
+      } catch {
+        return res.status(500).json({ message: "Erro ao processar resposta da IA" });
+      }
+
+      const asset = await storage.createContentAsset({
+        projectId: projectId || null,
+        sourceIdea: idea,
+        ideaArea: generated.ideaArea || null,
+        ideaSources: generated.ideaSources || null,
+        formats: {
+          headlines: generated.headlines || [],
+          article: generated.article || "",
+          podcastScript: generated.podcastScript || "",
+          reelScript: generated.reelScript || "",
+          liveScript: generated.liveScript || "",
+        },
+        usedPrompt: userPrompt,
+        channel: (channel || "instagram") as any,
+        status: "draft",
+      });
+
+      res.status(201).json(asset);
+    } catch (err) {
+      console.error("[POST /api/admin/social/generate]", err);
+      res.status(500).json({ message: "Erro ao gerar conteúdo", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.post("/api/admin/social/assets/:id/tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+
+      const text = (asset.formats as any)?.podcastScript || asset.sourceIdea;
+      if (!text) return res.status(400).json({ message: "Nenhum roteiro disponível para TTS" });
+
+      const voice = (req.body.voice as string) || "nova";
+      const openai = new OpenAI();
+      const audioResponse = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: voice as any,
+        input: text.slice(0, 4096),
+      });
+
+      const audioDir = path.join(process.cwd(), "uploads", "social-audio");
+      if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+
+      const filename = `tts-${asset.id}-${Date.now()}.mp3`;
+      const filepath = path.join(audioDir, filename);
+      const buffer = Buffer.from(await audioResponse.arrayBuffer());
+      fs.writeFileSync(filepath, buffer);
+
+      const audioUrl = `/uploads/social-audio/${filename}`;
+      const updatedAsset = await storage.updateContentAsset(asset.id, {
+        formats: { ...(asset.formats as any), audioUrl },
+      });
+
+      res.json({ audioUrl, asset: updatedAsset });
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets/:id/tts]", err);
+      res.status(500).json({ message: "Erro ao gerar áudio TTS", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.post("/api/admin/social/assets/:id/generate-utm", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+
+      const { baseUrl, campaignSource, campaignMedium, campaignName } = req.body;
+      if (!baseUrl) return res.status(400).json({ message: "baseUrl é obrigatória" });
+
+      const url = new URL(baseUrl);
+      url.searchParams.set("utm_source", campaignSource || asset.channel);
+      url.searchParams.set("utm_medium", campaignMedium || "social");
+      url.searchParams.set("utm_campaign", campaignName || asset.sourceIdea.slice(0, 30).replace(/\s+/g, "_").toLowerCase());
+      url.searchParams.set("utm_content", asset.id);
+
+      const utmLink = url.toString();
+      const updatedAsset = await storage.updateContentAsset(asset.id, { utmLink });
+      res.json({ utmLink, asset: updatedAsset });
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets/:id/generate-utm]", err);
+      res.status(500).json({ message: "Erro ao gerar link UTM" });
+    }
+  });
+
   return httpServer;
 }
 

@@ -30,6 +30,7 @@ import AdminCampaigns from "@/pages/admin-campaigns";
 import AdminLab from "@/pages/admin-lab";
 import FlowPublicEnroll from "@/pages/flow-public-enroll";
 import CampaignPublicEnroll from "@/pages/campaign-public-enroll";
+import SocialAds from "@/pages/social-ads";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -146,6 +147,9 @@ function Router() {
       </Route>
       <Route path="/admin/lab">
         <ProtectedRoute component={AdminLab} />
+      </Route>
+      <Route path="/social">
+        <ProtectedRoute component={SocialAds} />
       </Route>
       <Route path="/f/:token" component={FlowPublicEnroll} />
       <Route path="/c/:token" component={CampaignPublicEnroll} />

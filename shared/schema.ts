@@ -958,3 +958,92 @@ export type CampaignDelivery = typeof campaignDeliveries.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
 export type UpdateMessageTemplate = z.infer<typeof updateMessageTemplateSchema>;
+
+// ==================== Social/Ads ====================
+
+export const socialContentChannelEnum = pgEnum("social_content_channel", [
+  "instagram", "tiktok", "youtube", "linkedin", "blog", "whatsapp",
+]);
+
+export const socialContentStatusEnum = pgEnum("social_content_status", [
+  "draft", "approved", "scheduled", "published",
+]);
+
+export const socialProjects = pgTable("social_projects", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  clientName: varchar("client_name", { length: 255 }),
+  description: text("description"),
+  brand: jsonb("brand").$type<{ tone?: string; niche?: string; colors?: string[] }>().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const contentAssets = pgTable("content_assets", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id", { length: 36 }).references(() => socialProjects.id, { onDelete: "cascade" }),
+  sourceIdea: text("source_idea").notNull(),
+  ideaArea: varchar("idea_area", { length: 255 }),
+  ideaSources: text("idea_sources"),
+  formats: jsonb("formats").$type<{
+    headlines?: string[];
+    article?: string;
+    podcastScript?: string;
+    reelScript?: string;
+    liveScript?: string;
+    audioUrl?: string;
+  }>().default({}),
+  usedPrompt: text("used_prompt"),
+  channel: socialContentChannelEnum("channel").notNull().default("instagram"),
+  status: socialContentStatusEnum("status").notNull().default("draft"),
+  scheduledAt: timestamp("scheduled_at"),
+  publishedAt: timestamp("published_at"),
+  utmLink: text("utm_link"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSocialProjectSchema = createInsertSchema(socialProjects).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateSocialProjectSchema = z.object({
+  name: z.string().min(1).optional(),
+  clientName: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  brand: z.object({
+    tone: z.string().optional(),
+    niche: z.string().optional(),
+    colors: z.array(z.string()).optional(),
+  }).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const insertContentAssetSchema = createInsertSchema(contentAssets).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateContentAssetSchema = z.object({
+  status: z.enum(["draft", "approved", "scheduled", "published"]).optional(),
+  scheduledAt: z.string().optional().nullable(),
+  publishedAt: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  utmLink: z.string().optional().nullable(),
+  formats: z.object({
+    headlines: z.array(z.string()).optional(),
+    article: z.string().optional(),
+    podcastScript: z.string().optional(),
+    reelScript: z.string().optional(),
+    liveScript: z.string().optional(),
+    audioUrl: z.string().optional(),
+  }).optional().nullable(),
+});
+
+export type SocialProject = typeof socialProjects.$inferSelect;
+export type InsertSocialProject = z.infer<typeof insertSocialProjectSchema>;
+export type UpdateSocialProject = z.infer<typeof updateSocialProjectSchema>;
+export type ContentAsset = typeof contentAssets.$inferSelect;
+export type InsertContentAsset = z.infer<typeof insertContentAssetSchema>;
+export type UpdateContentAsset = z.infer<typeof updateContentAssetSchema>;
