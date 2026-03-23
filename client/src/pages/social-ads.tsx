@@ -29,7 +29,18 @@ interface ProjectPayload {
   name: string;
   clientName: string | null;
   description: string | null;
-  brand: { tone: string; niche: string; leadershipStyle?: string; colors?: string[] };
+  brand: {
+    tone: string;
+    niche: string;
+    leadershipStyle?: string;
+    colors?: string[];
+    cloningIds?: {
+      elevenLabsApiKey?: string;
+      elevenLabsVoiceId?: string;
+      heygenApiKey?: string;
+      heygenAvatarId?: string;
+    };
+  };
 }
 interface GeneratePayload {
   projectId?: string;
@@ -53,7 +64,14 @@ interface SocialProject {
   name: string;
   clientName?: string;
   description?: string;
-  brand?: { tone?: string; niche?: string; colors?: string[]; leadershipStyle?: string };
+  brand?: {
+    tone?: string;
+    niche?: string;
+    colors?: string[];
+    leadershipStyle?: string;
+    hasElevenLabs?: boolean;
+    hasHeyGen?: boolean;
+  };
   isActive: boolean;
   assetCount: number;
   createdAt: string;
@@ -73,6 +91,10 @@ interface ContentAsset {
     liveScript?: string;
     socialAds?: string;
     audioUrl?: string;
+    elevenLabsAudioUrl?: string;
+    heygenVideoId?: string;
+    heygenVideoUrl?: string;
+    heygenVideoStatus?: string;
   };
   usedPrompt?: string;
   channel: string;
@@ -146,6 +168,7 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<SocialProject | null>(null);
   const [form, setForm] = useState({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none", colors: "" });
+  const [cloningForm, setCloningForm] = useState({ elevenLabsApiKey: "", elevenLabsVoiceId: "", heygenApiKey: "", heygenAvatarId: "" });
 
   const { data: projects = [], isLoading } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
@@ -169,17 +192,35 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
     onError: () => toast({ title: "Erro ao excluir projeto", variant: "destructive" }),
   });
 
-  const openNew = () => { setEditing(null); setForm({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none", colors: "" }); setShowModal(true); };
+  const openNew = () => {
+    setEditing(null);
+    setForm({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none", colors: "" });
+    setCloningForm({ elevenLabsApiKey: "", elevenLabsVoiceId: "", heygenApiKey: "", heygenAvatarId: "" });
+    setShowModal(true);
+  };
   const openEdit = (p: SocialProject) => {
     setEditing(p);
     setForm({ name: p.name, clientName: p.clientName || "", description: p.description || "", tone: p.brand?.tone || "", niche: p.brand?.niche || "", leadershipStyle: p.brand?.leadershipStyle || "none", colors: (p.brand?.colors || []).join(", ") });
+    setCloningForm({ elevenLabsApiKey: "", elevenLabsVoiceId: "", heygenApiKey: "", heygenAvatarId: "" });
     setShowModal(true);
   };
 
   const handleSubmit = () => {
     const ls = form.leadershipStyle === "none" ? undefined : form.leadershipStyle;
     const colors = form.colors ? form.colors.split(",").map(c => c.trim()).filter(c => c) : undefined;
-    const payload = { name: form.name, clientName: form.clientName || null, description: form.description || null, brand: { tone: form.tone, niche: form.niche, leadershipStyle: ls, colors } };
+    const hasCloningInput = cloningForm.elevenLabsApiKey || cloningForm.elevenLabsVoiceId || cloningForm.heygenApiKey || cloningForm.heygenAvatarId;
+    const cloningIds = hasCloningInput ? {
+      elevenLabsApiKey: cloningForm.elevenLabsApiKey || undefined,
+      elevenLabsVoiceId: cloningForm.elevenLabsVoiceId || undefined,
+      heygenApiKey: cloningForm.heygenApiKey || undefined,
+      heygenAvatarId: cloningForm.heygenAvatarId || undefined,
+    } : undefined;
+    const payload: ProjectPayload = {
+      name: form.name,
+      clientName: form.clientName || null,
+      description: form.description || null,
+      brand: { tone: form.tone, niche: form.niche, leadershipStyle: ls, colors, ...(cloningIds ? { cloningIds } : {}) },
+    };
     if (editing) updateMutation.mutate({ id: editing.id, data: payload });
     else createMutation.mutate(payload);
   };
@@ -218,6 +259,8 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
                   {p.brand?.niche && <Badge variant="outline" className="text-[10px]">{p.brand.niche}</Badge>}
                   {p.brand?.tone && <Badge variant="outline" className="text-[10px]">{p.brand.tone}</Badge>}
                   {p.brand?.leadershipStyle && <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">{LEADERSHIP_STYLES.find(s => s.value === p.brand?.leadershipStyle)?.label.split("—")[0].trim() || p.brand.leadershipStyle}</Badge>}
+                  {p.brand?.hasElevenLabs && <Badge variant="outline" className="text-[10px] border-purple-400 text-purple-600"><Mic className="h-2.5 w-2.5 mr-0.5" />ElevenLabs</Badge>}
+                  {p.brand?.hasHeyGen && <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-600"><Video className="h-2.5 w-2.5 mr-0.5" />HeyGen</Badge>}
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2 pt-1">
@@ -279,6 +322,39 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
               <Input value={form.colors} onChange={e => setForm(f => ({ ...f, colors: e.target.value }))} placeholder="Ex: #00A86B, #1B3A57, #FFFFFF" data-testid="input-brand-colors" />
               <p className="text-xs text-muted-foreground mt-1">Opcional. Cores em hex para referência de identidade visual.</p>
             </div>
+
+            {isAdmin && (
+              <div className="space-y-2 pt-1 border-t">
+                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <Mic className="h-3.5 w-3.5 text-primary" /> Clonagem de Voz e Avatar (opcional)
+                </p>
+                {editing?.brand?.hasElevenLabs && (
+                  <p className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> ElevenLabs configurado. Deixe em branco para manter.</p>
+                )}
+                {editing?.brand?.hasHeyGen && (
+                  <p className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> HeyGen configurado. Deixe em branco para manter.</p>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">ElevenLabs API Key</Label>
+                    <Input type="password" value={cloningForm.elevenLabsApiKey} onChange={e => setCloningForm(f => ({ ...f, elevenLabsApiKey: e.target.value }))} placeholder="sk_..." className="text-xs" data-testid="input-elevenlabs-api-key" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">ElevenLabs Voice ID</Label>
+                    <Input type="text" value={cloningForm.elevenLabsVoiceId} onChange={e => setCloningForm(f => ({ ...f, elevenLabsVoiceId: e.target.value }))} placeholder="ID da voz clonada" className="text-xs" data-testid="input-elevenlabs-voice-id" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">HeyGen API Key</Label>
+                    <Input type="password" value={cloningForm.heygenApiKey} onChange={e => setCloningForm(f => ({ ...f, heygenApiKey: e.target.value }))} placeholder="API Key HeyGen" className="text-xs" data-testid="input-heygen-api-key" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">HeyGen Avatar ID</Label>
+                    <Input type="text" value={cloningForm.heygenAvatarId} onChange={e => setCloningForm(f => ({ ...f, heygenAvatarId: e.target.value }))} placeholder="ID do avatar" className="text-xs" data-testid="input-heygen-avatar-id" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">As credenciais são armazenadas de forma segura e nunca exibidas após salvar.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancelar</Button>
@@ -824,6 +900,10 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
   const [scheduleDate, setScheduleDate] = useState("");
   const [newSchedPlatform, setNewSchedPlatform] = useState("instagram");
   const [newSchedTime, setNewSchedTime] = useState("");
+  const [generatingElevenLabs, setGeneratingElevenLabs] = useState(false);
+  const [generatingHeyGen, setGeneratingHeyGen] = useState(false);
+  const [checkingHeyGenStatus, setCheckingHeyGenStatus] = useState(false);
+  const [heygenScriptType, setHeygenScriptType] = useState("reelScript");
 
   const { data: projects = [] } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
@@ -897,6 +977,65 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
+  const handleElevenLabsTts = async () => {
+    if (!selectedAsset) return;
+    setGeneratingElevenLabs(true);
+    try {
+      const res = await apiRequest("POST", `/api/admin/social/assets/${selectedAsset.id}/elevenlabs-tts`, {});
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.message || "Erro ao gerar áudio ElevenLabs", variant: "destructive" }); return; }
+      setSelectedAsset(prev => prev ? { ...prev, formats: { ...prev.formats, elevenLabsAudioUrl: data.elevenLabsAudioUrl } } : prev);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
+      toast({ title: "Áudio ElevenLabs gerado!" });
+    } catch {
+      toast({ title: "Erro ao gerar áudio ElevenLabs", variant: "destructive" });
+    } finally {
+      setGeneratingElevenLabs(false);
+    }
+  };
+
+  const handleHeyGenVideo = async () => {
+    if (!selectedAsset) return;
+    setGeneratingHeyGen(true);
+    try {
+      const res = await apiRequest("POST", `/api/admin/social/assets/${selectedAsset.id}/heygen-video`, { scriptType: heygenScriptType });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.message || "Erro ao gerar vídeo HeyGen", variant: "destructive" }); return; }
+      setSelectedAsset(prev => prev ? { ...prev, formats: { ...prev.formats, heygenVideoId: data.heygenVideoId, heygenVideoStatus: "processing" } } : prev);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
+      toast({ title: "Vídeo HeyGen enviado para processamento!" });
+    } catch {
+      toast({ title: "Erro ao gerar vídeo HeyGen", variant: "destructive" });
+    } finally {
+      setGeneratingHeyGen(false);
+    }
+  };
+
+  const handleCheckHeyGenStatus = async () => {
+    if (!selectedAsset) return;
+    setCheckingHeyGenStatus(true);
+    try {
+      const res = await fetch(`/api/admin/social/assets/${selectedAsset.id}/heygen-status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.message || "Erro ao verificar status", variant: "destructive" }); return; }
+      setSelectedAsset(prev => prev ? { ...prev, formats: { ...prev.formats, heygenVideoStatus: data.heygenVideoStatus, heygenVideoUrl: data.heygenVideoUrl } } : prev);
+      if (data.heygenVideoStatus === "completed") {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
+        toast({ title: "Vídeo HeyGen pronto!" });
+      } else if (data.heygenVideoStatus === "failed") {
+        toast({ title: "Erro na geração do vídeo HeyGen", variant: "destructive" });
+      } else {
+        toast({ title: `Status HeyGen: ${data.heygenVideoStatus || "processando..."}` });
+      }
+    } catch {
+      toast({ title: "Erro ao verificar status HeyGen", variant: "destructive" });
+    } finally {
+      setCheckingHeyGenStatus(false);
+    }
+  };
+
   const projectMap = Object.fromEntries(projects.map(p => [p.id, p.name]));
 
   return (
@@ -961,6 +1100,9 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                   {a.formats?.article && <Badge variant="outline" className="text-[9px]"><FileText className="h-2.5 w-2.5 mr-0.5" />Artigo</Badge>}
                   {a.formats?.podcastScript && <Badge variant="outline" className="text-[9px]"><Mic className="h-2.5 w-2.5 mr-0.5" />Podcast</Badge>}
                   {a.formats?.audioUrl && <Badge variant="outline" className="text-[9px]"><Mic className="h-2.5 w-2.5 mr-0.5 text-green-500" />Áudio</Badge>}
+                  {a.formats?.elevenLabsAudioUrl && <Badge variant="outline" className="text-[9px] border-purple-400 text-purple-600"><Mic className="h-2.5 w-2.5 mr-0.5" />EL Voz</Badge>}
+                  {a.formats?.heygenVideoStatus === "completed" && <Badge variant="outline" className="text-[9px] border-blue-400 text-blue-600"><Video className="h-2.5 w-2.5 mr-0.5" />Vídeo</Badge>}
+                  {a.formats?.heygenVideoStatus === "processing" && <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-600"><Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />Vídeo</Badge>}
                   {a.utmLink && <Badge variant="outline" className="text-[9px]"><Link2 className="h-2.5 w-2.5 mr-0.5 text-blue-500" />UTM</Badge>}
                 </div>
                 <p className="text-[10px] text-muted-foreground">{format(parseISO(a.createdAt), "dd/MM/yyyy", { locale: ptBR })}</p>
@@ -1046,6 +1188,89 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                   <div className="flex items-center gap-2 p-2 bg-muted rounded text-xs break-all"><span className="flex-1">{selectedAsset.utmLink}</span><CopyButton text={selectedAsset.utmLink} /></div>
                 </div>
               )}
+
+              {/* Clonagem de Mídia — ElevenLabs + HeyGen */}
+              {isAdmin && selectedAsset.projectId && (() => {
+                const proj = projects.find(p => p.id === selectedAsset.projectId);
+                const hasEl = proj?.brand?.hasElevenLabs;
+                const hasHg = proj?.brand?.hasHeyGen;
+                if (!hasEl && !hasHg) return null;
+                return (
+                  <div className="space-y-3 border-t pt-3">
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-primary" /> Clonagem de Mídia
+                    </p>
+
+                    {hasEl && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium flex items-center gap-1"><Mic className="h-3.5 w-3.5 text-purple-500" /> Voz Clonada (ElevenLabs)</p>
+                        {selectedAsset.formats?.elevenLabsAudioUrl ? (
+                          <div className="space-y-1">
+                            <audio controls className="w-full h-10" src={selectedAsset.formats.elevenLabsAudioUrl} />
+                            <a href={selectedAsset.formats.elevenLabsAudioUrl} download className="text-xs text-purple-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar áudio clonado</a>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={handleElevenLabsTts} disabled={generatingElevenLabs} data-testid="button-elevenlabs-tts" className="border-purple-300 text-purple-700 hover:bg-purple-50">
+                            {generatingElevenLabs ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Mic className="h-4 w-4 mr-1" />}
+                            Gerar com Voz Clonada
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {hasHg && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium flex items-center gap-1"><Video className="h-3.5 w-3.5 text-blue-500" /> Vídeo com Avatar (HeyGen)</p>
+                        {selectedAsset.formats?.heygenVideoStatus === "completed" && selectedAsset.formats?.heygenVideoUrl ? (
+                          <div className="space-y-1">
+                            <Badge className="text-[10px] bg-blue-600">Vídeo pronto</Badge>
+                            <a href={selectedAsset.formats.heygenVideoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar vídeo HeyGen</a>
+                          </div>
+                        ) : selectedAsset.formats?.heygenVideoStatus === "processing" ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] border-orange-400 text-orange-600"><Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />Processando...</Badge>
+                            <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={handleCheckHeyGenStatus} disabled={checkingHeyGenStatus} data-testid="button-check-heygen-status">
+                              {checkingHeyGenStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                              Verificar Status
+                            </Button>
+                          </div>
+                        ) : selectedAsset.formats?.heygenVideoStatus === "failed" ? (
+                          <div className="space-y-2">
+                            <Badge variant="destructive" className="text-[10px]">Falhou — tente novamente</Badge>
+                            <div className="flex items-center gap-2">
+                              <Select value={heygenScriptType} onValueChange={setHeygenScriptType}>
+                                <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="reelScript">Reels</SelectItem>
+                                  <SelectItem value="liveScript">Live</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button variant="outline" size="sm" onClick={handleHeyGenVideo} disabled={generatingHeyGen} data-testid="button-heygen-video" className="border-blue-300 text-blue-700 hover:bg-blue-50">
+                                {generatingHeyGen ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Video className="h-4 w-4 mr-1" />}
+                                Gerar Vídeo com Avatar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Select value={heygenScriptType} onValueChange={setHeygenScriptType}>
+                              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="reelScript">Reels</SelectItem>
+                                <SelectItem value="liveScript">Live</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button variant="outline" size="sm" onClick={handleHeyGenVideo} disabled={generatingHeyGen} data-testid="button-heygen-video" className="border-blue-300 text-blue-700 hover:bg-blue-50">
+                              {generatingHeyGen ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Video className="h-4 w-4 mr-1" />}
+                              Gerar Vídeo com Avatar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Publication Schedules per Platform */}
               <div className="space-y-2">

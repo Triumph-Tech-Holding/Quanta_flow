@@ -3822,7 +3822,18 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const projects = await storage.getSocialProjects(userId);
       const counts = await storage.countAssetsPerProject(userId);
       const countMap = Object.fromEntries(counts.map(c => [c.projectId, c.count]));
-      res.json(projects.map(p => ({ ...p, assetCount: countMap[p.id] || 0 })));
+      res.json(projects.map(p => {
+        const { cloningIds, ...brandWithoutCreds } = p.brand || {};
+        return {
+          ...p,
+          brand: {
+            ...brandWithoutCreds,
+            hasElevenLabs: !!(cloningIds?.elevenLabsApiKey && cloningIds?.elevenLabsVoiceId),
+            hasHeyGen: !!(cloningIds?.heygenApiKey && cloningIds?.heygenAvatarId),
+          },
+          assetCount: countMap[p.id] || 0,
+        };
+      }));
     } catch (err) {
       console.error("[GET /api/admin/social/projects]", err);
       res.status(500).json({ message: "Erro ao listar projetos" });
@@ -4166,6 +4177,171 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     } catch (err) {
       console.error("[POST /api/admin/social/assets/:id/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.post("/api/admin/social/assets/:id/elevenlabs-tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+
+      if (!asset.projectId) return res.status(400).json({ message: "Ativo não pertence a um projeto" });
+      const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
+      if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
+
+      const cloningIds = (project.brand as any)?.cloningIds;
+      if (!cloningIds?.elevenLabsApiKey || !cloningIds?.elevenLabsVoiceId) {
+        return res.status(400).json({ message: "Credenciais ElevenLabs não configuradas neste projeto. Configure a API Key e Voice ID nas configurações do projeto." });
+      }
+
+      const scriptText = asset.formats?.podcastScript || asset.formats?.reelScript || asset.formats?.liveScript || asset.sourceIdea;
+      if (!scriptText) return res.status(400).json({ message: "Nenhum roteiro disponível para clonar voz" });
+
+      const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${cloningIds.elevenLabsVoiceId}`, {
+        method: "POST",
+        headers: {
+          "xi-api-key": cloningIds.elevenLabsApiKey,
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: scriptText.slice(0, 5000),
+          model_id: "eleven_multilingual_v2",
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      });
+
+      if (!elRes.ok) {
+        const errBody = await elRes.text();
+        console.error("[ElevenLabs TTS]", elRes.status, errBody);
+        return res.status(502).json({ message: `Erro na API ElevenLabs: ${elRes.status}`, detail: errBody });
+      }
+
+      const audioDir = path.join(process.cwd(), "uploads", "social-audio");
+      if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+
+      const filename = `elevenlabs-${asset.id}-${Date.now()}.mp3`;
+      const filepath = path.join(audioDir, filename);
+      const buffer = Buffer.from(await elRes.arrayBuffer());
+      fs.writeFileSync(filepath, buffer);
+
+      const elevenLabsAudioUrl = `/uploads/social-audio/${filename}`;
+      const updatedAsset = await storage.updateContentAsset(asset.id, {
+        formats: { ...asset.formats, elevenLabsAudioUrl },
+      });
+
+      res.json({ elevenLabsAudioUrl, asset: updatedAsset });
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets/:id/elevenlabs-tts]", err);
+      res.status(500).json({ message: "Erro ao gerar áudio ElevenLabs", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.post("/api/admin/social/assets/:id/heygen-video", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+
+      if (!asset.projectId) return res.status(400).json({ message: "Ativo não pertence a um projeto" });
+      const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
+      if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
+
+      const cloningIds = (project.brand as any)?.cloningIds;
+      if (!cloningIds?.heygenApiKey || !cloningIds?.heygenAvatarId) {
+        return res.status(400).json({ message: "Credenciais HeyGen não configuradas neste projeto. Configure a API Key e Avatar ID nas configurações do projeto." });
+      }
+
+      const scriptType = (req.body.scriptType as string) || "reelScript";
+      const scriptText = scriptType === "liveScript"
+        ? (asset.formats?.liveScript || asset.formats?.reelScript || asset.sourceIdea)
+        : (asset.formats?.reelScript || asset.formats?.liveScript || asset.sourceIdea);
+
+      if (!scriptText) return res.status(400).json({ message: "Nenhum roteiro disponível para gerar vídeo" });
+
+      const heygenPayload = {
+        video_inputs: [{
+          character: { type: "avatar", avatar_id: cloningIds.heygenAvatarId, avatar_style: "normal" },
+          voice: { type: "text", input_text: scriptText.slice(0, 1500), speed: 1.0 },
+          background: { type: "color", value: "#ffffff" },
+        }],
+        dimension: { width: 1280, height: 720 },
+        test: false,
+        caption: false,
+      };
+
+      const heyRes = await fetch("https://api.heygen.com/v2/video/generate", {
+        method: "POST",
+        headers: {
+          "X-Api-Key": cloningIds.heygenApiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(heygenPayload),
+      });
+
+      if (!heyRes.ok) {
+        const errBody = await heyRes.text();
+        console.error("[HeyGen]", heyRes.status, errBody);
+        return res.status(502).json({ message: `Erro na API HeyGen: ${heyRes.status}`, detail: errBody });
+      }
+
+      const heyData = await heyRes.json() as { data?: { video_id?: string }; video_id?: string };
+      const heygenVideoId = heyData?.data?.video_id || heyData?.video_id;
+      if (!heygenVideoId) return res.status(502).json({ message: "HeyGen não retornou video_id" });
+
+      const updatedAsset = await storage.updateContentAsset(asset.id, {
+        formats: { ...asset.formats, heygenVideoId, heygenVideoStatus: "processing", heygenVideoUrl: undefined },
+      });
+
+      res.json({ heygenVideoId, heygenVideoStatus: "processing", asset: updatedAsset });
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets/:id/heygen-video]", err);
+      res.status(500).json({ message: "Erro ao gerar vídeo HeyGen", error: err instanceof Error ? err.message : err });
+    }
+  });
+
+  app.get("/api/admin/social/assets/:id/heygen-status", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+
+      const heygenVideoId = asset.formats?.heygenVideoId;
+      if (!heygenVideoId) return res.status(400).json({ message: "Nenhum vídeo HeyGen em processamento" });
+
+      if (!asset.projectId) return res.status(400).json({ message: "Ativo não pertence a um projeto" });
+      const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
+      const cloningIds = (project?.brand as any)?.cloningIds;
+      if (!cloningIds?.heygenApiKey) return res.status(400).json({ message: "Credenciais HeyGen não configuradas" });
+
+      const statusRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${heygenVideoId}`, {
+        headers: { "X-Api-Key": cloningIds.heygenApiKey },
+      });
+
+      if (!statusRes.ok) {
+        return res.status(502).json({ message: `Erro ao verificar status HeyGen: ${statusRes.status}` });
+      }
+
+      const statusData = await statusRes.json() as { data?: { status?: string; video_url?: string; video_url_caption?: string } };
+      const videoStatus = statusData?.data?.status;
+      const videoUrl = statusData?.data?.video_url;
+
+      let updatedAsset = asset;
+      if (videoStatus === "completed" && videoUrl) {
+        updatedAsset = (await storage.updateContentAsset(asset.id, {
+          formats: { ...asset.formats, heygenVideoUrl: videoUrl, heygenVideoStatus: "completed" },
+        })) || asset;
+      } else if (videoStatus === "failed") {
+        updatedAsset = (await storage.updateContentAsset(asset.id, {
+          formats: { ...asset.formats, heygenVideoStatus: "failed" },
+        })) || asset;
+      }
+
+      res.json({ heygenVideoId, heygenVideoStatus: videoStatus || asset.formats?.heygenVideoStatus, heygenVideoUrl: videoUrl || asset.formats?.heygenVideoUrl, asset: updatedAsset });
+    } catch (err) {
+      console.error("[GET /api/admin/social/assets/:id/heygen-status]", err);
+      res.status(500).json({ message: "Erro ao verificar status HeyGen" });
     }
   });
 

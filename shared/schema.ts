@@ -980,6 +980,12 @@ export const socialProjects = pgTable("social_projects", {
     niche?: string;
     colors?: string[];
     leadershipStyle?: string;
+    cloningIds?: {
+      elevenLabsApiKey?: string;
+      elevenLabsVoiceId?: string;
+      heygenApiKey?: string;
+      heygenAvatarId?: string;
+    };
   }>().default({}),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1001,6 +1007,10 @@ export const contentAssets = pgTable("content_assets", {
     liveScript?: string;
     socialAds?: string;
     audioUrl?: string;
+    elevenLabsAudioUrl?: string;
+    heygenVideoId?: string;
+    heygenVideoUrl?: string;
+    heygenVideoStatus?: string;
   }>().default({}),
   usedPrompt: text("used_prompt"),
   channel: socialContentChannelEnum("channel").notNull().default("instagram"),
@@ -1038,6 +1048,12 @@ export const updateSocialProjectSchema = z.object({
     niche: z.string().optional(),
     colors: z.array(z.string()).optional(),
     leadershipStyle: z.string().optional(),
+    cloningIds: z.object({
+      elevenLabsApiKey: z.string().optional(),
+      elevenLabsVoiceId: z.string().optional(),
+      heygenApiKey: z.string().optional(),
+      heygenAvatarId: z.string().optional(),
+    }).optional(),
   }).optional().nullable(),
   isActive: z.boolean().optional(),
 });
@@ -1060,6 +1076,10 @@ export const updateContentAssetSchema = z.object({
     liveScript: z.string().optional(),
     socialAds: z.string().optional(),
     audioUrl: z.string().optional(),
+    elevenLabsAudioUrl: z.string().optional(),
+    heygenVideoId: z.string().optional(),
+    heygenVideoUrl: z.string().optional(),
+    heygenVideoStatus: z.string().optional(),
   }).optional().nullable(),
 });
 
