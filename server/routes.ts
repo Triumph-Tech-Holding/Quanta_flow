@@ -4101,6 +4101,9 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
   // Publication schedules
   app.get("/api/admin/social/assets/:id/schedules", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
     try {
+      const asset = await storage.getContentAsset(req.params.id);
+      if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const schedules = await storage.getPublicationSchedulesByAsset(req.params.id);
       res.json(schedules);
     } catch (err) {

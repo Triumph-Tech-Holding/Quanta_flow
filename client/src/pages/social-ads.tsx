@@ -24,6 +24,27 @@ import {
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// Payload types for mutations
+interface ProjectPayload {
+  name: string;
+  clientName: string | null;
+  description: string | null;
+  brand: { tone: string; niche: string; leadershipStyle?: string };
+}
+interface GeneratePayload {
+  projectId?: string;
+  idea: string;
+  channel: string;
+  tone: string;
+}
+interface UpdateAssetPayload {
+  status?: string;
+  scheduledAt?: string | null;
+  publishedAt?: string | null;
+  formats?: Record<string, string | undefined>;
+  utmLink?: string | null;
+}
+
 // Types
 interface SocialProject {
   id: string;
@@ -129,13 +150,13 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/social/projects", data),
+    mutationFn: (data: ProjectPayload) => apiRequest("POST", "/api/admin/social/projects", data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/social/projects"] }); setShowModal(false); toast({ title: "Projeto criado!" }); },
     onError: () => toast({ title: "Erro ao criar projeto", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/social/projects/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: ProjectPayload }) => apiRequest("PATCH", `/api/admin/social/projects/${id}`, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/social/projects"] }); setShowModal(false); toast({ title: "Projeto atualizado!" }); },
     onError: () => toast({ title: "Erro ao atualizar projeto", variant: "destructive" }),
   });
@@ -283,8 +304,8 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
 
   const { data: projects = [] } = useQuery<SocialProject[]>({ queryKey: ["/api/admin/social/projects"] });
 
-  const generateMutation = useMutation<ContentAsset, Error, any>({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/social/generate", data).then(r => r.json()),
+  const generateMutation = useMutation<ContentAsset, Error, GeneratePayload>({
+    mutationFn: (data: GeneratePayload) => apiRequest("POST", "/api/admin/social/generate", data).then(r => r.json()),
     onSuccess: (asset: ContentAsset) => {
       setGeneratedAsset(asset);
       setStep(2);
@@ -628,7 +649,7 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/admin/social/assets/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: UpdateAssetPayload }) => apiRequest("PATCH", `/api/admin/social/assets/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/social/calendar"] });

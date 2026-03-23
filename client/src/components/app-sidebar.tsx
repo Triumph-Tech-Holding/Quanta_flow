@@ -4,7 +4,6 @@ import {
   Inbox,
   Users,
   Bot,
-  Share2,
   Brain,
   Users2,
   LayoutDashboard,
@@ -95,7 +94,7 @@ const modulesMenuItems = [
   {
     title: "Social/Ads",
     url: "/social",
-    icon: Share2,
+    icon: Megaphone,
     module: 4,
     enabled: true,
   },
