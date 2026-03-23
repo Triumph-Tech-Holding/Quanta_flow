@@ -4001,9 +4001,19 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       });
 
       const content = response.choices[0].message.content || "{}";
-      let generated: any;
+      const generatedSchema = z.object({
+        ideaArea: z.string().optional(),
+        ideaSources: z.string().optional(),
+        headlines: z.array(z.string()).optional(),
+        article: z.string().optional(),
+        podcastScript: z.string().optional(),
+        reelScript: z.string().optional(),
+        liveScript: z.string().optional(),
+        socialAds: z.string().optional(),
+      });
+      let generated: z.infer<typeof generatedSchema>;
       try {
-        generated = JSON.parse(content);
+        generated = generatedSchema.parse(JSON.parse(content));
       } catch {
         return res.status(500).json({ message: "Erro ao processar resposta da IA" });
       }
