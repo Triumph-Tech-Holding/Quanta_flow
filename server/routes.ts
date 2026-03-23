@@ -3887,7 +3887,19 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
-  app.patch("/api/admin/social/assets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { insertContentAssetSchema } = await import("@shared/schema");
+      const parsed = insertContentAssetSchema.parse(req.body);
+      const asset = await storage.createContentAsset(parsed);
+      res.status(201).json(asset);
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets]", err);
+      res.status(400).json({ message: "Erro ao criar ativo" });
+    }
+  });
+
+  app.patch("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { updateContentAssetSchema } = await import("@shared/schema");
       const parsed = updateContentAssetSchema.parse(req.body);
@@ -4000,8 +4012,8 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
           socialAds: generated.socialAds || "",
         },
         usedPrompt: userPrompt,
-        channel: (channel || "instagram") as any,
-        status: "draft",
+        channel: (["instagram", "tiktok", "youtube", "linkedin", "blog", "whatsapp"].includes(channel) ? channel : "instagram") as "instagram" | "tiktok" | "youtube" | "linkedin" | "blog" | "whatsapp",
+        status: "draft" as const,
       });
 
       res.status(201).json(asset);
@@ -4016,14 +4028,17 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
 
-      const text = (asset.formats as any)?.podcastScript || asset.sourceIdea;
+      const text = asset.formats?.podcastScript || asset.sourceIdea;
       if (!text) return res.status(400).json({ message: "Nenhum roteiro disponível para TTS" });
 
-      const voice = (req.body.voice as string) || "nova";
+      const allowedVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
+      type TtsVoice = typeof allowedVoices[number];
+      const voiceInput = (req.body.voice as string) || "nova";
+      const voice: TtsVoice = allowedVoices.includes(voiceInput as TtsVoice) ? (voiceInput as TtsVoice) : "nova";
       const openai = new OpenAI();
       const audioResponse = await openai.audio.speech.create({
         model: "tts-1",
-        voice: voice as any,
+        voice,
         input: text.slice(0, 4096),
       });
 
@@ -4037,7 +4052,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
       const audioUrl = `/uploads/social-audio/${filename}`;
       const updatedAsset = await storage.updateContentAsset(asset.id, {
-        formats: { ...(asset.formats as any), audioUrl },
+        formats: { ...asset.formats, audioUrl },
       });
 
       res.json({ audioUrl, asset: updatedAsset });
@@ -4047,7 +4062,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     }
   });
 
-  app.post("/api/admin/social/assets/:id/generate-utm", authenticateToken, async (req: AuthRequest, res: Response) => {
+  app.post("/api/admin/social/assets/:id/generate-utm", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
@@ -4101,7 +4116,13 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
   app.patch("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const { status } = req.body;
+      const allowedScheduleStatuses = ["planned", "sent", "manual"] as const;
+      type ScheduleStatus = typeof allowedScheduleStatuses[number];
+      const rawStatus = req.body.status as string;
+      if (!allowedScheduleStatuses.includes(rawStatus as ScheduleStatus)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+      const status = rawStatus as ScheduleStatus;
       const schedule = await storage.updatePublicationSchedule(req.params.id, status);
       if (!schedule) return res.status(404).json({ message: "Agendamento não encontrado" });
       res.json(schedule);

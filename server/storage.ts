@@ -1064,10 +1064,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContentAssets(filters?: { projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]> {
+    type SocialStatus = "draft" | "approved" | "scheduled" | "published";
+    type SocialChannel = "instagram" | "tiktok" | "youtube" | "linkedin" | "blog" | "whatsapp";
     const conditions = [];
     if (filters?.projectId) conditions.push(eq(contentAssets.projectId, filters.projectId));
-    if (filters?.status) conditions.push(eq(contentAssets.status, filters.status as any));
-    if (filters?.channel) conditions.push(eq(contentAssets.channel, filters.channel as any));
+    if (filters?.status) conditions.push(eq(contentAssets.status, filters.status as SocialStatus));
+    if (filters?.channel) conditions.push(eq(contentAssets.channel, filters.channel as SocialChannel));
     const query = conditions.length > 0
       ? db.select().from(contentAssets).where(and(...conditions)).orderBy(desc(contentAssets.createdAt))
       : db.select().from(contentAssets).orderBy(desc(contentAssets.createdAt));
@@ -1085,11 +1087,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateContentAsset(id: string, data: UpdateContentAsset): Promise<ContentAsset | undefined> {
-    const updateData: any = { ...data, updatedAt: new Date() };
-    if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
-    if (data.publishedAt !== undefined) updateData.publishedAt = data.publishedAt ? new Date(data.publishedAt) : null;
+    const setValues: {
+      status?: "draft" | "approved" | "scheduled" | "published";
+      notes?: string | null;
+      utmLink?: string | null;
+      formats?: { headlines?: string[]; article?: string; podcastScript?: string; reelScript?: string; liveScript?: string; socialAds?: string; audioUrl?: string } | null;
+      scheduledAt?: Date | null;
+      publishedAt?: Date | null;
+      updatedAt: Date;
+    } = { updatedAt: new Date() };
+    if (data.status !== undefined) setValues.status = data.status;
+    if (data.notes !== undefined) setValues.notes = data.notes;
+    if (data.utmLink !== undefined) setValues.utmLink = data.utmLink;
+    if (data.formats !== undefined) setValues.formats = data.formats;
+    if (data.scheduledAt !== undefined) setValues.scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
+    if (data.publishedAt !== undefined) setValues.publishedAt = data.publishedAt ? new Date(data.publishedAt) : null;
     const [a] = await db.update(contentAssets)
-      .set(updateData)
+      .set(setValues)
       .where(eq(contentAssets.id, id))
       .returning();
     return a;
@@ -1148,9 +1162,9 @@ export class DatabaseStorage implements IStorage {
     return s;
   }
 
-  async updatePublicationSchedule(id: string, status: string): Promise<PublicationSchedule | undefined> {
+  async updatePublicationSchedule(id: string, status: "planned" | "sent" | "manual"): Promise<PublicationSchedule | undefined> {
     const [s] = await db.update(publicationSchedules)
-      .set({ status: status as any })
+      .set({ status })
       .where(eq(publicationSchedules.id, id))
       .returning();
     return s;

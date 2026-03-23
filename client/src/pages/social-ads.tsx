@@ -269,7 +269,7 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
 function StudioTab({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState("_none_");
   const [idea, setIdea] = useState("");
   const [channel, setChannel] = useState("instagram");
   const [tone, setTone] = useState("inspirador");
@@ -295,7 +295,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
 
   const handleGenerate = () => {
     if (!idea.trim()) { toast({ title: "Digite uma ideia", variant: "destructive" }); return; }
-    generateMutation.mutate({ projectId: projectId || undefined, idea: idea.trim(), channel, tone });
+    generateMutation.mutate({ projectId: projectId === "_none_" ? undefined : projectId, idea: idea.trim(), channel, tone });
   };
 
   const handleTts = async () => {
@@ -371,7 +371,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
               <Select value={projectId} onValueChange={setProjectId}>
                 <SelectTrigger data-testid="select-project"><SelectValue placeholder="Nenhum (geral)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum (geral)</SelectItem>
+                  <SelectItem value="_none_">Nenhum (geral)</SelectItem>
                   {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}{p.clientName ? ` — ${p.clientName}` : ""}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1123,16 +1123,16 @@ export default function SocialAdsPage() {
           <Tabs defaultValue="dashboard">
             <TabsList className="mb-6">
               <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>
-              <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>
+              {isAdmin && <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>}
               <TabsTrigger value="library" data-testid="tab-library"><BookOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
               <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="h-4 w-4 mr-1.5" />Calendário</TabsTrigger>
-              <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>
+              {isAdmin && <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>}
             </TabsList>
             <TabsContent value="dashboard"><DashboardTab /></TabsContent>
-            <TabsContent value="studio"><StudioTab isAdmin={isAdmin} /></TabsContent>
+            {isAdmin && <TabsContent value="studio"><StudioTab isAdmin={isAdmin} /></TabsContent>}
             <TabsContent value="library"><LibraryTab isAdmin={isAdmin} /></TabsContent>
             <TabsContent value="calendar"><CalendarTab /></TabsContent>
-            <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>
+            {isAdmin && <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>}
           </Tabs>
         </div>
       </SidebarInset>
