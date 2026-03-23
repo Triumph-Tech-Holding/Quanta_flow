@@ -19,6 +19,7 @@ import {
   Megaphone, Plus, Trash2, Pencil, Copy, Check, Sparkles, Loader2,
   FileText, Mic, Video, Radio, Link2, Calendar, FolderOpen, BookOpen,
   ChevronLeft, ChevronRight, Eye, Download, CheckCircle2, Clock, Newspaper,
+  BarChart3, Target, TrendingUp, MousePointerClick, SendHorizontal, Layers,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,7 +30,7 @@ interface SocialProject {
   name: string;
   clientName?: string;
   description?: string;
-  brand?: { tone?: string; niche?: string; colors?: string[] };
+  brand?: { tone?: string; niche?: string; colors?: string[]; leadershipStyle?: string };
   isActive: boolean;
   assetCount: number;
   createdAt: string;
@@ -47,6 +48,7 @@ interface ContentAsset {
     podcastScript?: string;
     reelScript?: string;
     liveScript?: string;
+    socialAds?: string;
     audioUrl?: string;
   };
   usedPrompt?: string;
@@ -58,6 +60,22 @@ interface ContentAsset {
   notes?: string;
   createdAt: string;
 }
+
+interface PublicationSchedule {
+  id: string;
+  assetId: string;
+  platform: string;
+  scheduledTime: string;
+  status: "planned" | "sent" | "manual";
+  notes?: string;
+  createdAt: string;
+}
+
+const LEADERSHIP_STYLES = [
+  { value: "hormozi", label: "Alex Hormozi — Ofertas & Resultados", desc: "Linguagem direta, foco em ROI e resultados concretos" },
+  { value: "priestley", label: "Daniel Priestley — Autoridade & KPI", desc: "Posicionamento como Key Person of Influence, ecossistemas" },
+  { value: "garyvee", label: "Gary Vaynerchuk — Documentação & Autenticidade", desc: "Volume de conteúdo orgânico e jornada autêntica" },
+];
 
 const CHANNELS = [
   { value: "instagram", label: "Instagram", color: "bg-pink-500" },
@@ -104,7 +122,7 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<SocialProject | null>(null);
-  const [form, setForm] = useState({ name: "", clientName: "", description: "", tone: "", niche: "" });
+  const [form, setForm] = useState({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none" });
 
   const { data: projects = [], isLoading } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
@@ -128,15 +146,16 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
     onError: () => toast({ title: "Erro ao excluir projeto", variant: "destructive" }),
   });
 
-  const openNew = () => { setEditing(null); setForm({ name: "", clientName: "", description: "", tone: "", niche: "" }); setShowModal(true); };
+  const openNew = () => { setEditing(null); setForm({ name: "", clientName: "", description: "", tone: "", niche: "", leadershipStyle: "none" }); setShowModal(true); };
   const openEdit = (p: SocialProject) => {
     setEditing(p);
-    setForm({ name: p.name, clientName: p.clientName || "", description: p.description || "", tone: p.brand?.tone || "", niche: p.brand?.niche || "" });
+    setForm({ name: p.name, clientName: p.clientName || "", description: p.description || "", tone: p.brand?.tone || "", niche: p.brand?.niche || "", leadershipStyle: p.brand?.leadershipStyle || "none" });
     setShowModal(true);
   };
 
   const handleSubmit = () => {
-    const payload = { name: form.name, clientName: form.clientName || null, description: form.description || null, brand: { tone: form.tone, niche: form.niche } };
+    const ls = form.leadershipStyle === "none" ? undefined : form.leadershipStyle;
+    const payload = { name: form.name, clientName: form.clientName || null, description: form.description || null, brand: { tone: form.tone, niche: form.niche, leadershipStyle: ls } };
     if (editing) updateMutation.mutate({ id: editing.id, data: payload });
     else createMutation.mutate(payload);
   };
@@ -174,6 +193,7 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
                 <div className="flex flex-wrap gap-1">
                   {p.brand?.niche && <Badge variant="outline" className="text-[10px]">{p.brand.niche}</Badge>}
                   {p.brand?.tone && <Badge variant="outline" className="text-[10px]">{p.brand.tone}</Badge>}
+                  {p.brand?.leadershipStyle && <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">{LEADERSHIP_STYLES.find(s => s.value === p.brand?.leadershipStyle)?.label.split("—")[0].trim() || p.brand.leadershipStyle}</Badge>}
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2 pt-1">
@@ -211,6 +231,24 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div>
+              <Label>Framework de Liderança</Label>
+              <Select value={form.leadershipStyle} onValueChange={v => setForm(f => ({ ...f, leadershipStyle: v }))}>
+                <SelectTrigger data-testid="select-leadership-style"><SelectValue placeholder="Nenhum (padrão)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum (padrão)</SelectItem>
+                  {LEADERSHIP_STYLES.map(s => (
+                    <SelectItem key={s.value} value={s.value}>
+                      <div>
+                        <div className="font-medium text-sm">{s.label}</div>
+                        <div className="text-xs text-muted-foreground">{s.desc}</div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Influencia o estilo de linguagem e abordagem da IA na geração de conteúdo.</p>
             </div>
           </div>
           <DialogFooter>
@@ -397,12 +435,13 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
           </div>
 
           <Tabs value={activeFormat} onValueChange={setActiveFormat}>
-            <TabsList className="w-full">
-              <TabsTrigger value="headlines" className="flex-1 text-xs"><Newspaper className="h-3.5 w-3.5 mr-1" />Headlines</TabsTrigger>
-              <TabsTrigger value="article" className="flex-1 text-xs"><FileText className="h-3.5 w-3.5 mr-1" />Artigo</TabsTrigger>
-              <TabsTrigger value="podcastScript" className="flex-1 text-xs"><Mic className="h-3.5 w-3.5 mr-1" />Podcast</TabsTrigger>
-              <TabsTrigger value="reelScript" className="flex-1 text-xs"><Video className="h-3.5 w-3.5 mr-1" />Reels</TabsTrigger>
-              <TabsTrigger value="liveScript" className="flex-1 text-xs"><Radio className="h-3.5 w-3.5 mr-1" />Live</TabsTrigger>
+            <TabsList className="w-full grid grid-cols-6">
+              <TabsTrigger value="headlines" className="text-xs"><Newspaper className="h-3.5 w-3.5 mr-1 hidden sm:block" />Headlines</TabsTrigger>
+              <TabsTrigger value="article" className="text-xs"><FileText className="h-3.5 w-3.5 mr-1 hidden sm:block" />Artigo</TabsTrigger>
+              <TabsTrigger value="podcastScript" className="text-xs"><Mic className="h-3.5 w-3.5 mr-1 hidden sm:block" />Podcast</TabsTrigger>
+              <TabsTrigger value="reelScript" className="text-xs"><Video className="h-3.5 w-3.5 mr-1 hidden sm:block" />Reels</TabsTrigger>
+              <TabsTrigger value="liveScript" className="text-xs"><Radio className="h-3.5 w-3.5 mr-1 hidden sm:block" />Live</TabsTrigger>
+              <TabsTrigger value="socialAds" className="text-xs"><Target className="h-3.5 w-3.5 mr-1 hidden sm:block" />Social Ads</TabsTrigger>
             </TabsList>
 
             <TabsContent value="headlines">
@@ -438,6 +477,23 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
                 </TabsContent>
               );
             })}
+
+            <TabsContent value="socialAds">
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium text-muted-foreground">Copy de Anúncio — Agentes de Fidelização</span>
+                    </div>
+                    <CopyButton text={formats.socialAds || ""} />
+                  </div>
+                  <ScrollArea className="h-64">
+                    <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{formats.socialAds || "Social Ads não disponível. Regere o conteúdo para incluir este formato."}</pre>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
 
           <Dialog open={showPrompt} onOpenChange={setShowPrompt}>
@@ -545,6 +601,8 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
   const [filterChannel, setFilterChannel] = useState("all");
   const [selectedAsset, setSelectedAsset] = useState<ContentAsset | null>(null);
   const [scheduleDate, setScheduleDate] = useState("");
+  const [newSchedPlatform, setNewSchedPlatform] = useState("instagram");
+  const [newSchedTime, setNewSchedTime] = useState("");
 
   const { data: projects = [] } = useQuery<SocialProject[]>({ queryKey: ["/api/admin/social/projects"] });
 
@@ -582,6 +640,37 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/social/projects"] });
       toast({ title: "Ativo excluído" });
+    },
+  });
+
+  const { data: assetSchedules = [] } = useQuery<PublicationSchedule[]>({
+    queryKey: ["/api/admin/social/assets", selectedAsset?.id, "schedules"],
+    queryFn: async () => {
+      if (!selectedAsset) return [];
+      const res = await fetch(`/api/admin/social/assets/${selectedAsset.id}/schedules`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      return res.json();
+    },
+    enabled: !!selectedAsset,
+  });
+
+  const createScheduleMutation = useMutation({
+    mutationFn: ({ assetId, platform, scheduledTime }: { assetId: string; platform: string; scheduledTime: string }) =>
+      apiRequest("POST", `/api/admin/social/assets/${assetId}/schedules`, { platform, scheduledTime }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets", selectedAsset?.id, "schedules"] });
+      setNewSchedTime("");
+      toast({ title: "Agendamento criado!" });
+    },
+    onError: () => toast({ title: "Erro ao criar agendamento", variant: "destructive" }),
+  });
+
+  const deleteScheduleMutation = useMutation({
+    mutationFn: (schedId: string) => apiRequest("DELETE", `/api/admin/social/schedules/${schedId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets", selectedAsset?.id, "schedules"] });
+      toast({ title: "Agendamento removido" });
     },
   });
 
@@ -679,22 +768,29 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
       {/* Asset detail modal */}
       <Dialog open={!!selectedAsset} onOpenChange={v => !v && setSelectedAsset(null)}>
         {selectedAsset && (
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ChannelBadge channel={selectedAsset.channel} />
                 <span className="truncate">{selectedAsset.sourceIdea}</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              {selectedAsset.ideaArea && <p className="text-sm text-muted-foreground">{selectedAsset.ideaArea}{selectedAsset.ideaSources ? ` — ${selectedAsset.ideaSources}` : ""}</p>}
+            <div className="space-y-4">
+              {selectedAsset.ideaArea && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span>{selectedAsset.ideaArea}{selectedAsset.ideaSources ? ` — Fontes: ${selectedAsset.ideaSources}` : ""}</span>
+                </div>
+              )}
+
               <Tabs defaultValue="headlines">
-                <TabsList className="w-full">
-                  <TabsTrigger value="headlines" className="text-xs flex-1">Headlines</TabsTrigger>
-                  <TabsTrigger value="article" className="text-xs flex-1">Artigo</TabsTrigger>
-                  <TabsTrigger value="podcastScript" className="text-xs flex-1">Podcast</TabsTrigger>
-                  <TabsTrigger value="reelScript" className="text-xs flex-1">Reels</TabsTrigger>
-                  <TabsTrigger value="liveScript" className="text-xs flex-1">Live</TabsTrigger>
+                <TabsList className="w-full grid grid-cols-6">
+                  <TabsTrigger value="headlines" className="text-[10px]">Headlines</TabsTrigger>
+                  <TabsTrigger value="article" className="text-[10px]">Artigo</TabsTrigger>
+                  <TabsTrigger value="podcastScript" className="text-[10px]">Podcast</TabsTrigger>
+                  <TabsTrigger value="reelScript" className="text-[10px]">Reels</TabsTrigger>
+                  <TabsTrigger value="liveScript" className="text-[10px]">Live</TabsTrigger>
+                  <TabsTrigger value="socialAds" className="text-[10px]">Ads</TabsTrigger>
                 </TabsList>
                 <TabsContent value="headlines">
                   <ScrollArea className="h-48"><div className="space-y-1">{(selectedAsset.formats?.headlines || []).map((h, i) => (<div key={i} className="flex items-start gap-2 p-2 rounded bg-muted/40 text-sm"><span className="text-primary font-bold shrink-0">#{i + 1}</span><span className="flex-1">{h}</span><CopyButton text={h} /></div>))}</div></ScrollArea>
@@ -704,7 +800,15 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                     <ScrollArea className="h-48"><div className="flex justify-end mb-1"><CopyButton text={selectedAsset.formats?.[k] || ""} /></div><pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{selectedAsset.formats?.[k] || "Não disponível"}</pre></ScrollArea>
                   </TabsContent>
                 ))}
+                <TabsContent value="socialAds">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><Target className="h-3.5 w-3.5" /> Copy de Anúncio (Agentes de Fidelização)</span>
+                    <CopyButton text={selectedAsset.formats?.socialAds || ""} />
+                  </div>
+                  <ScrollArea className="h-48"><pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{selectedAsset.formats?.socialAds || "Não disponível neste ativo. Regere para incluir."}</pre></ScrollArea>
+                </TabsContent>
               </Tabs>
+
               {selectedAsset.formats?.audioUrl && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS</p>
@@ -712,16 +816,53 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                   <a href={selectedAsset.formats.audioUrl} download className="text-xs text-primary flex items-center gap-1"><Download className="h-3 w-3" /> Baixar</a>
                 </div>
               )}
+
               {selectedAsset.utmLink && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Link2 className="h-3 w-3" /> Link UTM</p>
                   <div className="flex items-center gap-2 p-2 bg-muted rounded text-xs break-all"><span className="flex-1">{selectedAsset.utmLink}</span><CopyButton text={selectedAsset.utmLink} /></div>
                 </div>
               )}
+
+              {/* Publication Schedules per Platform */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold flex items-center gap-1"><SendHorizontal className="h-3.5 w-3.5 text-primary" /> Agendamentos por Plataforma</p>
+                {assetSchedules.length > 0 && (
+                  <div className="space-y-1">
+                    {assetSchedules.map(s => (
+                      <div key={s.id} className="flex items-center gap-2 p-2 rounded border text-xs">
+                        <ChannelBadge channel={s.platform} />
+                        <span className="flex-1">{format(new Date(s.scheduledTime), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                        <Badge variant={s.status === "sent" ? "default" : s.status === "manual" ? "outline" : "secondary"} className="text-[9px]">
+                          {s.status === "planned" ? "Planejado" : s.status === "sent" ? "Enviado" : "Manual"}
+                        </Badge>
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => deleteScheduleMutation.mutate(s.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <Select value={newSchedPlatform} onValueChange={setNewSchedPlatform}>
+                      <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input type="datetime-local" className="flex-1 h-8 text-xs" value={newSchedTime} onChange={e => setNewSchedTime(e.target.value)} />
+                    <Button size="sm" variant="outline" disabled={!newSchedTime || createScheduleMutation.isPending} onClick={() => createScheduleMutation.mutate({ assetId: selectedAsset.id, platform: newSchedPlatform, scheduledTime: newSchedTime })} data-testid="button-add-schedule">
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {isAdmin && selectedAsset.status === "approved" && (
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs shrink-0">Agendar para:</Label>
-                  <Input type="datetime-local" className="text-xs h-8" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} />
+                <div className="flex items-center gap-2 pt-1 border-t">
+                  <Label className="text-xs shrink-0 text-muted-foreground">Marcar asset como agendado:</Label>
+                  <Input type="datetime-local" className="text-xs h-8 flex-1" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} />
                   <Button size="sm" variant="outline" disabled={!scheduleDate} onClick={() => { updateMutation.mutate({ id: selectedAsset.id, data: { status: "scheduled", scheduledAt: scheduleDate } }); }}>
                     <Calendar className="h-3 w-3 mr-1" /> Agendar
                   </Button>
@@ -825,6 +966,140 @@ function CalendarTab() {
   );
 }
 
+// ==================== DASHBOARD TAB ====================
+
+function DashboardTab() {
+  const { data: stats, isLoading } = useQuery<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }>({
+    queryKey: ["/api/admin/social/stats"],
+  });
+  const { data: projects = [] } = useQuery<SocialProject[]>({ queryKey: ["/api/admin/social/projects"] });
+  const { data: recentAssets = [] } = useQuery<ContentAsset[]>({
+    queryKey: ["/api/admin/social/assets", "recent"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/social/assets?limit=6", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      return res.json();
+    },
+  });
+
+  if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  const s = stats || { total: 0, byStatus: {}, byChannel: {} };
+
+  const kpis = [
+    { label: "Total de Ativos", value: s.total, icon: Layers, color: "text-blue-500" },
+    { label: "Em Rascunho", value: s.byStatus.draft || 0, icon: Clock, color: "text-yellow-500" },
+    { label: "Aprovados", value: s.byStatus.approved || 0, icon: CheckCircle2, color: "text-green-500" },
+    { label: "Publicados", value: s.byStatus.published || 0, icon: TrendingUp, color: "text-primary" },
+    { label: "Projetos Ativos", value: projects.filter(p => p.isActive).length, icon: FolderOpen, color: "text-purple-500" },
+    { label: "Agendados", value: s.byStatus.scheduled || 0, icon: Calendar, color: "text-orange-500" },
+  ];
+
+  const topChannels = Object.entries(s.byChannel)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  const formatDist = [
+    { key: "draft", label: "Rascunho", count: s.byStatus.draft || 0, color: "bg-yellow-400" },
+    { key: "approved", label: "Aprovado", count: s.byStatus.approved || 0, color: "bg-green-500" },
+    { key: "scheduled", label: "Agendado", count: s.byStatus.scheduled || 0, color: "bg-orange-400" },
+    { key: "published", label: "Publicado", count: s.byStatus.published || 0, color: "bg-primary" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {kpis.map(k => (
+          <Card key={k.label}>
+            <CardContent className="pt-4 pb-3 text-center">
+              <k.icon className={`h-5 w-5 mx-auto mb-1 ${k.color}`} />
+              <div className="text-2xl font-bold">{k.value}</div>
+              <div className="text-[10px] text-muted-foreground">{k.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Status distribution */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Distribuição por Status</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {s.total === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum ativo gerado ainda.</p>
+            ) : (
+              formatDist.map(f => (
+                <div key={f.key} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span>{f.label}</span>
+                    <span className="font-medium">{f.count} ({s.total > 0 ? Math.round((f.count / s.total) * 100) : 0}%)</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div className={`h-full rounded-full ${f.color} transition-all`} style={{ width: `${s.total > 0 ? (f.count / s.total) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Channel distribution */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><MousePointerClick className="h-4 w-4 text-primary" /> Canais Mais Usados</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {topChannels.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum dado ainda.</p>
+            ) : (
+              topChannels.map(([channel, count]) => {
+                const ch = CHANNELS.find(c => c.value === channel);
+                return (
+                  <div key={channel} className="flex items-center gap-3">
+                    <ChannelBadge channel={channel} />
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full ${ch?.color || "bg-gray-400"}`} style={{ width: `${s.total > 0 ? (count / s.total) * 100 : 0}%` }} />
+                    </div>
+                    <span className="text-xs font-medium w-6 text-right">{count}</span>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent content */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Ativos Recentes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentAssets.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum ativo gerado ainda. Vá ao Estúdio para criar!</p>
+          ) : (
+            <div className="space-y-2">
+              {recentAssets.slice(0, 6).map(a => (
+                <div key={a.id} className="flex items-center gap-3 p-2 rounded border text-sm">
+                  <ChannelBadge channel={a.channel} />
+                  <span className="flex-1 truncate">{a.sourceIdea}</span>
+                  {a.ideaArea && <span className="text-xs text-muted-foreground hidden md:block truncate max-w-32">{a.ideaArea}</span>}
+                  <Badge variant={STATUS_CONFIG[a.status]?.variant || "secondary"} className="text-[10px] shrink-0">{STATUS_CONFIG[a.status]?.label}</Badge>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{format(new Date(a.createdAt), "dd/MM", { locale: ptBR })}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ==================== MAIN PAGE ====================
 
 export default function SocialAdsPage() {
@@ -845,17 +1120,19 @@ export default function SocialAdsPage() {
         </header>
 
         <div className="flex-1 p-4 lg:p-6">
-          <Tabs defaultValue="studio">
+          <Tabs defaultValue="dashboard">
             <TabsList className="mb-6">
-              <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>
+              <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>
               <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>
               <TabsTrigger value="library" data-testid="tab-library"><BookOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
               <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="h-4 w-4 mr-1.5" />Calendário</TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>
             </TabsList>
-            <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>
+            <TabsContent value="dashboard"><DashboardTab /></TabsContent>
             <TabsContent value="studio"><StudioTab isAdmin={isAdmin} /></TabsContent>
             <TabsContent value="library"><LibraryTab isAdmin={isAdmin} /></TabsContent>
             <TabsContent value="calendar"><CalendarTab /></TabsContent>
+            <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>
           </Tabs>
         </div>
       </SidebarInset>

@@ -3919,28 +3919,53 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  app.get("/api/admin/social/stats", authenticateToken, async (_req: AuthRequest, res: Response) => {
+    try {
+      const stats = await storage.getSocialStats();
+      res.json(stats);
+    } catch (err) {
+      console.error("[GET /api/admin/social/stats]", err);
+      res.status(500).json({ message: "Erro ao obter estatísticas" });
+    }
+  });
+
   app.post("/api/admin/social/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { projectId, idea, channel, tone } = req.body;
       if (!idea) return res.status(400).json({ message: "Ideia é obrigatória" });
 
+      // Load project brand/leadership style if provided
+      let leadershipStyle = "";
+      if (projectId) {
+        const project = await storage.getSocialProject(projectId);
+        if (project?.brand?.leadershipStyle) {
+          const styleMap: Record<string, string> = {
+            hormozi: "Alex Hormozi (foco em ofertas irresistíveis, resultados mensuráveis e linguagem direta e provocativa)",
+            priestley: "Daniel Priestley (foco em construção de autoridade, ecossistemas de conteúdo e posicionamento como KPI — Key Person of Influence)",
+            garyvee: "Gary Vaynerchuk (foco em documentação da jornada, autenticidade radical e volume de conteúdo orgânico)",
+          };
+          leadershipStyle = styleMap[project.brand.leadershipStyle] || project.brand.leadershipStyle;
+        }
+      }
+
       const openai = new OpenAI();
-      const systemPrompt = `Você é um estrategista de conteúdo especializado em marketing digital e construção de autoridade. 
+      const systemPrompt = `Você é um estrategista de conteúdo especializado em marketing digital e construção de autoridade.
 Tom de voz: ${tone || "inspirador e profissional"}.
-Canal principal: ${channel || "instagram"}.
+Canal principal: ${channel || "instagram"}.${leadershipStyle ? `\nFramework de liderança: ${leadershipStyle}.` : ""}
 Responda SOMENTE em JSON válido, sem markdown, sem texto fora do JSON.`;
 
       const userPrompt = `Ideia central: "${idea}"
 
 Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 {
-  "ideaArea": "área do conhecimento identificada (ex: Filosofia - Estoicismo)",
-  "ideaSources": "2-3 autores ou referências que validam esta ideia",
-  "headlines": ["headline 1", "headline 2", "headline 3", "headline 4", "headline 5"],
-  "article": "artigo completo para blog/LinkedIn com 400-600 palavras, focado em SEO e autoridade B2B",
-  "podcastScript": "roteiro estruturado de podcast de 15-30 minutos com: ABERTURA (gancho + apresentação do tema), DESENVOLVIMENTO (3 pontos principais com exemplos), CONCLUSÃO (resumo + CTA)",
-  "reelScript": "roteiro de Reels/TikTok de 30-60 segundos: GANCHO (primeiros 3s para parar o scroll), DESENVOLVIMENTO (valor rápido), CTA (ação final)",
-  "liveScript": "roadmap de Live com: ABERTURA (apresentação + expectativas), 3-4 BLOCOS DE CONTEÚDO (com ganchos de retenção e momentos de interação), ENCERRAMENTO (resumo + oferta/CTA)"
+  "ideaArea": "área do conhecimento identificada (ex: Filosofia - Estoicismo, Neurociência, Liderança)",
+  "ideaSources": "2-3 autores ou referências científicas/filosóficas que validam esta ideia (ex: Marcus Aurelius, Andrew Huberman, Viktor Frankl)",
+  "headlines": ["headline 1 com gancho emocional", "headline 2 com dados/curiosidade", "headline 3 com promessa de transformação", "headline 4 com pergunta provocativa", "headline 5 com autoridade"],
+  "article": "artigo completo para blog/LinkedIn com 500-700 palavras, focado em SEO, autoridade B2B e exemplos práticos",
+  "podcastScript": "roteiro de podcast 15-30min: ABERTURA (gancho + apresentação do tema + o que o ouvinte vai aprender), BLOCO 1 (primeiro ponto principal com exemplo real), BLOCO 2 (segundo ponto com história ou dado), BLOCO 3 (terceiro ponto com insight transformador), CONCLUSÃO (síntese + CTA para próximo episódio ou ação)",
+  "reelScript": "roteiro de Reels/TikTok 30-60s: GANCHO (primeiros 3s explosivos para parar o scroll), DESENVOLVIMENTO (valor rápido e concreto em 3 bullets), CTA (ação clara e urgente)",
+  "liveScript": "roadmap de Live: ABERTURA (apresentação + expectativas + enquete inicial), BLOCO 1 (conteúdo principal com interação), BLOCO 2 (aprofundamento + Q&A), BLOCO 3 (case prático), ENCERRAMENTO (resumo + oferta/CTA + próxima live)",
+  "socialAds": "copy completo de anúncio para captar Agentes de Fidelização: HEADLINE PODEROSA (1 linha), CORPO DO ANÚNCIO (problema → agitação → solução, 3-4 parágrafos curtos), CTA DIRETO (1 linha de ação), VARIAÇÃO A/B (versão alternativa mais curta para teste)"
 }`;
 
       const response = await openai.chat.completions.create({
@@ -3972,6 +3997,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
           podcastScript: generated.podcastScript || "",
           reelScript: generated.reelScript || "",
           liveScript: generated.liveScript || "",
+          socialAds: generated.socialAds || "",
         },
         usedPrompt: userPrompt,
         channel: (channel || "instagram") as any,
@@ -4041,6 +4067,57 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     } catch (err) {
       console.error("[POST /api/admin/social/assets/:id/generate-utm]", err);
       res.status(500).json({ message: "Erro ao gerar link UTM" });
+    }
+  });
+
+  // Publication schedules
+  app.get("/api/admin/social/assets/:id/schedules", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const schedules = await storage.getPublicationSchedulesByAsset(req.params.id);
+      res.json(schedules);
+    } catch (err) {
+      console.error("[GET /api/admin/social/assets/:id/schedules]", err);
+      res.status(500).json({ message: "Erro ao listar agendamentos" });
+    }
+  });
+
+  app.post("/api/admin/social/assets/:id/schedules", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { platform, scheduledTime, notes } = req.body;
+      if (!platform || !scheduledTime) return res.status(400).json({ message: "Platform e scheduledTime são obrigatórios" });
+      const schedule = await storage.createPublicationSchedule({
+        assetId: req.params.id,
+        platform,
+        scheduledTime: new Date(scheduledTime),
+        status: "planned",
+        notes: notes || null,
+      });
+      res.status(201).json(schedule);
+    } catch (err) {
+      console.error("[POST /api/admin/social/assets/:id/schedules]", err);
+      res.status(500).json({ message: "Erro ao criar agendamento" });
+    }
+  });
+
+  app.patch("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { status } = req.body;
+      const schedule = await storage.updatePublicationSchedule(req.params.id, status);
+      if (!schedule) return res.status(404).json({ message: "Agendamento não encontrado" });
+      res.json(schedule);
+    } catch (err) {
+      console.error("[PATCH /api/admin/social/schedules/:id]", err);
+      res.status(500).json({ message: "Erro ao atualizar agendamento" });
+    }
+  });
+
+  app.delete("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      await storage.deletePublicationSchedule(req.params.id);
+      res.status(204).end();
+    } catch (err) {
+      console.error("[DELETE /api/admin/social/schedules/:id]", err);
+      res.status(500).json({ message: "Erro ao excluir agendamento" });
     }
   });
 

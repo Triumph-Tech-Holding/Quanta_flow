@@ -974,7 +974,12 @@ export const socialProjects = pgTable("social_projects", {
   name: varchar("name", { length: 255 }).notNull(),
   clientName: varchar("client_name", { length: 255 }),
   description: text("description"),
-  brand: jsonb("brand").$type<{ tone?: string; niche?: string; colors?: string[] }>().default({}),
+  brand: jsonb("brand").$type<{
+    tone?: string;
+    niche?: string;
+    colors?: string[];
+    leadershipStyle?: string;
+  }>().default({}),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -992,6 +997,7 @@ export const contentAssets = pgTable("content_assets", {
     podcastScript?: string;
     reelScript?: string;
     liveScript?: string;
+    socialAds?: string;
     audioUrl?: string;
   }>().default({}),
   usedPrompt: text("used_prompt"),
@@ -1003,6 +1009,18 @@ export const contentAssets = pgTable("content_assets", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const pubScheduleStatusEnum = pgEnum("pub_schedule_status", ["planned", "sent", "manual"]);
+
+export const publicationSchedules = pgTable("publication_schedules", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  assetId: varchar("asset_id", { length: 36 }).notNull().references(() => contentAssets.id, { onDelete: "cascade" }),
+  platform: varchar("platform", { length: 50 }).notNull(),
+  scheduledTime: timestamp("scheduled_time").notNull(),
+  status: pubScheduleStatusEnum("status").notNull().default("planned"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertSocialProjectSchema = createInsertSchema(socialProjects).omit({
@@ -1017,6 +1035,7 @@ export const updateSocialProjectSchema = z.object({
     tone: z.string().optional(),
     niche: z.string().optional(),
     colors: z.array(z.string()).optional(),
+    leadershipStyle: z.string().optional(),
   }).optional().nullable(),
   isActive: z.boolean().optional(),
 });
@@ -1037,8 +1056,13 @@ export const updateContentAssetSchema = z.object({
     podcastScript: z.string().optional(),
     reelScript: z.string().optional(),
     liveScript: z.string().optional(),
+    socialAds: z.string().optional(),
     audioUrl: z.string().optional(),
   }).optional().nullable(),
+});
+
+export const insertPublicationScheduleSchema = createInsertSchema(publicationSchedules).omit({
+  id: true, createdAt: true,
 });
 
 export type SocialProject = typeof socialProjects.$inferSelect;
@@ -1047,3 +1071,5 @@ export type UpdateSocialProject = z.infer<typeof updateSocialProjectSchema>;
 export type ContentAsset = typeof contentAssets.$inferSelect;
 export type InsertContentAsset = z.infer<typeof insertContentAssetSchema>;
 export type UpdateContentAsset = z.infer<typeof updateContentAssetSchema>;
+export type PublicationSchedule = typeof publicationSchedules.$inferSelect;
+export type InsertPublicationSchedule = z.infer<typeof insertPublicationScheduleSchema>;

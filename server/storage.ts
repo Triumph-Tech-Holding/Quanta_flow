@@ -30,9 +30,10 @@ import {
   type Campaign, type InsertCampaign, type UpdateCampaign,
   type CampaignDelivery,
   type MessageTemplate, type InsertMessageTemplate, type UpdateMessageTemplate,
-  socialProjects, contentAssets,
+  socialProjects, contentAssets, publicationSchedules,
   type SocialProject, type InsertSocialProject, type UpdateSocialProject,
   type ContentAsset, type InsertContentAsset, type UpdateContentAsset,
+  type PublicationSchedule, type InsertPublicationSchedule,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -150,6 +151,11 @@ export interface IStorage {
   deleteContentAsset(id: string): Promise<boolean>;
   getCalendarAssets(month: string): Promise<ContentAsset[]>;
   countAssetsPerProject(): Promise<{ projectId: string; count: number }[]>;
+  getSocialStats(): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }>;
+  getPublicationSchedulesByAsset(assetId: string): Promise<PublicationSchedule[]>;
+  createPublicationSchedule(data: InsertPublicationSchedule): Promise<PublicationSchedule>;
+  updatePublicationSchedule(id: string, status: string): Promise<PublicationSchedule | undefined>;
+  deletePublicationSchedule(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1115,6 +1121,44 @@ export class DatabaseStorage implements IStorage {
       .from(contentAssets)
       .groupBy(contentAssets.projectId);
     return rows.filter(r => r.projectId !== null) as { projectId: string; count: number }[];
+  }
+
+  async getSocialStats(): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }> {
+    const all = await db.select({
+      status: contentAssets.status,
+      channel: contentAssets.channel,
+    }).from(contentAssets);
+    const byStatus: Record<string, number> = {};
+    const byChannel: Record<string, number> = {};
+    for (const row of all) {
+      byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+      byChannel[row.channel] = (byChannel[row.channel] || 0) + 1;
+    }
+    return { total: all.length, byStatus, byChannel };
+  }
+
+  async getPublicationSchedulesByAsset(assetId: string): Promise<PublicationSchedule[]> {
+    return db.select().from(publicationSchedules)
+      .where(eq(publicationSchedules.assetId, assetId))
+      .orderBy(asc(publicationSchedules.scheduledTime));
+  }
+
+  async createPublicationSchedule(data: InsertPublicationSchedule): Promise<PublicationSchedule> {
+    const [s] = await db.insert(publicationSchedules).values(data).returning();
+    return s;
+  }
+
+  async updatePublicationSchedule(id: string, status: string): Promise<PublicationSchedule | undefined> {
+    const [s] = await db.update(publicationSchedules)
+      .set({ status: status as any })
+      .where(eq(publicationSchedules.id, id))
+      .returning();
+    return s;
+  }
+
+  async deletePublicationSchedule(id: string): Promise<boolean> {
+    const result = await db.delete(publicationSchedules).where(eq(publicationSchedules.id, id)).returning();
+    return result.length > 0;
   }
 }
 
