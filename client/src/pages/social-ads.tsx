@@ -1193,32 +1193,49 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                 </TabsContent>
               </Tabs>
 
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS (OpenAI)</p>
-                {selectedAsset.formats?.audioUrl ? (
-                  <>
-                    <audio controls className="w-full h-10" src={selectedAsset.formats.audioUrl} />
-                    <a href={selectedAsset.formats.audioUrl} download className="text-xs text-primary flex items-center gap-1"><Download className="h-3 w-3" /> Baixar</a>
-                  </>
-                ) : isAdmin ? (
-                  <div className="flex items-center gap-2">
-                    <Select value={libraryTtsVoice} onValueChange={setLibraryTtsVoice}>
-                      <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nova">Nova (feminino)</SelectItem>
-                        <SelectItem value="alloy">Alloy (neutro)</SelectItem>
-                        <SelectItem value="echo">Echo (masculino)</SelectItem>
-                        <SelectItem value="onyx">Onyx (masculino grave)</SelectItem>
-                        <SelectItem value="shimmer">Shimmer (feminino)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button variant="outline" size="sm" onClick={handleLibraryTts} disabled={generatingLibraryTts} data-testid="button-library-tts">
-                      {generatingLibraryTts ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Mic className="h-4 w-4 mr-1" />}
-                      Gerar Áudio
-                    </Button>
+              {(() => {
+                const proj = projects.find(p => p.id === selectedAsset.projectId);
+                const hasEl = proj?.brand?.hasElevenLabs;
+                if (hasEl) {
+                  return (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS</p>
+                      <p className="text-xs text-muted-foreground italic">Este projeto usa Voz Clonada (ElevenLabs) — gere na seção Clonagem de Mídia abaixo.</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS (OpenAI)</p>
+                    {selectedAsset.formats?.audioUrl ? (
+                      <>
+                        <audio controls className="w-full h-10" src={selectedAsset.formats.audioUrl} />
+                        <div className="flex items-center gap-2">
+                          <a href={selectedAsset.formats.audioUrl} download className="text-xs text-primary flex items-center gap-1"><Download className="h-3 w-3" /> Baixar</a>
+                          <CopyButton text={selectedAsset.formats.audioUrl} />
+                        </div>
+                      </>
+                    ) : isAdmin ? (
+                      <div className="flex items-center gap-2">
+                        <Select value={libraryTtsVoice} onValueChange={setLibraryTtsVoice}>
+                          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nova">Nova (feminino)</SelectItem>
+                            <SelectItem value="alloy">Alloy (neutro)</SelectItem>
+                            <SelectItem value="echo">Echo (masculino)</SelectItem>
+                            <SelectItem value="onyx">Onyx (masculino grave)</SelectItem>
+                            <SelectItem value="shimmer">Shimmer (feminino)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" onClick={handleLibraryTts} disabled={generatingLibraryTts} data-testid="button-library-tts">
+                          {generatingLibraryTts ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Mic className="h-4 w-4 mr-1" />}
+                          Gerar Áudio
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
+                );
+              })()}
 
               {selectedAsset.utmLink && (
                 <div className="space-y-1">
@@ -1245,7 +1262,10 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                         {selectedAsset.formats?.elevenLabsAudioUrl ? (
                           <div className="space-y-1">
                             <audio controls className="w-full h-10" src={selectedAsset.formats.elevenLabsAudioUrl} />
-                            <a href={selectedAsset.formats.elevenLabsAudioUrl} download className="text-xs text-purple-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar áudio clonado</a>
+                            <div className="flex items-center gap-2">
+                              <a href={selectedAsset.formats.elevenLabsAudioUrl} download className="text-xs text-purple-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar áudio clonado</a>
+                              <CopyButton text={selectedAsset.formats.elevenLabsAudioUrl} />
+                            </div>
                           </div>
                         ) : (
                           <Button variant="outline" size="sm" onClick={handleElevenLabsTts} disabled={generatingElevenLabs} data-testid="button-elevenlabs-tts" className="border-purple-300 text-purple-700 hover:bg-purple-50">
@@ -1262,7 +1282,10 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                         {selectedAsset.formats?.heygenVideoStatus === "completed" && selectedAsset.formats?.heygenVideoUrl ? (
                           <div className="space-y-1">
                             <Badge className="text-[10px] bg-blue-600">Vídeo pronto</Badge>
-                            <a href={selectedAsset.formats.heygenVideoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar vídeo HeyGen</a>
+                            <div className="flex items-center gap-2">
+                              <a href={selectedAsset.formats.heygenVideoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1"><Download className="h-3 w-3" /> Baixar vídeo HeyGen</a>
+                              <CopyButton text={selectedAsset.formats.heygenVideoUrl} />
+                            </div>
                           </div>
                         ) : selectedAsset.formats?.heygenVideoStatus === "processing" ? (
                           <div className="flex items-center gap-2">
