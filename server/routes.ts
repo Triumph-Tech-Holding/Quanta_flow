@@ -3884,7 +3884,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
-      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       res.json(asset);
     } catch (err) {
       res.status(500).json({ message: "Erro ao buscar ativo" });
@@ -4063,7 +4063,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
-      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
       const text = asset.formats?.podcastScript || asset.sourceIdea;
       if (!text) return res.status(400).json({ message: "Nenhum roteiro disponível para TTS" });
@@ -4103,7 +4103,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
-      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
       const { baseUrl, campaignSource, campaignMedium, campaignName } = req.body;
       if (!baseUrl) return res.status(400).json({ message: "baseUrl é obrigatória" });
@@ -4128,7 +4128,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
-      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
+      if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const schedules = await storage.getPublicationSchedulesByAsset(req.params.id);
       res.json(schedules);
     } catch (err) {
