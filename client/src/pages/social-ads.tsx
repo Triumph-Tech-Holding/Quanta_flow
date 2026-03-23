@@ -305,6 +305,9 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [ttsVoice, setTtsVoice] = useState("nova");
   const [utmBase, setUtmBase] = useState("");
+  const [utmSource, setUtmSource] = useState("");
+  const [utmMedium, setUtmMedium] = useState("");
+  const [utmCampaign, setUtmCampaign] = useState("");
   const [generatingTts, setGeneratingTts] = useState(false);
   const [generatingUtm, setGeneratingUtm] = useState(false);
 
@@ -344,7 +347,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
     if (!generatedAsset || !utmBase) return;
     setGeneratingUtm(true);
     try {
-      const res = await apiRequest("POST", `/api/admin/social/assets/${generatedAsset.id}/generate-utm`, { baseUrl: utmBase });
+      const res = await apiRequest("POST", `/api/admin/social/assets/${generatedAsset.id}/generate-utm`, { baseUrl: utmBase, campaignSource: utmSource || undefined, campaignMedium: utmMedium || undefined, campaignName: utmCampaign || undefined });
       const data: { asset: ContentAsset; utmLink: string } = await res.json();
       setGeneratedAsset(data.asset);
       toast({ title: "Link UTM gerado!" });
@@ -364,7 +367,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
-  const handleReset = () => { setStep(1); setIdea(""); setGeneratedAsset(null); setActiveFormat("headlines"); setUtmBase(""); };
+  const handleReset = () => { setStep(1); setIdea(""); setGeneratedAsset(null); setActiveFormat("headlines"); setUtmBase(""); setUtmSource(""); setUtmMedium(""); setUtmCampaign(""); };
 
   if (!isAdmin) return (
     <div className="text-center py-20 text-muted-foreground">
@@ -584,10 +587,16 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
                   <CopyButton text={generatedAsset.utmLink} />
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <Input value={utmBase} onChange={e => setUtmBase(e.target.value)} placeholder="https://seusite.com/pagina" className="flex-1 text-sm" data-testid="input-utm-base" />
-                  <Button variant="outline" size="sm" onClick={handleUtm} disabled={generatingUtm || !utmBase} data-testid="button-generate-utm">
-                    {generatingUtm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                <div className="space-y-2">
+                  <Input value={utmBase} onChange={e => setUtmBase(e.target.value)} placeholder="https://seusite.com/pagina" className="text-sm" data-testid="input-utm-base" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input value={utmSource} onChange={e => setUtmSource(e.target.value)} placeholder="Fonte (ex: instagram)" className="text-xs" data-testid="input-utm-source" />
+                    <Input value={utmMedium} onChange={e => setUtmMedium(e.target.value)} placeholder="Meio (ex: social)" className="text-xs" data-testid="input-utm-medium" />
+                    <Input value={utmCampaign} onChange={e => setUtmCampaign(e.target.value)} placeholder="Campanha" className="text-xs" data-testid="input-utm-campaign" />
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full" onClick={handleUtm} disabled={generatingUtm || !utmBase} data-testid="button-generate-utm">
+                    {generatingUtm ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
+                    Gerar Link UTM
                   </Button>
                 </div>
               )}
