@@ -3867,10 +3867,11 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.get("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
-      const filters: { userId: string; projectId?: string; status?: string; channel?: string } = { userId };
+      const filters: { userId: string; projectId?: string; status?: string; channel?: string; limit?: number } = { userId };
       if (req.query.projectId) filters.projectId = req.query.projectId as string;
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.channel) filters.channel = req.query.channel as string;
+      if (req.query.limit) { const l = parseInt(req.query.limit as string, 10); if (!isNaN(l) && l > 0) filters.limit = l; }
       const assets = await storage.getContentAssets(filters);
       res.json(assets);
     } catch (err) {

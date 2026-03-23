@@ -144,7 +144,7 @@ export interface IStorage {
   createSocialProject(data: InsertSocialProject): Promise<SocialProject>;
   updateSocialProject(id: string, userId: string, data: UpdateSocialProject): Promise<SocialProject | undefined>;
   deleteSocialProject(id: string, userId: string): Promise<boolean>;
-  getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]>;
+  getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string; limit?: number }): Promise<ContentAsset[]>;
   getContentAsset(id: string): Promise<ContentAsset | undefined>;
   createContentAsset(data: InsertContentAsset): Promise<ContentAsset>;
   updateContentAsset(id: string, data: UpdateContentAsset): Promise<ContentAsset | undefined>;
@@ -1070,7 +1070,7 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]> {
+  async getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string; limit?: number }): Promise<ContentAsset[]> {
     type SocialStatus = "draft" | "approved" | "scheduled" | "published";
     type SocialChannel = "instagram" | "tiktok" | "youtube" | "linkedin" | "blog" | "whatsapp";
     const conditions = [];
@@ -1078,10 +1078,10 @@ export class DatabaseStorage implements IStorage {
     if (filters?.projectId) conditions.push(eq(contentAssets.projectId, filters.projectId));
     if (filters?.status) conditions.push(eq(contentAssets.status, filters.status as SocialStatus));
     if (filters?.channel) conditions.push(eq(contentAssets.channel, filters.channel as SocialChannel));
-    const query = conditions.length > 0
+    const base = conditions.length > 0
       ? db.select().from(contentAssets).where(and(...conditions)).orderBy(desc(contentAssets.createdAt))
       : db.select().from(contentAssets).orderBy(desc(contentAssets.createdAt));
-    return query;
+    return filters?.limit ? base.limit(filters.limit) : base;
   }
 
   async getContentAsset(id: string): Promise<ContentAsset | undefined> {
