@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -293,11 +293,24 @@ function ProjectsTab({ isAdmin }: { isAdmin: boolean }) {
 
 // ==================== STUDIO TAB ====================
 
+type WizardPhase = "intro" | "enriching" | "headline_selection" | "custom_input" | "generating";
+type ChatRole = "bot" | "user";
+interface ChatMessage {
+  role: ChatRole;
+  content: string;
+  type?: "text" | "headlines";
+  headlines?: string[];
+}
+interface WizardData {
+  ideaArea: string;
+  ideaSources: string;
+  headlines: string[];
+}
+
 function StudioTab({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [projectId, setProjectId] = useState("_none_");
-  const [idea, setIdea] = useState("");
   const [channel, setChannel] = useState("instagram");
   const [tone, setTone] = useState("inspirador");
   const [generatedAsset, setGeneratedAsset] = useState<ContentAsset | null>(null);
@@ -311,7 +324,43 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
   const [generatingTts, setGeneratingTts] = useState(false);
   const [generatingUtm, setGeneratingUtm] = useState(false);
 
+  // Chat Wizard state
+  const [wizardPhase, setWizardPhase] = useState<WizardPhase>("intro");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: "bot", content: "Olá! Sou o Assistente MFORTE 🚀\n\nCompartilhe sua ideia de poder e vou transformá-la em um pacote completo de conteúdo — artigo, podcast, reels, live e anúncio — pronto para publicar.\n\nQual é o tema ou insight que você quer explorar hoje?" },
+  ]);
+  const [wizardInput, setWizardInput] = useState("");
+  const [rawIdea, setRawIdea] = useState("");
+  const [wizardData, setWizardData] = useState<WizardData | null>(null);
+  const [customHeadline, setCustomHeadline] = useState("");
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   const { data: projects = [] } = useQuery<SocialProject[]>({ queryKey: ["/api/admin/social/projects"] });
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const wizardMutation = useMutation<WizardData, Error, { idea: string; projectId?: string }>({
+    mutationFn: (data) => apiRequest("POST", "/api/admin/social/wizard/start", data).then(r => r.json()),
+    onSuccess: (data: WizardData) => {
+      setWizardData(data);
+      setWizardPhase("headline_selection");
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: "bot",
+          content: `Excelente ideia! Analisei e identifiquei:\n\n📌 Área: **${data.ideaArea}**\n📚 Referências: ${data.ideaSources}\n\nAgora escolha o headline que mais ressoa com você — ou escreva o seu próprio:`,
+          type: "headlines",
+          headlines: data.headlines,
+        },
+      ]);
+    },
+    onError: () => {
+      setWizardPhase("intro");
+      setChatMessages(prev => [...prev, { role: "bot", content: "Ops! Não consegui analisar sua ideia. Pode tentar novamente?" }]);
+    },
+  });
 
   const generateMutation = useMutation<ContentAsset, Error, GeneratePayload>({
     mutationFn: (data: GeneratePayload) => apiRequest("POST", "/api/admin/social/generate", data).then(r => r.json()),
@@ -320,12 +369,48 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
       setStep(2);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
     },
-    onError: () => toast({ title: "Erro ao gerar conteúdo", description: "Verifique a conexão com a IA", variant: "destructive" }),
+    onError: () => {
+      setWizardPhase("headline_selection");
+      toast({ title: "Erro ao gerar conteúdo", description: "Verifique a conexão com a IA", variant: "destructive" });
+    },
   });
 
-  const handleGenerate = () => {
-    if (!idea.trim()) { toast({ title: "Digite uma ideia", variant: "destructive" }); return; }
-    generateMutation.mutate({ projectId: projectId === "_none_" ? undefined : projectId, idea: idea.trim(), channel, tone });
+  const handleSendIdea = () => {
+    const text = wizardInput.trim();
+    if (!text) return;
+    setRawIdea(text);
+    setChatMessages(prev => [
+      ...prev,
+      { role: "user", content: text },
+      { role: "bot", content: "Analisando sua ideia com IA... ✨" },
+    ]);
+    setWizardInput("");
+    setWizardPhase("enriching");
+    wizardMutation.mutate({ idea: text, projectId: projectId === "_none_" ? undefined : projectId });
+  };
+
+  const handleSelectHeadline = (headline: string) => {
+    setChatMessages(prev => [
+      ...prev,
+      { role: "user", content: headline },
+      { role: "bot", content: "Perfeito! Gerando seu pacote completo de conteúdo... 🚀\n\nIsso pode levar alguns segundos." },
+    ]);
+    setWizardPhase("generating");
+    const enrichedIdea = `${headline}\n\nContexto: ${rawIdea}${wizardData?.ideaArea ? `\nÁrea: ${wizardData.ideaArea}` : ""}${wizardData?.ideaSources ? `\nReferências: ${wizardData.ideaSources}` : ""}`;
+    generateMutation.mutate({
+      projectId: projectId === "_none_" ? undefined : projectId,
+      idea: enrichedIdea,
+      channel,
+      tone,
+    });
+  };
+
+  const handleSendCustomHeadline = () => {
+    const text = customHeadline.trim();
+    if (!text) return;
+    setCustomHeadline("");
+    setWizardPhase("generating");
+    handleSelectHeadline(text);
   };
 
   const handleTts = async () => {
@@ -367,7 +452,18 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
-  const handleReset = () => { setStep(1); setIdea(""); setGeneratedAsset(null); setActiveFormat("headlines"); setUtmBase(""); setUtmSource(""); setUtmMedium(""); setUtmCampaign(""); };
+  const handleReset = () => {
+    setStep(1);
+    setGeneratedAsset(null);
+    setActiveFormat("headlines");
+    setUtmBase(""); setUtmSource(""); setUtmMedium(""); setUtmCampaign("");
+    setWizardPhase("intro");
+    setRawIdea("");
+    setWizardData(null);
+    setWizardInput("");
+    setCustomHeadline("");
+    setChatMessages([{ role: "bot", content: "Olá! Sou o Assistente MFORTE 🚀\n\nCompartilhe sua ideia de poder e vou transformá-la em um pacote completo de conteúdo — artigo, podcast, reels, live e anúncio — pronto para publicar.\n\nQual é o tema ou insight que você quer explorar hoje?" }]);
+  };
 
   if (!isAdmin) return (
     <div className="text-center py-20 text-muted-foreground">
@@ -382,7 +478,7 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-sm">
-        {[{ n: 1, label: "Ideia" }, { n: 2, label: "Conteúdo" }, { n: 3, label: "Finalizar" }].map(({ n, label }) => (
+        {[{ n: 1, label: "Chat Wizard" }, { n: 2, label: "Conteúdo" }, { n: 3, label: "Finalizar" }].map(({ n, label }) => (
           <div key={n} className="flex items-center gap-2">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold border-2 ${step === n ? "bg-primary text-white border-primary" : step > n ? "bg-primary/20 border-primary text-primary" : "bg-muted border-muted-foreground/30 text-muted-foreground"}`}>{n}</div>
             <span className={step === n ? "font-medium" : "text-muted-foreground"}>{label}</span>
@@ -391,60 +487,144 @@ function StudioTab({ isAdmin }: { isAdmin: boolean }) {
         ))}
       </div>
 
-      {/* Step 1: Input */}
+      {/* Step 1: Chat Wizard */}
       {step === 1 && (
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Qual é a sua ideia?</CardTitle><CardDescription>Digite o tema central e a IA vai transformar em 5 formatos de conteúdo prontos para publicar.</CardDescription></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Projeto / Cliente</Label>
+        <Card className="flex flex-col" style={{ height: "calc(100vh - 220px)", minHeight: 520 }}>
+          {/* Config bar */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b flex-wrap">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Projeto:</span>
               <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger data-testid="select-project"><SelectValue placeholder="Nenhum (geral)" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs w-auto max-w-[180px]" data-testid="select-project"><SelectValue placeholder="Nenhum" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none_">Nenhum (geral)</SelectItem>
                   {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}{p.clientName ? ` — ${p.clientName}` : ""}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Canal Principal</Label>
-                <Select value={channel} onValueChange={setChannel}>
-                  <SelectTrigger data-testid="select-channel"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Tom de Voz</Label>
-                <Select value={tone} onValueChange={setTone}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="inspirador">Inspirador</SelectItem>
-                    <SelectItem value="profissional">Profissional</SelectItem>
-                    <SelectItem value="casual">Casual</SelectItem>
-                    <SelectItem value="educativo">Educativo</SelectItem>
-                    <SelectItem value="provocativo">Provocativo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Canal:</span>
+              <Select value={channel} onValueChange={setChannel}>
+                <SelectTrigger className="h-7 text-xs w-[120px]" data-testid="select-channel"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label>Ideia Central *</Label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Tom:</span>
+              <Select value={tone} onValueChange={setTone}>
+                <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inspirador">Inspirador</SelectItem>
+                  <SelectItem value="profissional">Profissional</SelectItem>
+                  <SelectItem value="casual">Casual</SelectItem>
+                  <SelectItem value="educativo">Educativo</SelectItem>
+                  <SelectItem value="provocativo">Provocativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Chat messages */}
+          <ScrollArea className="flex-1 px-4 py-3">
+            <div className="space-y-3">
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "bot" && (
+                    <div className="flex items-start gap-2 max-w-[85%]">
+                      <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-0.5">
+                        <Sparkles className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-2.5 text-sm whitespace-pre-line">
+                          {msg.content.replace(/\*\*(.*?)\*\*/g, "$1")}
+                        </div>
+                        {/* Highlight bold parts */}
+                        {msg.type === "headlines" && msg.headlines && (
+                          <div className="space-y-1.5 pl-1">
+                            {msg.headlines.map((h, hi) => (
+                              <button
+                                key={hi}
+                                onClick={() => wizardPhase === "headline_selection" && handleSelectHeadline(h)}
+                                disabled={wizardPhase !== "headline_selection"}
+                                className={`w-full text-left px-3 py-2 rounded-xl border text-sm transition-colors ${wizardPhase === "headline_selection" ? "border-primary/40 hover:bg-primary/5 hover:border-primary cursor-pointer" : "border-muted-foreground/20 text-muted-foreground cursor-default"}`}
+                                data-testid={`button-headline-${hi}`}
+                              >
+                                {h}
+                              </button>
+                            ))}
+                            {wizardPhase === "headline_selection" && (
+                              <div className="flex gap-2 pt-1">
+                                <input
+                                  className="flex-1 h-8 px-3 rounded-xl border border-dashed border-muted-foreground/40 text-sm bg-background placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary"
+                                  placeholder="Ou escreva seu próprio headline..."
+                                  value={customHeadline}
+                                  onChange={e => setCustomHeadline(e.target.value)}
+                                  onKeyDown={e => e.key === "Enter" && handleSendCustomHeadline()}
+                                  data-testid="input-custom-headline"
+                                />
+                                <Button size="sm" className="h-8 px-3" onClick={handleSendCustomHeadline} disabled={!customHeadline.trim()} data-testid="button-send-custom-headline">
+                                  <SendHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* Generating spinner */}
+                        {idx === chatMessages.length - 1 && wizardPhase === "generating" && generateMutation.isPending && (
+                          <div className="flex items-center gap-2 pl-1">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-xs text-muted-foreground">Gerando pacote completo...</span>
+                          </div>
+                        )}
+                        {idx === chatMessages.length - 1 && wizardPhase === "enriching" && wizardMutation.isPending && (
+                          <div className="flex items-center gap-2 pl-1">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-xs text-muted-foreground">Analisando com IA...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {msg.role === "user" && (
+                    <div className="bg-primary text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-sm max-w-[80%] whitespace-pre-line">
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={chatBottomRef} />
+            </div>
+          </ScrollArea>
+
+          {/* Input area */}
+          <div className="px-4 pb-4 pt-2 border-t">
+            <div className="flex gap-2 items-end">
               <Textarea
-                value={idea}
-                onChange={e => setIdea(e.target.value)}
-                placeholder="Ex: A resiliência é a maior vantagem competitiva de um empreendedor..."
-                rows={4}
+                value={wizardInput}
+                onChange={e => setWizardInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && wizardPhase === "intro") { e.preventDefault(); handleSendIdea(); } }}
+                placeholder={wizardPhase === "intro" ? "Digite sua ideia aqui... (Enter para enviar)" : wizardPhase === "headline_selection" ? "Escolha um headline acima ou escreva o seu..." : "Aguarde..."}
+                disabled={wizardPhase !== "intro"}
+                rows={2}
+                className="resize-none text-sm"
                 data-testid="textarea-idea"
               />
-              <p className="text-xs text-muted-foreground mt-1">Seja específico — quanto mais contexto, melhor o conteúdo gerado.</p>
+              <Button
+                size="icon"
+                className="h-[58px] w-10 shrink-0"
+                onClick={handleSendIdea}
+                disabled={wizardPhase !== "intro" || !wizardInput.trim()}
+                data-testid="button-send-idea"
+              >
+                <SendHorizontal className="h-4 w-4" />
+              </Button>
             </div>
-            <Button className="w-full" onClick={handleGenerate} disabled={generateMutation.isPending || !idea.trim()} data-testid="button-generate">
-              {generateMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Gerando conteúdo...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Conteúdo com IA</>}
-            </Button>
-          </CardContent>
+            <p className="text-[11px] text-muted-foreground mt-1.5 text-center">
+              {wizardPhase === "intro" ? "Descreva o tema ou insight — seja específico para obter melhores resultados" : wizardPhase === "headline_selection" ? "Clique em um headline ou escreva o seu próprio acima" : ""}
+            </p>
+          </div>
         </Card>
       )}
 

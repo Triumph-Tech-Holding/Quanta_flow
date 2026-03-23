@@ -3964,6 +3964,76 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // ==================== SOCIAL WIZARD (Chat Wizard MFORTE) ====================
+  app.post("/api/admin/social/wizard/start", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { idea, projectId } = req.body;
+      if (!idea || !idea.trim()) return res.status(400).json({ message: "Ideia é obrigatória" });
+
+      const userId = req.user!.userId;
+      let leadershipStyle = "";
+      let projectTone = "";
+      if (projectId) {
+        const project = await storage.getSocialProject(projectId, userId);
+        if (project?.brand?.leadershipStyle) {
+          const styleMap: Record<string, string> = {
+            hormozi: "Alex Hormozi (ofertas irresistíveis, resultados mensuráveis, linguagem direta)",
+            priestley: "Daniel Priestley (autoridade, ecossistemas de conteúdo, Key Person of Influence)",
+            garyvee: "Gary Vaynerchuk (documentação da jornada, autenticidade radical, volume orgânico)",
+          };
+          leadershipStyle = styleMap[project.brand.leadershipStyle] || project.brand.leadershipStyle;
+        }
+        if (project?.brand?.tone) projectTone = project.brand.tone;
+      }
+
+      const openai = new OpenAI();
+      const systemPrompt = `Você é um estrategista de conteúdo especializado em marketing de autoridade e construção de audiência.${leadershipStyle ? `\nFramework de referência: ${leadershipStyle}.` : ""}${projectTone ? `\nTom de voz: ${projectTone}.` : ""}
+Responda SOMENTE em JSON válido, sem markdown, sem texto fora do JSON.`;
+
+      const userPrompt = `Analise esta ideia e retorne exatamente este JSON:
+{
+  "ideaArea": "área do conhecimento (ex: Filosofia - Estoicismo, Neurociência, Liderança Estratégica)",
+  "ideaSources": "2-3 autores ou referências que validam a ideia (ex: Viktor Frankl, Angela Duckworth, Simon Sinek)",
+  "headlines": [
+    "headline com gancho emocional forte",
+    "headline com dado ou curiosidade surpreendente",
+    "headline com promessa de transformação clara"
+  ]
+}
+
+Ideia: "${idea.trim()}"`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0].message.content || "{}";
+      const schema = z.object({
+        ideaArea: z.string().default(""),
+        ideaSources: z.string().default(""),
+        headlines: z.array(z.string()).default([]),
+      });
+
+      let result: z.infer<typeof schema>;
+      try {
+        result = schema.parse(JSON.parse(content));
+      } catch {
+        return res.status(500).json({ message: "Erro ao processar resposta da IA" });
+      }
+
+      res.json(result);
+    } catch (err) {
+      console.error("[POST /api/admin/social/wizard/start]", err);
+      res.status(500).json({ message: "Erro ao analisar ideia", error: err instanceof Error ? err.message : err });
+    }
+  });
+
   app.post("/api/admin/social/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { projectId, idea, channel, tone } = req.body;
