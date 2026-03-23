@@ -911,7 +911,7 @@ function CalendarTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const monthStr = format(currentMonth, "yyyy-MM");
 
-  const { data: assets = [] } = useQuery<ContentAsset[]>({
+  const { data: grouped = {} } = useQuery<Record<string, Record<string, ContentAsset[]>>>({
     queryKey: ["/api/admin/social/calendar", monthStr],
     queryFn: async () => {
       const res = await fetch(`/api/admin/social/calendar?month=${monthStr}`, {
@@ -925,17 +925,8 @@ function CalendarTab() {
   const firstDayOfWeek = getDay(days[0]);
   const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-  const assetsByDay = useMemo(() => {
-    const map: Record<string, ContentAsset[]> = {};
-    assets.forEach(a => {
-      if (a.scheduledAt) {
-        const key = format(parseISO(a.scheduledAt), "yyyy-MM-dd");
-        if (!map[key]) map[key] = [];
-        map[key].push(a);
-      }
-    });
-    return map;
-  }, [assets]);
+  const totalCount = useMemo(() => Object.values(grouped).reduce((sum, channels) => sum + Object.values(channels).reduce((s, arr) => s + arr.length, 0), 0), [grouped]);
+  const allAssets = useMemo(() => Object.values(grouped).flatMap(channels => Object.values(channels).flat()), [grouped]);
 
   return (
     <div className="space-y-4">
@@ -953,9 +944,10 @@ function CalendarTab() {
         </div>
         <div className="grid grid-cols-7">
           {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e-${i}`} className="min-h-20 border-t border-r bg-muted/20" />)}
-          {days.map((day, i) => {
+          {days.map((day) => {
             const key = format(day, "yyyy-MM-dd");
-            const dayAssets = assetsByDay[key] || [];
+            const dayByChannel = grouped[key] || {};
+            const dayAssets = Object.values(dayByChannel).flat();
             const isToday = isSameDay(day, new Date());
             return (
               <div key={key} className={`min-h-20 border-t border-r p-1 ${isToday ? "bg-primary/5" : ""}`} data-testid={`calendar-day-${key}`}>
@@ -975,12 +967,12 @@ function CalendarTab() {
         </div>
       </div>
 
-      {assets.length === 0 ? (
+      {totalCount === 0 ? (
         <p className="text-center text-sm text-muted-foreground py-4">Nenhum conteúdo agendado neste mês.</p>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm font-medium">{assets.length} ativo(s) agendado(s) em {format(currentMonth, "MMMM", { locale: ptBR })}</p>
-          {assets.map(a => (
+          <p className="text-sm font-medium">{totalCount} ativo(s) agendado(s) em {format(currentMonth, "MMMM", { locale: ptBR })}</p>
+          {allAssets.map(a => (
             <div key={a.id} className="flex items-center gap-3 p-2 rounded border text-sm">
               <div className="shrink-0"><Clock className="h-3.5 w-3.5 text-muted-foreground" /></div>
               <span className="text-xs text-muted-foreground shrink-0">{a.scheduledAt ? format(parseISO(a.scheduledAt), "dd/MM HH:mm") : ""}</span>

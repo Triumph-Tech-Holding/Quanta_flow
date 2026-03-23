@@ -3940,7 +3940,15 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     try {
       const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
       const assets = await storage.getCalendarAssets(month, req.user!.userId);
-      res.json(assets);
+      // Group by date (YYYY-MM-DD) then by channel per spec
+      const grouped: Record<string, Record<string, typeof assets>> = {};
+      for (const asset of assets) {
+        const dateKey = (asset.scheduledAt as Date).toISOString().slice(0, 10);
+        if (!grouped[dateKey]) grouped[dateKey] = {};
+        if (!grouped[dateKey][asset.channel]) grouped[dateKey][asset.channel] = [];
+        grouped[dateKey][asset.channel].push(asset);
+      }
+      res.json(grouped);
     } catch (err) {
       res.status(500).json({ message: "Erro ao carregar calendário" });
     }
