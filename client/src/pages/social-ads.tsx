@@ -627,7 +627,6 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
 
   const { data: projects = [] } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
-    enabled: isAdmin,
   });
 
   const queryParams = useMemo(() => {
@@ -1144,7 +1143,7 @@ export default function SocialAdsPage() {
         </header>
 
         <div className="flex-1 p-4 lg:p-6">
-          <Tabs defaultValue={isAdmin ? "dashboard" : "library"}>
+          <Tabs defaultValue={isAdmin ? "studio" : "library"}>
             <TabsList className="mb-6">
               {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>}
               {isAdmin && <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>}

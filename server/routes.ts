@@ -3816,7 +3816,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   // ==================== Social/Ads Routes ====================
 
-  app.get("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
       const projects = await storage.getSocialProjects(userId);
