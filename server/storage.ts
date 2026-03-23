@@ -1,4 +1,4 @@
-import { eq, desc, and, or, ilike, asc, sql as sqlExpr, gte, isNotNull, lte, inArray } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, sql as sqlExpr, gte, lt, isNotNull, lte, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, leads, apiConfigs, evolutionConfigs, conversations, messages,
@@ -1131,7 +1131,7 @@ export class DatabaseStorage implements IStorage {
         eq(contentAssets.userId, userId),
         isNotNull(contentAssets.scheduledAt),
         gte(contentAssets.scheduledAt, start),
-        lte(contentAssets.scheduledAt, end),
+        lt(contentAssets.scheduledAt, end),
       ))
       .orderBy(asc(contentAssets.scheduledAt));
   }
