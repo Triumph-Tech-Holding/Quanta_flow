@@ -3816,7 +3816,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   // ==================== Social/Ads Routes ====================
 
-  app.get("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/projects", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
       const projects = await storage.getSocialProjects(userId);
@@ -3864,7 +3864,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
-  app.get("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/assets", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
       const filters: { userId: string; projectId?: string; status?: string; channel?: string; limit?: number } = { userId };
@@ -3880,7 +3880,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
-  app.get("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/assets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
@@ -3936,7 +3936,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
-  app.get("/api/admin/social/calendar", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/calendar", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
       const assets = await storage.getCalendarAssets(month, req.user!.userId);
@@ -4124,7 +4124,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
   });
 
   // Publication schedules
-  app.get("/api/admin/social/assets/:id/schedules", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/assets/:id/schedules", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
