@@ -909,6 +909,7 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
 
 function CalendarTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedAsset, setSelectedAsset] = useState<ContentAsset | null>(null);
   const monthStr = format(currentMonth, "yyyy-MM");
 
   const { data: grouped = {} } = useQuery<Record<string, Record<string, ContentAsset[]>>>({
@@ -954,10 +955,10 @@ function CalendarTab() {
                 <p className={`text-xs font-medium mb-1 ${isToday ? "text-primary" : "text-muted-foreground"}`}>{format(day, "d")}</p>
                 <div className="space-y-0.5">
                   {dayAssets.slice(0, 3).map(a => (
-                    <div key={a.id} className="text-[9px] rounded px-1 py-0.5 flex items-center gap-0.5 truncate" title={a.sourceIdea}>
+                    <button key={a.id} onClick={() => setSelectedAsset(a)} className="w-full text-left text-[9px] rounded px-1 py-0.5 flex items-center gap-0.5 truncate hover:bg-muted/50 transition-colors cursor-pointer" title={a.sourceIdea} data-testid={`calendar-asset-${a.id}`}>
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${CHANNELS.find(c => c.value === a.channel)?.color || "bg-gray-400"}`} />
                       <span className="truncate">{a.sourceIdea.slice(0, 20)}</span>
-                    </div>
+                    </button>
                   ))}
                   {dayAssets.length > 3 && <p className="text-[9px] text-muted-foreground">+{dayAssets.length - 3} mais</p>}
                 </div>
@@ -973,16 +974,53 @@ function CalendarTab() {
         <div className="space-y-2">
           <p className="text-sm font-medium">{totalCount} ativo(s) agendado(s) em {format(currentMonth, "MMMM", { locale: ptBR })}</p>
           {allAssets.map(a => (
-            <div key={a.id} className="flex items-center gap-3 p-2 rounded border text-sm">
+            <button key={a.id} onClick={() => setSelectedAsset(a)} className="w-full flex items-center gap-3 p-2 rounded border text-sm hover:bg-muted/40 transition-colors text-left" data-testid={`calendar-list-asset-${a.id}`}>
               <div className="shrink-0"><Clock className="h-3.5 w-3.5 text-muted-foreground" /></div>
               <span className="text-xs text-muted-foreground shrink-0">{a.scheduledAt ? format(parseISO(a.scheduledAt), "dd/MM HH:mm") : ""}</span>
               <ChannelBadge channel={a.channel} />
               <span className="flex-1 truncate">{a.sourceIdea}</span>
               <Badge variant={STATUS_CONFIG[a.status]?.variant || "secondary"} className="text-[10px] shrink-0">{STATUS_CONFIG[a.status]?.label}</Badge>
-            </div>
+            </button>
           ))}
         </div>
       )}
+
+      <Dialog open={!!selectedAsset} onOpenChange={() => setSelectedAsset(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ChannelBadge channel={selectedAsset?.channel || "instagram"} />
+              <span className="truncate">{selectedAsset?.sourceIdea?.slice(0, 50)}</span>
+            </DialogTitle>
+          </DialogHeader>
+          {selectedAsset && (
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant={STATUS_CONFIG[selectedAsset.status]?.variant || "secondary"}>{STATUS_CONFIG[selectedAsset.status]?.label}</Badge>
+                {selectedAsset.scheduledAt && <span className="text-muted-foreground text-xs">📅 {format(parseISO(selectedAsset.scheduledAt), "dd/MM/yyyy HH:mm")}</span>}
+              </div>
+              {selectedAsset.ideaArea && <p className="text-xs text-muted-foreground"><strong>Área:</strong> {selectedAsset.ideaArea}</p>}
+              {selectedAsset.formats?.headlines && selectedAsset.formats.headlines.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium mb-1">Headlines:</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
+                    {selectedAsset.formats.headlines.slice(0, 3).map((h, i) => <li key={i} className="truncate">{h}</li>)}
+                  </ul>
+                </div>
+              )}
+              {selectedAsset.utmLink && (
+                <div>
+                  <p className="text-xs font-medium mb-1">Link UTM:</p>
+                  <p className="text-xs text-muted-foreground break-all">{selectedAsset.utmLink}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSelectedAsset(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1141,19 +1179,19 @@ export default function SocialAdsPage() {
         </header>
 
         <div className="flex-1 p-4 lg:p-6">
-          <Tabs defaultValue={isAdmin ? "studio" : "library"}>
+          <Tabs defaultValue={isAdmin ? "projects" : "library"}>
             <TabsList className="mb-6">
-              {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>}
               {isAdmin && <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>}
               <TabsTrigger value="library" data-testid="tab-library"><BookOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
               <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="h-4 w-4 mr-1.5" />Calendário</TabsTrigger>
-              {isAdmin && <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>}
             </TabsList>
-            {isAdmin && <TabsContent value="dashboard"><DashboardTab /></TabsContent>}
+            {isAdmin && <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>}
             {isAdmin && <TabsContent value="studio"><StudioTab isAdmin={isAdmin} /></TabsContent>}
             <TabsContent value="library"><LibraryTab isAdmin={isAdmin} /></TabsContent>
             <TabsContent value="calendar"><CalendarTab /></TabsContent>
-            {isAdmin && <TabsContent value="projects"><ProjectsTab isAdmin={isAdmin} /></TabsContent>}
+            {isAdmin && <TabsContent value="dashboard"><DashboardTab /></TabsContent>}
           </Tabs>
         </div>
       </SidebarInset>
