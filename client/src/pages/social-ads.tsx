@@ -904,6 +904,8 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
   const [generatingHeyGen, setGeneratingHeyGen] = useState(false);
   const [checkingHeyGenStatus, setCheckingHeyGenStatus] = useState(false);
   const [heygenScriptType, setHeygenScriptType] = useState("reelScript");
+  const [libraryTtsVoice, setLibraryTtsVoice] = useState("nova");
+  const [generatingLibraryTts, setGeneratingLibraryTts] = useState(false);
 
   const { data: projects = [] } = useQuery<SocialProject[]>({
     queryKey: ["/api/admin/social/projects"],
@@ -976,6 +978,23 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
       toast({ title: "Agendamento removido" });
     },
   });
+
+  const handleLibraryTts = async () => {
+    if (!selectedAsset) return;
+    setGeneratingLibraryTts(true);
+    try {
+      const res = await apiRequest("POST", `/api/admin/social/assets/${selectedAsset.id}/tts`, { voice: libraryTtsVoice });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.message || "Erro ao gerar áudio", variant: "destructive" }); return; }
+      setSelectedAsset(prev => prev ? { ...prev, formats: { ...prev.formats, audioUrl: data.audioUrl } } : prev);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social/assets"] });
+      toast({ title: "Áudio TTS gerado!" });
+    } catch {
+      toast({ title: "Erro ao gerar áudio TTS", variant: "destructive" });
+    } finally {
+      setGeneratingLibraryTts(false);
+    }
+  };
 
   const handleElevenLabsTts = async () => {
     if (!selectedAsset) return;
@@ -1174,13 +1193,32 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
                 </TabsContent>
               </Tabs>
 
-              {selectedAsset.formats?.audioUrl && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS</p>
-                  <audio controls className="w-full h-10" src={selectedAsset.formats.audioUrl} />
-                  <a href={selectedAsset.formats.audioUrl} download className="text-xs text-primary flex items-center gap-1"><Download className="h-3 w-3" /> Baixar</a>
-                </div>
-              )}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" /> Áudio TTS (OpenAI)</p>
+                {selectedAsset.formats?.audioUrl ? (
+                  <>
+                    <audio controls className="w-full h-10" src={selectedAsset.formats.audioUrl} />
+                    <a href={selectedAsset.formats.audioUrl} download className="text-xs text-primary flex items-center gap-1"><Download className="h-3 w-3" /> Baixar</a>
+                  </>
+                ) : isAdmin ? (
+                  <div className="flex items-center gap-2">
+                    <Select value={libraryTtsVoice} onValueChange={setLibraryTtsVoice}>
+                      <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nova">Nova (feminino)</SelectItem>
+                        <SelectItem value="alloy">Alloy (neutro)</SelectItem>
+                        <SelectItem value="echo">Echo (masculino)</SelectItem>
+                        <SelectItem value="onyx">Onyx (masculino grave)</SelectItem>
+                        <SelectItem value="shimmer">Shimmer (feminino)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={handleLibraryTts} disabled={generatingLibraryTts} data-testid="button-library-tts">
+                      {generatingLibraryTts ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Mic className="h-4 w-4 mr-1" />}
+                      Gerar Áudio
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
 
               {selectedAsset.utmLink && (
                 <div className="space-y-1">

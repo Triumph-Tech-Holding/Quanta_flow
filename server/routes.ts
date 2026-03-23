@@ -3822,30 +3822,32 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const projects = await storage.getSocialProjects(userId);
       const counts = await storage.countAssetsPerProject(userId);
       const countMap = Object.fromEntries(counts.map(c => [c.projectId, c.count]));
-      res.json(projects.map(p => {
-        const { cloningIds, ...brandWithoutCreds } = p.brand || {};
-        return {
-          ...p,
-          brand: {
-            ...brandWithoutCreds,
-            hasElevenLabs: !!(cloningIds?.elevenLabsApiKey && cloningIds?.elevenLabsVoiceId),
-            hasHeyGen: !!(cloningIds?.heygenApiKey && cloningIds?.heygenAvatarId),
-          },
-          assetCount: countMap[p.id] || 0,
-        };
-      }));
+      res.json(projects.map(p => sanitizeSocialProject(p as unknown as { brand?: Record<string, unknown> | null; [key: string]: unknown }, countMap[p.id] || 0)));
     } catch (err) {
       console.error("[GET /api/admin/social/projects]", err);
       res.status(500).json({ message: "Erro ao listar projetos" });
     }
   });
 
+  function sanitizeSocialProject(p: { brand?: Record<string, unknown> | null; [key: string]: unknown }, assetCount?: number) {
+    const { cloningIds, ...brandWithoutCreds } = (p.brand as { cloningIds?: { elevenLabsApiKey?: string; elevenLabsVoiceId?: string; heygenApiKey?: string; heygenAvatarId?: string }; [k: string]: unknown }) || {};
+    return {
+      ...p,
+      brand: {
+        ...brandWithoutCreds,
+        hasElevenLabs: !!(cloningIds?.elevenLabsApiKey && cloningIds?.elevenLabsVoiceId),
+        hasHeyGen: !!(cloningIds?.heygenApiKey && cloningIds?.heygenAvatarId),
+      },
+      ...(assetCount !== undefined ? { assetCount } : {}),
+    };
+  }
+
   app.post("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { insertSocialProjectSchema } = await import("@shared/schema");
       const parsed = insertSocialProjectSchema.parse({ ...req.body, userId: req.user!.userId });
       const project = await storage.createSocialProject(parsed);
-      res.status(201).json(project);
+      res.status(201).json(sanitizeSocialProject(project as unknown as { brand?: Record<string, unknown> | null; [key: string]: unknown }));
     } catch (err) {
       console.error("[POST /api/admin/social/projects]", err);
       res.status(400).json({ message: "Erro ao criar projeto", error: err instanceof Error ? err.message : err });
@@ -3856,9 +3858,24 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     try {
       const { updateSocialProjectSchema } = await import("@shared/schema");
       const parsed = updateSocialProjectSchema.parse(req.body);
+
+      // Preserve existing cloningIds — only overwrite fields that were explicitly provided
+      if (parsed.brand !== undefined && parsed.brand !== null) {
+        const existing = await storage.getSocialProject(req.params.id, req.user!.userId);
+        if (!existing) return res.status(404).json({ message: "Projeto não encontrado" });
+        const existingCloning = existing.brand?.cloningIds;
+        const newCloning = parsed.brand.cloningIds;
+        parsed.brand.cloningIds = {
+          elevenLabsApiKey: newCloning?.elevenLabsApiKey || existingCloning?.elevenLabsApiKey,
+          elevenLabsVoiceId: newCloning?.elevenLabsVoiceId || existingCloning?.elevenLabsVoiceId,
+          heygenApiKey: newCloning?.heygenApiKey || existingCloning?.heygenApiKey,
+          heygenAvatarId: newCloning?.heygenAvatarId || existingCloning?.heygenAvatarId,
+        };
+      }
+
       const project = await storage.updateSocialProject(req.params.id, req.user!.userId, parsed);
       if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
-      res.json(project);
+      res.json(sanitizeSocialProject(project as unknown as { brand?: Record<string, unknown> | null; [key: string]: unknown }));
     } catch (err) {
       console.error("[PATCH /api/admin/social/projects/:id]", err);
       res.status(400).json({ message: "Erro ao atualizar projeto" });
@@ -4190,7 +4207,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
       if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
 
-      const cloningIds = (project.brand as any)?.cloningIds;
+      const cloningIds = project.brand?.cloningIds;
       if (!cloningIds?.elevenLabsApiKey || !cloningIds?.elevenLabsVoiceId) {
         return res.status(400).json({ message: "Credenciais ElevenLabs não configuradas neste projeto. Configure a API Key e Voice ID nas configurações do projeto." });
       }
@@ -4248,7 +4265,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
       if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
 
-      const cloningIds = (project.brand as any)?.cloningIds;
+      const cloningIds = project.brand?.cloningIds;
       if (!cloningIds?.heygenApiKey || !cloningIds?.heygenAvatarId) {
         return res.status(400).json({ message: "Credenciais HeyGen não configuradas neste projeto. Configure a API Key e Avatar ID nas configurações do projeto." });
       }
@@ -4312,7 +4329,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
       if (!asset.projectId) return res.status(400).json({ message: "Ativo não pertence a um projeto" });
       const project = await storage.getSocialProject(asset.projectId, req.user!.userId);
-      const cloningIds = (project?.brand as any)?.cloningIds;
+      const cloningIds = project?.brand?.cloningIds;
       if (!cloningIds?.heygenApiKey) return res.status(400).json({ message: "Credenciais HeyGen não configuradas" });
 
       const statusRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${heygenVideoId}`, {
