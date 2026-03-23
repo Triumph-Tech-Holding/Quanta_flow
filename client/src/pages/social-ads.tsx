@@ -1120,15 +1120,15 @@ export default function SocialAdsPage() {
         </header>
 
         <div className="flex-1 p-4 lg:p-6">
-          <Tabs defaultValue="dashboard">
+          <Tabs defaultValue={isAdmin ? "dashboard" : "library"}>
             <TabsList className="mb-6">
-              <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>
+              {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard"><BarChart3 className="h-4 w-4 mr-1.5" />Dashboard</TabsTrigger>}
               {isAdmin && <TabsTrigger value="studio" data-testid="tab-studio"><Sparkles className="h-4 w-4 mr-1.5" />Estúdio</TabsTrigger>}
               <TabsTrigger value="library" data-testid="tab-library"><BookOpen className="h-4 w-4 mr-1.5" />Biblioteca</TabsTrigger>
               <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="h-4 w-4 mr-1.5" />Calendário</TabsTrigger>
               {isAdmin && <TabsTrigger value="projects" data-testid="tab-projects"><FolderOpen className="h-4 w-4 mr-1.5" />Projetos</TabsTrigger>}
             </TabsList>
-            <TabsContent value="dashboard"><DashboardTab /></TabsContent>
+            {isAdmin && <TabsContent value="dashboard"><DashboardTab /></TabsContent>}
             {isAdmin && <TabsContent value="studio"><StudioTab isAdmin={isAdmin} /></TabsContent>}
             <TabsContent value="library"><LibraryTab isAdmin={isAdmin} /></TabsContent>
             <TabsContent value="calendar"><CalendarTab /></TabsContent>
