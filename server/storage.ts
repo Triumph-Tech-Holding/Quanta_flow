@@ -139,22 +139,23 @@ export interface IStorage {
   updateMessageTemplate(id: string, data: UpdateMessageTemplate): Promise<MessageTemplate | undefined>;
   deleteMessageTemplate(id: string): Promise<boolean>;
   // Social/Ads
-  getSocialProjects(): Promise<SocialProject[]>;
-  getSocialProject(id: string): Promise<SocialProject | undefined>;
+  getSocialProjects(userId: string): Promise<SocialProject[]>;
+  getSocialProject(id: string, userId: string): Promise<SocialProject | undefined>;
   createSocialProject(data: InsertSocialProject): Promise<SocialProject>;
-  updateSocialProject(id: string, data: UpdateSocialProject): Promise<SocialProject | undefined>;
-  deleteSocialProject(id: string): Promise<boolean>;
-  getContentAssets(filters?: { projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]>;
+  updateSocialProject(id: string, userId: string, data: UpdateSocialProject): Promise<SocialProject | undefined>;
+  deleteSocialProject(id: string, userId: string): Promise<boolean>;
+  getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]>;
   getContentAsset(id: string): Promise<ContentAsset | undefined>;
   createContentAsset(data: InsertContentAsset): Promise<ContentAsset>;
   updateContentAsset(id: string, data: UpdateContentAsset): Promise<ContentAsset | undefined>;
   deleteContentAsset(id: string): Promise<boolean>;
-  getCalendarAssets(month: string): Promise<ContentAsset[]>;
-  countAssetsPerProject(): Promise<{ projectId: string; count: number }[]>;
-  getSocialStats(): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }>;
+  getCalendarAssets(month: string, userId: string): Promise<ContentAsset[]>;
+  countAssetsPerProject(userId: string): Promise<{ projectId: string; count: number }[]>;
+  getSocialStats(userId: string): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }>;
   getPublicationSchedulesByAsset(assetId: string): Promise<PublicationSchedule[]>;
+  getPublicationSchedule(id: string): Promise<PublicationSchedule | undefined>;
   createPublicationSchedule(data: InsertPublicationSchedule): Promise<PublicationSchedule>;
-  updatePublicationSchedule(id: string, status: string): Promise<PublicationSchedule | undefined>;
+  updatePublicationSchedule(id: string, status: "planned" | "sent" | "manual"): Promise<PublicationSchedule | undefined>;
   deletePublicationSchedule(id: string): Promise<boolean>;
 }
 
@@ -1164,6 +1165,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(publicationSchedules)
       .where(eq(publicationSchedules.assetId, assetId))
       .orderBy(asc(publicationSchedules.scheduledTime));
+  }
+
+  async getPublicationSchedule(id: string): Promise<PublicationSchedule | undefined> {
+    const [s] = await db.select().from(publicationSchedules).where(eq(publicationSchedules.id, id));
+    return s;
   }
 
   async createPublicationSchedule(data: InsertPublicationSchedule): Promise<PublicationSchedule> {

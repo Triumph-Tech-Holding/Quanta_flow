@@ -3904,6 +3904,9 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.patch("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const existing = await storage.getContentAsset(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (existing.userId && existing.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const { updateContentAssetSchema } = await import("@shared/schema");
       const parsed = updateContentAssetSchema.parse(req.body);
       const asset = await storage.updateContentAsset(req.params.id, parsed);
@@ -3917,6 +3920,9 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.delete("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const existing = await storage.getContentAsset(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (existing.userId && existing.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       await storage.deleteContentAsset(req.params.id);
       res.json({ message: "Ativo excluído" });
     } catch (err) {
@@ -4032,6 +4038,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
       const text = asset.formats?.podcastScript || asset.sourceIdea;
       if (!text) return res.status(400).json({ message: "Nenhum roteiro disponível para TTS" });
@@ -4071,6 +4078,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
       const { baseUrl, campaignSource, campaignMedium, campaignName } = req.body;
       if (!baseUrl) return res.status(400).json({ message: "baseUrl é obrigatória" });
@@ -4103,6 +4111,9 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
   app.post("/api/admin/social/assets/:id/schedules", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const ownerAsset = await storage.getContentAsset(req.params.id);
+      if (!ownerAsset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (ownerAsset.userId && ownerAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const { platform, scheduledTime, notes } = req.body;
       if (!platform || !scheduledTime) return res.status(400).json({ message: "Platform e scheduledTime são obrigatórios" });
       const schedule = await storage.createPublicationSchedule({
@@ -4121,6 +4132,10 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
   app.patch("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const existingSched = await storage.getPublicationSchedule(req.params.id);
+      if (!existingSched) return res.status(404).json({ message: "Agendamento não encontrado" });
+      const schedAsset = await storage.getContentAsset(existingSched.assetId);
+      if (schedAsset && schedAsset.userId && schedAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const allowedScheduleStatuses = ["planned", "sent", "manual"] as const;
       type ScheduleStatus = typeof allowedScheduleStatuses[number];
       const rawStatus = req.body.status as string;
@@ -4139,6 +4154,10 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
 
   app.delete("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
+      const existingSched = await storage.getPublicationSchedule(req.params.id);
+      if (!existingSched) return res.status(404).json({ message: "Agendamento não encontrado" });
+      const schedAsset = await storage.getContentAsset(existingSched.assetId);
+      if (schedAsset && schedAsset.userId && schedAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       await storage.deletePublicationSchedule(req.params.id);
       res.status(204).end();
     } catch (err) {

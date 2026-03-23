@@ -604,7 +604,10 @@ function LibraryTab({ isAdmin }: { isAdmin: boolean }) {
   const [newSchedPlatform, setNewSchedPlatform] = useState("instagram");
   const [newSchedTime, setNewSchedTime] = useState("");
 
-  const { data: projects = [] } = useQuery<SocialProject[]>({ queryKey: ["/api/admin/social/projects"] });
+  const { data: projects = [] } = useQuery<SocialProject[]>({
+    queryKey: ["/api/admin/social/projects"],
+    enabled: isAdmin,
+  });
 
   const queryParams = useMemo(() => {
     const p: Record<string, string> = {};
