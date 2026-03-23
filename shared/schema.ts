@@ -971,6 +971,7 @@ export const socialContentStatusEnum = pgEnum("social_content_status", [
 
 export const socialProjects = pgTable("social_projects", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
   name: varchar("name", { length: 255 }).notNull(),
   clientName: varchar("client_name", { length: 255 }),
   description: text("description"),
@@ -987,6 +988,7 @@ export const socialProjects = pgTable("social_projects", {
 
 export const contentAssets = pgTable("content_assets", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
   projectId: varchar("project_id", { length: 36 }).references(() => socialProjects.id, { onDelete: "cascade" }),
   sourceIdea: text("source_idea").notNull(),
   ideaArea: varchar("idea_area", { length: 255 }),

@@ -1036,12 +1036,16 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== Social/Ads ====================
 
-  async getSocialProjects(): Promise<SocialProject[]> {
-    return db.select().from(socialProjects).orderBy(desc(socialProjects.createdAt));
+  async getSocialProjects(userId: string): Promise<SocialProject[]> {
+    return db.select().from(socialProjects)
+      .where(eq(socialProjects.userId, userId))
+      .orderBy(desc(socialProjects.createdAt));
   }
 
-  async getSocialProject(id: string): Promise<SocialProject | undefined> {
-    const [p] = await db.select().from(socialProjects).where(eq(socialProjects.id, id)).limit(1);
+  async getSocialProject(id: string, userId: string): Promise<SocialProject | undefined> {
+    const [p] = await db.select().from(socialProjects)
+      .where(and(eq(socialProjects.id, id), eq(socialProjects.userId, userId)))
+      .limit(1);
     return p;
   }
 
@@ -1050,23 +1054,26 @@ export class DatabaseStorage implements IStorage {
     return p;
   }
 
-  async updateSocialProject(id: string, data: UpdateSocialProject): Promise<SocialProject | undefined> {
+  async updateSocialProject(id: string, userId: string, data: UpdateSocialProject): Promise<SocialProject | undefined> {
     const [p] = await db.update(socialProjects)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(socialProjects.id, id))
+      .where(and(eq(socialProjects.id, id), eq(socialProjects.userId, userId)))
       .returning();
     return p;
   }
 
-  async deleteSocialProject(id: string): Promise<boolean> {
-    const result = await db.delete(socialProjects).where(eq(socialProjects.id, id)).returning();
+  async deleteSocialProject(id: string, userId: string): Promise<boolean> {
+    const result = await db.delete(socialProjects)
+      .where(and(eq(socialProjects.id, id), eq(socialProjects.userId, userId)))
+      .returning();
     return result.length > 0;
   }
 
-  async getContentAssets(filters?: { projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]> {
+  async getContentAssets(filters?: { userId?: string; projectId?: string; status?: string; channel?: string }): Promise<ContentAsset[]> {
     type SocialStatus = "draft" | "approved" | "scheduled" | "published";
     type SocialChannel = "instagram" | "tiktok" | "youtube" | "linkedin" | "blog" | "whatsapp";
     const conditions = [];
+    if (filters?.userId) conditions.push(eq(contentAssets.userId, filters.userId));
     if (filters?.projectId) conditions.push(eq(contentAssets.projectId, filters.projectId));
     if (filters?.status) conditions.push(eq(contentAssets.status, filters.status as SocialStatus));
     if (filters?.channel) conditions.push(eq(contentAssets.channel, filters.channel as SocialChannel));
@@ -1114,12 +1121,13 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getCalendarAssets(month: string): Promise<ContentAsset[]> {
+  async getCalendarAssets(month: string, userId: string): Promise<ContentAsset[]> {
     const [year, m] = month.split("-").map(Number);
     const start = new Date(year, m - 1, 1);
     const end = new Date(year, m, 1);
     return db.select().from(contentAssets)
       .where(and(
+        eq(contentAssets.userId, userId),
         isNotNull(contentAssets.scheduledAt),
         gte(contentAssets.scheduledAt, start),
         lte(contentAssets.scheduledAt, end),
@@ -1127,21 +1135,22 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(contentAssets.scheduledAt));
   }
 
-  async countAssetsPerProject(): Promise<{ projectId: string; count: number }[]> {
+  async countAssetsPerProject(userId: string): Promise<{ projectId: string; count: number }[]> {
     const rows = await db.select({
       projectId: contentAssets.projectId,
       count: sqlExpr<number>`count(*)::int`,
     })
       .from(contentAssets)
+      .where(eq(contentAssets.userId, userId))
       .groupBy(contentAssets.projectId);
     return rows.filter(r => r.projectId !== null) as { projectId: string; count: number }[];
   }
 
-  async getSocialStats(): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }> {
+  async getSocialStats(userId: string): Promise<{ total: number; byStatus: Record<string, number>; byChannel: Record<string, number> }> {
     const all = await db.select({
       status: contentAssets.status,
       channel: contentAssets.channel,
-    }).from(contentAssets);
+    }).from(contentAssets).where(eq(contentAssets.userId, userId));
     const byStatus: Record<string, number> = {};
     const byChannel: Record<string, number> = {};
     for (const row of all) {

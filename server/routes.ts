@@ -3818,8 +3818,9 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.get("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const projects = await storage.getSocialProjects();
-      const counts = await storage.countAssetsPerProject();
+      const userId = req.user!.userId;
+      const projects = await storage.getSocialProjects(userId);
+      const counts = await storage.countAssetsPerProject(userId);
       const countMap = Object.fromEntries(counts.map(c => [c.projectId, c.count]));
       res.json(projects.map(p => ({ ...p, assetCount: countMap[p.id] || 0 })));
     } catch (err) {
@@ -3831,7 +3832,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.post("/api/admin/social/projects", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { insertSocialProjectSchema } = await import("@shared/schema");
-      const parsed = insertSocialProjectSchema.parse(req.body);
+      const parsed = insertSocialProjectSchema.parse({ ...req.body, userId: req.user!.userId });
       const project = await storage.createSocialProject(parsed);
       res.status(201).json(project);
     } catch (err) {
@@ -3844,7 +3845,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     try {
       const { updateSocialProjectSchema } = await import("@shared/schema");
       const parsed = updateSocialProjectSchema.parse(req.body);
-      const project = await storage.updateSocialProject(req.params.id, parsed);
+      const project = await storage.updateSocialProject(req.params.id, req.user!.userId, parsed);
       if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
       res.json(project);
     } catch (err) {
@@ -3855,7 +3856,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.delete("/api/admin/social/projects/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      await storage.deleteSocialProject(req.params.id);
+      await storage.deleteSocialProject(req.params.id, req.user!.userId);
       res.json({ message: "Projeto excluído" });
     } catch (err) {
       console.error("[DELETE /api/admin/social/projects/:id]", err);
@@ -3865,7 +3866,8 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
 
   app.get("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
     try {
-      const filters: { projectId?: string; status?: string; channel?: string } = {};
+      const userId = req.user!.userId;
+      const filters: { userId: string; projectId?: string; status?: string; channel?: string } = { userId };
       if (req.query.projectId) filters.projectId = req.query.projectId as string;
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.channel) filters.channel = req.query.channel as string;
@@ -3881,6 +3883,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     try {
       const asset = await storage.getContentAsset(req.params.id);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
+      if (asset.userId && asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       res.json(asset);
     } catch (err) {
       res.status(500).json({ message: "Erro ao buscar ativo" });
@@ -3890,7 +3893,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.post("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       const { insertContentAssetSchema } = await import("@shared/schema");
-      const parsed = insertContentAssetSchema.parse(req.body);
+      const parsed = insertContentAssetSchema.parse({ ...req.body, userId: req.user!.userId });
       const asset = await storage.createContentAsset(parsed);
       res.status(201).json(asset);
     } catch (err) {
@@ -3924,16 +3927,16 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.get("/api/admin/social/calendar", authenticateToken, checkRole(["super_admin", "admin", "user"]), async (req: AuthRequest, res: Response) => {
     try {
       const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
-      const assets = await storage.getCalendarAssets(month);
+      const assets = await storage.getCalendarAssets(month, req.user!.userId);
       res.json(assets);
     } catch (err) {
       res.status(500).json({ message: "Erro ao carregar calendário" });
     }
   });
 
-  app.get("/api/admin/social/stats", authenticateToken, checkRole(["super_admin", "admin"]), async (_req: AuthRequest, res: Response) => {
+  app.get("/api/admin/social/stats", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const stats = await storage.getSocialStats();
+      const stats = await storage.getSocialStats(req.user!.userId);
       res.json(stats);
     } catch (err) {
       console.error("[GET /api/admin/social/stats]", err);
@@ -3947,9 +3950,10 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       if (!idea) return res.status(400).json({ message: "Ideia é obrigatória" });
 
       // Load project brand/leadership style if provided
+      const userId = req.user!.userId;
       let leadershipStyle = "";
       if (projectId) {
-        const project = await storage.getSocialProject(projectId);
+        const project = await storage.getSocialProject(projectId, userId);
         if (project?.brand?.leadershipStyle) {
           const styleMap: Record<string, string> = {
             hormozi: "Alex Hormozi (foco em ofertas irresistíveis, resultados mensuráveis e linguagem direta e provocativa)",
@@ -3999,6 +4003,7 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       }
 
       const asset = await storage.createContentAsset({
+        userId,
         projectId: projectId || null,
         sourceIdea: idea,
         ideaArea: generated.ideaArea || null,
