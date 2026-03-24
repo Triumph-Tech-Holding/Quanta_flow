@@ -669,7 +669,43 @@ Agora qualquer mensagem que chegar será atendida automaticamente 24/7
 Estúdio de Conteúdo → Projetos → Novo Projeto (dê um nome e escolha o nicho)
 Estúdio → Selecione o projeto → Wizard IA → Descreva sua ideia em linguagem natural
 A IA gera: 3 headlines, caption, hooks, roteiro para reel e muito mais
+
+Opcional — Clonagem de Voz e Avatar:
+  Projetos → Configurar ElevenLabs (Voice ID) → Gerar com Voz Clonada
+  Projetos → Configurar HeyGen (Avatar ID) → Gerar Vídeo com Avatar
 ```
+
+---
+
+## 💡 16. Dicas de Ouro
+
+### ✅ Boas Práticas
+
+**1. Teste sempre no Lab antes de ativar**
+Nunca ative um fluxo sem testá-lo pelo Simulador de Conversa. Identifique bugs antes que seus clientes os encontrem.
+
+**2. Seja específico no System Prompt do Agente IA**
+Quanto mais detalhado o prompt, melhor o agente responde. Inclua: tom de voz, o que pode e não pode dizer, preços atualizados, horário de funcionamento.
+
+**3. Segmente bem suas campanhas**
+Não mande promoção de iPhone para quem está procurando Samsung. Use os filtros de temperatura e estágio para personalizar.
+
+**4. Configure SLA de acordo com sua operação**
+Se você responde em até 1 hora, configure SLA de 60 minutos. Assim você é alertado antes de perder o prazo.
+
+**5. Use variáveis nas mensagens**
+Em vez de "Olá!", use "Olá, {nome}!" — o sistema substitui automaticamente pelo nome do lead.
+
+**6. Monitore o Dashboard diariamente**
+Leads "quentes" com alta pontuação merecem atenção imediata. Não deixe esfriar!
+
+### ❌ Erros Comuns a Evitar
+
+- Criar fluxos sem testar e enviar mensagens erradas para clientes
+- Usar System Prompt vago ("seja útil") sem especificar o contexto
+- Disparar campanhas sem segmentação (spam gera bloqueios)
+- Ignorar o timer de SLA vermelho no Inbox
+- Não configurar palavras-chave nos fluxos (fluxo nunca ativa)
 
 ---
 
@@ -846,38 +882,6 @@ Depois (com Clonagem):
 De 2h de gravação para 15 minutos de revisão
 Mantém a própria voz e aparência — sem contratação de atores
 ```
-
----
-
-## 💡 16. Dicas de Ouro
-
-### ✅ Boas Práticas
-
-**1. Teste sempre no Lab antes de ativar**
-Nunca ative um fluxo sem testá-lo pelo Simulador de Conversa. Identifique bugs antes que seus clientes os encontrem.
-
-**2. Seja específico no System Prompt do Agente IA**
-Quanto mais detalhado o prompt, melhor o agente responde. Inclua: tom de voz, o que pode e não pode dizer, preços atualizados, horário de funcionamento.
-
-**3. Segmente bem suas campanhas**
-Não mande promoção de iPhone para quem está procurando Samsung. Use os filtros de temperatura e estágio para personalizar.
-
-**4. Configure SLA de acordo com sua operação**
-Se você responde em até 1 hora, configure SLA de 60 minutos. Assim você é alertado antes de perder o prazo.
-
-**5. Use variáveis nas mensagens**
-Em vez de "Olá!", use "Olá, {nome}!" — o sistema substitui automaticamente pelo nome do lead.
-
-**6. Monitore o Dashboard diariamente**
-Leads "quentes" com alta pontuação merecem atenção imediata. Não deixe esfriar!
-
-### ❌ Erros Comuns a Evitar
-
-- Criar fluxos sem testar e enviar mensagens erradas para clientes
-- Usar System Prompt vago ("seja útil") sem especificar o contexto
-- Disparar campanhas sem segmentação (spam gera bloqueios)
-- Ignorar o timer de SLA vermelho no Inbox
-- Não configurar palavras-chave nos fluxos (fluxo nunca ativa)
 
 ---
 

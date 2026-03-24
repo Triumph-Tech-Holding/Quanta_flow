@@ -318,7 +318,7 @@ async function seedDocumentationVersions() {
 - Geração de conteúdo: POST /api/admin/social/generate — 6 formatos via gpt-4o-mini (headlines, caption, hooks, socialAds, email, blogPost)
 - TTS de áudio: POST /api/admin/social/assets/:id/tts — voz OpenAI (nova/alloy/echo/onyx/shimmer)
 - Construtor UTM: POST /api/admin/social/assets/:id/generate-utm
-- Biblioteca filtrávelI: GET /api/admin/social/assets (filtros: status, canal, projectId)
+- Biblioteca filtrável: GET /api/admin/social/assets (filtros: status, canal, projectId)
 - Calendário: GET /api/admin/social/calendar?month=YYYY-MM (agrupado por data/canal)
 - Agendamentos: CRUD /api/admin/social/assets/:id/schedules
 - Dashboard: GET /api/admin/social/stats
