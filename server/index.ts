@@ -220,14 +220,14 @@ async function seedDocumentationVersions() {
 
     await db.delete(documentationVersions).where(eq(documentationVersions.version, "1.0.0"));
 
-    const v6exists = await db.select({ id: documentationVersions.id }).from(documentationVersions).where(gte(documentationVersions.version, "6.0.0")).limit(1);
-    if (v6exists.length === 0) {
+    const v7exists = await db.select({ id: documentationVersions.id }).from(documentationVersions).where(gte(documentationVersions.version, "7.0.0")).limit(1);
+    if (v7exists.length === 0) {
       await db.insert(documentationVersions).values({
         userId: adminId,
-        version: "6.0.0",
-        title: "Quanta Flow — Documentação Técnica Completa v6.0.0",
-        description: "Versão completa com todos os módulos: Inbox Omnichannel, CRM/Kanban, Automação + Builder Visual + Simulador de Conversa, Fábrica de Agentes IA, Campanhas Omnichannel + Drip, Fila de Atendimento + SLA, Microlearning, Webhooks Outbound + HMAC, Google Sheets OAuth2, Lab (5 abas), Branding White-label, RBAC (18 permissões), Manual Completo com visualizador inline.",
-        content: `# Quanta Flow v6.0.0 — Documentação Técnica
+        version: "7.0.0",
+        title: "Quanta Flow — Documentação Técnica Completa v7.0.0",
+        description: "Versão completa com todos os módulos: Inbox Omnichannel, CRM/Kanban, Automação + Builder Visual + Simulador de Conversa, Fábrica de Agentes IA, Campanhas Omnichannel + Drip, Fila de Atendimento + SLA, Microlearning, Webhooks Outbound + HMAC, Google Sheets OAuth2, Lab (5 abas), Branding White-label, RBAC (18 permissões), Estúdio de Conteúdo Omnichannel com IA (Social/Ads), Chat Wizard MFORTE, Clonagem de Voz e Avatar (ElevenLabs + HeyGen), Manual Completo com visualizador inline.",
+        content: `# Quanta Flow v7.0.0 — Documentação Técnica
 
 ## Stack
 - Frontend: React 18 + Vite + TypeScript + Tailwind CSS + Shadcn UI
@@ -313,8 +313,27 @@ async function seedDocumentationVersions() {
 - 18 permissões em 7 recursos: settings, users, audit_logs, inbox, leads, automation, campaigns
 - Middleware: checkRole([...roles])
 
+### Estúdio de Conteúdo Omnichannel (Social/Ads)
+- Projetos de marca com tom, nicho, cores, estilo de liderança (UUID PK, userId-scoped)
+- Geração de conteúdo: POST /api/admin/social/generate — 6 formatos via gpt-4o-mini (headlines, caption, hooks, socialAds, email, blogPost)
+- TTS de áudio: POST /api/admin/social/assets/:id/tts — voz OpenAI (nova/alloy/echo/onyx/shimmer)
+- Construtor UTM: POST /api/admin/social/assets/:id/generate-utm
+- Biblioteca filtrávelI: GET /api/admin/social/assets (filtros: status, canal, projectId)
+- Calendário: GET /api/admin/social/calendar?month=YYYY-MM (agrupado por data/canal)
+- Agendamentos: CRUD /api/admin/social/assets/:id/schedules
+- Dashboard: GET /api/admin/social/stats
+- Chat Wizard MFORTE: POST /api/admin/social/wizard/start — enriquece ideia com área, fontes e 3 headlines via GPT-4o-mini
+
+### Clonagem de Voz e Avatar (ElevenLabs + HeyGen)
+- Credenciais armazenadas em brand.cloningIds (JSONB criptografado) — jamais retornadas em GET
+- GET /api/admin/social/projects retorna hasElevenLabs e hasHeyGen (booleans) em vez das credenciais
+- ElevenLabs TTS: POST /api/admin/social/assets/:id/elevenlabs-tts — modelo eleven_multilingual_v2, armazena elevenLabsAudioUrl em formats JSONB
+- HeyGen Vídeo: POST /api/admin/social/assets/:id/heygen-video — usa roteiro (reelScript/liveScript), armazena heygenVideoId/Status/Url em formats JSONB
+- Polling de status: GET /api/admin/social/assets/:id/heygen-status — verifica /v2/video_status.get
+- UI: botão de geração com feedback de status (processando/concluído/falhou), player de áudio, player de vídeo, download e cópia de URL
+
 ### Documentação
-- Manual de uso: MANUAL_DE_USO.md (712 linhas, 16 módulos)
+- Manual de uso: MANUAL_DE_USO.md (19 seções + subseções, v7.0.0)
 - GET /api/documentation/manual-md — serve markdown para visualizador inline
 - GET /api/documentation/manual-pdf — gera PDF via pdfkit
 - Visualizador inline sem bibliotecas externas (renderMarkdown custom)
@@ -324,7 +343,10 @@ users, leads, conversations, messages, unified_contacts, agent_assignments,
 automation_flows, ai_agents, campaigns, campaign_deliveries, message_templates,
 learning_tracks, learning_deliveries, outbound_webhooks, sheet_integrations,
 email_configs, api_configs, settings, roles, permissions, role_permissions,
-user_roles, audit_logs, documentation_versions
+user_roles, audit_logs, documentation_versions,
+social_projects (UUID PK, brand JSONB c/ cloningIds),
+content_assets (UUID PK, formats JSONB c/ elevenLabsAudioUrl/heygenVideoId/Status/Url),
+publication_schedules (UUID PK)
 
 ## JobQueue (5s interval)
 - send_message, check_inactivity, check_sla
@@ -343,11 +365,22 @@ user_roles, audit_logs, documentation_versions
 - GET /api/admin/audit-logs
 - GET/POST /api/admin/settings
 - GET /api/health
+- GET/POST/PATCH/DELETE /api/admin/social/projects
+- GET/POST/DELETE /api/admin/social/assets
+- POST /api/admin/social/generate
+- POST /api/admin/social/wizard/start
+- GET /api/admin/social/calendar
+- GET /api/admin/social/stats
+- POST /api/admin/social/assets/:id/tts
+- POST /api/admin/social/assets/:id/elevenlabs-tts
+- POST /api/admin/social/assets/:id/heygen-video
+- GET /api/admin/social/assets/:id/heygen-status
+- POST /api/admin/social/assets/:id/generate-utm
 `,
         format: "markdown",
       });
     }
-    log("Documentation versions seed OK (v6.0.0)", "seed");
+    log("Documentation versions seed OK (v7.0.0)", "seed");
   } catch (err) {
     console.error("Error seeding documentation versions:", err);
   }

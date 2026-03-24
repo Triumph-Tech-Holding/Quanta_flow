@@ -664,6 +664,189 @@ Automação → Clique no toggle do fluxo → Ativo!
 Agora qualquer mensagem que chegar será atendida automaticamente 24/7
 ```
 
+### Passo 6 — Criar Conteúdo para Redes Sociais com IA (5 min)
+```
+Estúdio de Conteúdo → Projetos → Novo Projeto (dê um nome e escolha o nicho)
+Estúdio → Selecione o projeto → Wizard IA → Descreva sua ideia em linguagem natural
+A IA gera: 3 headlines, caption, hooks, roteiro para reel e muito mais
+```
+
+---
+
+## 🎨 17. Estúdio de Conteúdo Omnichannel
+
+**O que é:** Central de criação de conteúdo com IA para redes sociais e anúncios. Transforma uma simples ideia em pacotes completos de publicação — headline, caption, hooks, roteiro de reel, post de blog e email — tudo gerado em segundos.
+
+### Como usar:
+
+**1. Criar um Projeto de Marca:**
+1. Acesse **Estúdio de Conteúdo** no menu lateral
+2. Clique na aba **Projetos** → **Novo Projeto**
+3. Preencha:
+   - **Nome do Projeto**: Ex: "Clínica Dr. Paulo", "Loja de Moda Verão 26"
+   - **Cliente**: Nome do cliente (opcional)
+   - **Nicho**: Ex: "Saúde e Bem-estar", "Moda Feminina"
+   - **Tom de Voz**: Formal, Descontraído, Inspiracional, Técnico
+   - **Estilo de Liderança**: Ex: "Especialista", "Amigo", "Coach"
+   - **Cores da Marca**: Palette de até 3 cores (#HEX)
+4. Clique em **Salvar Projeto**
+
+**2. Criar um Ativo de Conteúdo:**
+1. Vá para a aba **Estúdio**
+2. Selecione o projeto de marca
+3. Preencha:
+   - **Título**: Tema central do conteúdo
+   - **Canal**: Instagram, WhatsApp, Email, Blog, Anúncio
+   - **Formato**: Reel, Feed, Stories, Email, Blog
+4. Clique em **Gerar com IA** — a IA cria todos os formatos em paralelo
+
+### 🧱 Formatos de Conteúdo Gerados:
+
+| Formato | Descrição | Uso Ideal |
+|---------|-----------|-----------|
+| **Headlines** | 3 títulos chamativos | Anúncios, blog posts |
+| **Caption** | Legenda completa com CTA | Feed Instagram/Facebook |
+| **Hooks** | Frases de abertura impactantes | Início de Reels e Stories |
+| **Social Ads** | Texto completo para anúncio pago | Meta Ads, Google Ads |
+| **Email** | Email marketing completo | Disparos para lista |
+| **Blog Post** | Artigo longo otimizado | SEO e nutrição de leads |
+
+### 🔧 Recursos do Estúdio:
+
+- **TTS de Áudio (OpenAI)**: Gere narração em áudio para qualquer ativo (5 vozes disponíveis: Nova, Alloy, Echo, Onyx, Shimmer)
+- **Construtor UTM**: Adicione parâmetros de rastreamento ao link (source, medium, campaign) para medir o tráfego com precisão
+- **Biblioteca de Conteúdos**: Filtre e organize todos os ativos por status (rascunho, aprovado, publicado) e por canal
+- **Calendário de Publicação**: Visualize os conteúdos agendados por data e canal em formato de agenda
+- **Agendamentos por Plataforma**: Programe quando e em qual rede social cada ativo vai ser publicado
+- **Dashboard de Métricas**: Total de ativos criados, distribuição por status e por canal
+
+### 📊 Fluxo de Trabalho Completo:
+```
+Ideia → Estúdio → [Gerar com IA] → Editar se necessário → [Aprovar]
+→ [Gerar Áudio TTS] → [Adicionar UTM] → [Agendar]
+→ Biblioteca mostra ativo como "Agendado"
+```
+
+### 🎯 Cenário Real — Agência de Marketing:
+```
+Agência tem 15 clientes para produzir conteúdo todo mês
+
+Antes: 3 redatores trabalhando 40h/semana
+Depois (com Estúdio de Conteúdo):
+
+1. Cria projeto "Clínica Odonto Premium" com cores e tom da marca
+2. Entra no Estúdio e descreve: "Post sobre clareamento dental a laser"
+3. IA gera em 8 segundos:
+   • 3 headlines ("Sorria com Confiança", "Dentes Brancos em 1 Hora", ...)
+   • Caption completa com CTA e hashtags
+   • Roteiro do reel (30 segundos)
+   • Texto do anúncio para Meta Ads
+4. Redator revisa em 5 min, aprova e agenda
+5. Áudio narrado gerado automaticamente para os Stories
+
+Resultado: 60 posts/mês por cliente em vez de 20
+Tempo: 5 min por post em vez de 2h
+```
+
+---
+
+### 17.1 — Chat Wizard MFORTE
+
+**O que é:** Interface de chat conversacional dentro do Estúdio que transforma uma ideia em linguagem natural em um pacote completo de conteúdo — com enriquecimento por IA antes de gerar.
+
+### Como usar:
+1. Acesse a aba **Estúdio** e selecione um projeto
+2. Clique no botão **Wizard IA** (ícone de varinha mágica)
+3. O chat abre com a pergunta: *"Qual é a sua ideia de conteúdo?"*
+4. Digite sua ideia livremente, por exemplo:
+   - *"Quero falar sobre os benefícios do jejum intermitente para quem malha"*
+   - *"Post para anunciar a chegada da coleção outono/inverno"*
+5. A IA enriquece automaticamente com:
+   - **Área temática** identificada (ex: "Saúde e Nutrição Esportiva")
+   - **Fontes sugeridas** para embasar o conteúdo
+   - **3 Headlines prontos** para usar ou adaptar
+6. Os resultados aparecem como balões de chat
+7. Clique em **Usar esta ideia** para criar o ativo com os dados enriquecidos
+
+### 🎤 Exemplos de Ideias e Resultados:
+```
+VOCÊ DIGITOU:
+"Post sobre liquidação de fim de ano na minha loja de roupas"
+
+IA RESPONDEU:
+Área: Varejo de Moda / Promoções Sazonais
+
+Fontes: Pesquisa de comportamento de compra de fim de ano (ABCOMM 2025)
+
+Headlines gerados:
+1. "Liquidação de Janeiro: Até 70% OFF em toda a Coleção Verão!"
+2. "Renove seu Guarda-Roupa Sem Pesar no Bolso — Só Até Domingo!"
+3. "Os Preços Mais Baixos do Ano Estão Aqui. Corre que É Por Tempo Limitado!"
+```
+
+---
+
+### 17.2 — Clonagem de Voz e Avatar (ElevenLabs + HeyGen)
+
+**O que é:** Integração avançada que permite gerar conteúdo com **voz clonada** (ElevenLabs) e **vídeos com avatar digital** (HeyGen) — tudo a partir dos ativos criados no Estúdio.
+
+### Configuração (por Projeto):
+
+**ElevenLabs — Voz Clonada:**
+1. Acesse **Projetos** → edite o projeto desejado
+2. Clique em **Credenciais de Clonagem** → **Configurar ElevenLabs**
+3. Insira:
+   - **ElevenLabs API Key**: Encontrada em elevenlabs.io → Profile → API Keys
+   - **Voice ID**: ID da voz clonada criada no ElevenLabs (ex: `21m00Tcm4TlvDq8ikWAM`)
+4. Clique em **Salvar** — o badge "ElevenLabs" fica verde no projeto
+
+**HeyGen — Avatar Digital:**
+1. No mesmo painel de credenciais, clique em **Configurar HeyGen**
+2. Insira:
+   - **HeyGen API Key**: Encontrada em heygen.com → Settings → API
+   - **Avatar ID**: ID do avatar criado no HeyGen (ex: `Abigail_expressive_20240926`)
+3. Clique em **Salvar** — o badge "HeyGen" fica verde no projeto
+
+> ⚠️ **Segurança**: As credenciais são armazenadas criptografadas e nunca ficam visíveis após salvar. O sistema exibe apenas os indicadores "Configurado" (verde) ou "Não configurado" (cinza).
+
+### Como Gerar Conteúdo com Voz Clonada (ElevenLabs):
+1. Abra um ativo na **Biblioteca**
+2. Na seção **Clonagem de Mídia**, clique em **Gerar com Voz Clonada**
+3. O sistema envia o texto do ativo para o ElevenLabs via eleven_multilingual_v2
+4. O áudio MP3 é gerado e fica disponível para:
+   - ▶️ Reproduzir diretamente no navegador
+   - ⬇️ Baixar o arquivo MP3
+   - 📋 Copiar URL para usar em outras ferramentas
+
+### Como Gerar Vídeo com Avatar (HeyGen):
+1. Abra um ativo na **Biblioteca**
+2. Na seção **Clonagem de Mídia**, selecione o tipo de roteiro:
+   - **Reels**: Usa o roteiro de reel do ativo
+   - **Live**: Usa o roteiro de live do ativo
+3. Clique em **Gerar Vídeo com Avatar**
+4. O status muda para **Processando...** (HeyGen processa em background)
+5. Clique em **Verificar Status** até aparecer **Vídeo pronto**
+6. Acesse o vídeo finalizado:
+   - ⬇️ Baixar o vídeo MP4
+   - 📋 Copiar URL do vídeo
+
+### 🎯 Cenário Real — Criador de Conteúdo:
+```
+João é coach de finanças com 200k seguidores no Instagram
+
+Antes: Gravava vídeos 3x/semana — 2h de produção cada
+Depois (com Clonagem):
+
+1. Escreve ideia no Wizard: "Dica de como sair das dívidas em 6 meses"
+2. IA gera roteiro completo do reel (30s)
+3. Clica em "Gerar Vídeo com Avatar" — HeyGen cria o vídeo em 10 min
+4. Clica em "Gerar com Voz Clonada" — narração em PT-BR perfeita em 30s
+5. Baixa o vídeo final pronto para publicar
+
+De 2h de gravação para 15 minutos de revisão
+Mantém a própria voz e aparência — sem contratação de atores
+```
+
 ---
 
 ## 💡 16. Dicas de Ouro
