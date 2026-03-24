@@ -820,6 +820,26 @@ Headlines gerados:
 3. "Os Preços Mais Baixos do Ano Estão Aqui. Corre que É Por Tempo Limitado!"
 ```
 
+### 🎯 Cenário Real — Social Media Manager:
+```
+Carla gerencia 8 marcas ao mesmo tempo para uma agência digital
+
+Antes: Passava 3h/semana por marca pesquisando pautas e adaptando tom de voz
+Depois (com Wizard MFORTE):
+
+1. Acessa o projeto da marca (cores, tom, nicho já salvos)
+2. Digita no Wizard: "Dia dos Namorados se aproximando — quero algo para minha loja de joias"
+3. Em 5 segundos recebe:
+   Área: Varejo de Joias / Datas Comemorativas
+   Fontes: Tendências de presentes Dia dos Namorados 2026 (ABComm)
+   Headlines: "O Anel que Ela Vai Lembrar Para Sempre", "Amor Eterno em Ouro 18k", ...
+4. Clica em "Usar esta ideia" → Estúdio gera caption, hooks, roteiro do reel
+5. Aprova e agenda em 10 minutos no total
+
+De 3h para 10 minutos por pauta por marca
+Tom sempre consistente com cada cliente
+```
+
 ---
 
 ### 17.2 — Clonagem de Voz e Avatar (ElevenLabs + HeyGen)
