@@ -1,6 +1,9 @@
 import { storage } from "./storage";
 import { jobQueue } from "./jobQueue";
 import { log } from "./index";
+import { db } from "./db";
+import { learningPoints } from "@workspace/db";
+import { awardScoreEvent } from "./services/scoreEngine";
 
 async function processLearningTracks(): Promise<void> {
   try {
@@ -67,6 +70,30 @@ async function processLearningForUser(userId: string): Promise<void> {
         });
 
         await storage.updateLearningDelivery(delivery.id, { status: "sent", sentAt: new Date() });
+
+        // Awards de "delivered" (consumo) — só vale se o contato tiver workspace
+        if (contact.workspaceId) {
+          try {
+            await db.insert(learningPoints).values({
+              workspaceId: contact.workspaceId,
+              contactId: contact.id,
+              trackId: track.id,
+              deliveryId: delivery.id,
+              points: 2,
+              reason: "delivered",
+              durationSeconds: 0,
+            });
+            await awardScoreEvent({
+              workspaceId: contact.workspaceId,
+              contactId: contact.id,
+              eventType: "learning_delivered",
+              source: "microlearning",
+              refId: track.id,
+            });
+          } catch (e) {
+            log(`LearningWorker: failed to award learning_delivered — ${e instanceof Error ? e.message : String(e)}`, "learning");
+          }
+        }
 
         log(`LearningWorker: scheduled track ${track.id} step ${track.stepOrder} for contact ${contact.id}`, "learning");
       }

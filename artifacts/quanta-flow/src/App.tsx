@@ -36,6 +36,8 @@ import AdminLandingEditor from "@/pages/admin-landing-editor";
 import AdminLandingMetrics from "@/pages/admin-landing-metrics";
 import LandingPublic from "@/pages/landing-public";
 import SocialAds from "@/pages/social-ads";
+import AdminScoreRules from "@/pages/admin-score-rules";
+import RankingPage from "@/pages/ranking";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component, allowPasswordChange = false }: { component: React.ComponentType; allowPasswordChange?: boolean }) {
@@ -170,6 +172,12 @@ function Router() {
       </Route>
       <Route path="/f/:token" component={FlowPublicEnroll} />
       <Route path="/c/:token" component={CampaignPublicEnroll} />
+      <Route path="/admin/score-rules">
+        <ProtectedRoute component={AdminScoreRules} />
+      </Route>
+      <Route path="/ranking">
+        <ProtectedRoute component={RankingPage} />
+      </Route>
       <Route path="/p/:slug" component={LandingPublic} />
       <Route component={NotFound} />
     </Switch>

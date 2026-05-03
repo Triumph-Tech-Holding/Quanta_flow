@@ -7,6 +7,7 @@ import { db } from "../db";
 import { landingPages, automationFlows, campaignDeliveries, brandingConfig, workspaces } from "@workspace/db";
 import { eq, and, sql as sqlExpr } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { awardScoreEvent } from "../services/scoreEngine";
 
 interface AuthRequest extends Request {
   user?: { userId: string; email: string; tokenVersion: number; workspaceId?: string };
@@ -321,6 +322,18 @@ export function registerLandingPageRoutes(app: Express, authenticateToken: any) 
       // Always count a submit event too
       await landingPageStorage.recordEvent(page.id, "form_submit", formBlock.id, null, null);
 
+      try {
+        await awardScoreEvent({
+          workspaceId: page.workspaceId,
+          contactId: contact.id,
+          eventType: "form_submitted",
+          source: "landing:" + page.slug,
+          refId: page.id,
+        });
+      } catch (e) {
+        (req as any).log?.warn?.({ err: e }, "score award (form_submitted) failed");
+      }
+
       const successMessage = formBlock.props.successMessage || "Recebemos suas informações. Em breve entraremos em contato!";
       const redirectUrl = formBlock.props.redirectUrl || null;
       return res.json({ ok: true, successMessage, redirectUrl });
@@ -340,6 +353,20 @@ export function registerLandingPageRoutes(app: Express, authenticateToken: any) 
       const blockId = typeof req.body?.blockId === "string" ? req.body.blockId : null;
       const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.slice(0, 64) : null;
       await landingPageStorage.recordEvent(page.id, eventType, blockId, sessionId, null);
+
+      // Score events: cta_click and page_view alimentam o score se já houver contato vinculado por sessão
+      if ((eventType === "cta_click" || eventType === "page_view") && typeof req.body?.contactId === "string") {
+        try {
+          await awardScoreEvent({
+            workspaceId: page.workspaceId,
+            contactId: String(req.body.contactId),
+            eventType: eventType === "cta_click" ? "cta_clicked" : "page_viewed",
+            source: "landing:" + page.slug,
+            refId: page.id,
+          });
+        } catch {}
+      }
+
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ message: "Erro ao registrar evento" });

@@ -25,6 +25,8 @@ import {
   Cpu,
   Building2,
   FileText,
+  Trophy,
+  Target,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -92,6 +94,13 @@ const modulesMenuItems = [
     url: "/learning-tracks",
     icon: GraduationCap,
     module: 7,
+    enabled: true,
+  },
+  {
+    title: "Ranking",
+    url: "/ranking",
+    icon: Trophy,
+    module: 8,
     enabled: true,
   },
   {
@@ -199,9 +208,15 @@ const automationSubItems = [
     icon: FileText,
     permission: "edit_settings",
   },
+  {
+    title: "Motor de Score",
+    url: "/admin/score-rules",
+    icon: Target,
+    permission: "edit_settings",
+  },
 ];
 
-const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns", "/admin/landing-pages"];
+const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns", "/admin/landing-pages", "/admin/score-rules"];
 
 const engenhariaMenuItems = [
   {

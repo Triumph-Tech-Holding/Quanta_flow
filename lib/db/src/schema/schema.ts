@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, integer, real, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, integer, real, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -1253,3 +1253,98 @@ export type InsertContentAsset = z.infer<typeof insertContentAssetSchema>;
 export type UpdateContentAsset = z.infer<typeof updateContentAssetSchema>;
 export type PublicationSchedule = typeof publicationSchedules.$inferSelect;
 export type InsertPublicationSchedule = z.infer<typeof insertPublicationScheduleSchema>;
+
+// ==================== Premium: Score Engine + Gamification (#53) ====================
+
+export const scoreEventTypeEnum = pgEnum("score_event_type", [
+  "message_received", "message_replied", "link_clicked", "form_submitted",
+  "cta_clicked", "page_viewed", "learning_delivered", "learning_completed",
+  "deal_won", "deal_lost", "manual_adjust",
+]);
+
+export const contactScoreEvents = pgTable("contact_score_events", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull(),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  eventType: scoreEventTypeEnum("event_type").notNull(),
+  points: integer("points").notNull().default(0),
+  channel: channelTypeEnum("channel"),
+  source: varchar("source", { length: 80 }),
+  refId: varchar("ref_id", { length: 80 }),
+  metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byContact: index("idx_score_events_contact").on(t.contactId, t.createdAt),
+  byWorkspace: index("idx_score_events_workspace").on(t.workspaceId, t.createdAt),
+}));
+
+export const scoreRules = pgTable("score_rules", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull(),
+  eventType: scoreEventTypeEnum("event_type").notNull(),
+  points: integer("points").notNull().default(1),
+  hotThreshold: integer("hot_threshold").notNull().default(80),
+  warmThreshold: integer("warm_threshold").notNull().default(40),
+  coolDownDays: integer("cool_down_days").notNull().default(14),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  uniq: uniqueIndex("uniq_score_rules_ws_event").on(t.workspaceId, t.eventType),
+}));
+
+export const learningPoints = pgTable("learning_points", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull(),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  trackId: varchar("track_id", { length: 36 }),
+  deliveryId: varchar("delivery_id", { length: 36 }),
+  points: integer("points").notNull().default(0),
+  reason: varchar("reason", { length: 60 }).notNull().default("delivered"),
+  durationSeconds: integer("duration_seconds").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byContact: index("idx_learning_points_contact").on(t.contactId, t.createdAt),
+  byWorkspace: index("idx_learning_points_workspace").on(t.workspaceId, t.createdAt),
+}));
+
+export const learningBadges = pgTable("learning_badges", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull(),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  code: varchar("code", { length: 60 }).notNull(),
+  label: varchar("label", { length: 120 }).notNull(),
+  awardedAt: timestamp("awarded_at").defaultNow().notNull(),
+}, (t) => ({
+  uniq: uniqueIndex("uniq_badge_contact_code").on(t.contactId, t.code),
+}));
+
+export const learningCompletions = pgTable("learning_completions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull(),
+  contactId: varchar("contact_id", { length: 36 }).notNull().references(() => unifiedContacts.id, { onDelete: "cascade" }),
+  trackId: varchar("track_id", { length: 36 }).notNull().references(() => learningTracks.id, { onDelete: "cascade" }),
+  deliveryId: varchar("delivery_id", { length: 36 }),
+  durationSeconds: integer("duration_seconds").notNull().default(0),
+  completedAt: timestamp("completed_at").defaultNow().notNull(),
+}, (t) => ({
+  uniq: uniqueIndex("uniq_completion_contact_delivery").on(t.contactId, t.deliveryId),
+}));
+
+export const insertContactScoreEventSchema = createInsertSchema(contactScoreEvents).omit({ id: true, createdAt: true });
+export const insertScoreRuleSchema = createInsertSchema(scoreRules).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateScoreRuleSchema = z.object({
+  points: z.number().int().optional(),
+  hotThreshold: z.number().int().min(0).max(1000).optional(),
+  warmThreshold: z.number().int().min(0).max(1000).optional(),
+  coolDownDays: z.number().int().min(0).max(365).optional(),
+  isActive: z.boolean().optional(),
+});
+export type ContactScoreEvent = typeof contactScoreEvents.$inferSelect;
+export type InsertContactScoreEvent = z.infer<typeof insertContactScoreEventSchema>;
+export type ScoreRule = typeof scoreRules.$inferSelect;
+export type InsertScoreRule = z.infer<typeof insertScoreRuleSchema>;
+export type UpdateScoreRule = z.infer<typeof updateScoreRuleSchema>;
+export type LearningPoint = typeof learningPoints.$inferSelect;
+export type LearningBadge = typeof learningBadges.$inferSelect;
+export type LearningCompletion = typeof learningCompletions.$inferSelect;
