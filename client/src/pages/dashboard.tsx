@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   Users,
@@ -23,7 +24,16 @@ import {
   Headphones,
   Star,
   CircleDot,
+  Sparkles,
+  Clock,
+  Zap,
+  RefreshCw,
+  Loader2,
+  ChevronRight,
+  Lightbulb,
 } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { QuantaLogo } from "@/components/quanta-logo";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,6 +153,279 @@ function StatsLoadingSkeleton() {
         <Card><CardContent className="pt-6"><Skeleton className="h-40 w-full" /></CardContent></Card>
       </div>
     </div>
+  );
+}
+
+interface BrainAction {
+  type: string;
+  label: string;
+  payload?: Record<string, unknown>;
+}
+
+interface BrainPrediction {
+  probability: "Alta" | "Media" | "Baixa";
+  confidence: number;
+  reasoning: string;
+}
+
+interface BrainInsight {
+  id: string;
+  contactId: string;
+  contactName: string;
+  contactPhone: string | null;
+  type: string;
+  severity: "alta" | "media" | "baixa";
+  title: string;
+  description: string;
+  hoursSinceLastContact: number | null;
+  score: number;
+  temperature: string;
+  lastIntent: string | null;
+  pipelineStage: string;
+  prediction?: BrainPrediction;
+  suggestedActions: BrainAction[];
+  generatedAt: string;
+}
+
+interface BrainResponse {
+  summary: {
+    totalInsights: number;
+    bySeverity: Record<"alta" | "media" | "baixa", number>;
+    byType: Record<string, number>;
+    generatedAt: string;
+  };
+  insights: BrainInsight[];
+}
+
+const SEVERITY_STYLE: Record<"alta" | "media" | "baixa", { bg: string; text: string; border: string; label: string }> = {
+  alta:  { bg: "bg-red-500/10",    text: "text-red-700 dark:text-red-300",       border: "border-red-500/40",    label: "Crítico" },
+  media: { bg: "bg-amber-500/10",  text: "text-amber-700 dark:text-amber-300",   border: "border-amber-500/40",  label: "Atenção" },
+  baixa: { bg: "bg-blue-500/10",   text: "text-blue-700 dark:text-blue-300",     border: "border-blue-500/40",   label: "Monitorar" },
+};
+
+const PROB_STYLE: Record<"Alta" | "Media" | "Baixa", string> = {
+  Alta:  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
+  Media: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40",
+  Baixa: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/40",
+};
+
+function BrainInsightsCard() {
+  const { toast } = useToast();
+  const [withPrediction, setWithPrediction] = useState(false);
+  const [predicting, setPredicting] = useState<string | null>(null);
+  const [predictions, setPredictions] = useState<Record<string, BrainPrediction>>({});
+
+  const brainQuery = useQuery<BrainResponse>({
+    queryKey: ["/api/brain/insights", { withPrediction }],
+    queryFn: async () => {
+      const res = await fetch(`/api/brain/insights${withPrediction ? "?withPrediction=true" : ""}`, {
+        credentials: "include",
+        headers: {
+          ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}),
+        },
+      });
+      if (!res.ok) throw new Error("Falha ao carregar insights");
+      return res.json();
+    },
+    refetchOnWindowFocus: false,
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/brain/insights"] });
+    },
+    onSuccess: () => toast({ title: "Insights atualizados" }),
+  });
+
+  const predictOne = async (contactId: string) => {
+    if (predictions[contactId]) return;
+    setPredicting(contactId);
+    try {
+      const res = await apiRequest("GET", `/api/brain/insights/${contactId}/prediction`);
+      const pred = await res.json();
+      setPredictions(prev => ({ ...prev, [contactId]: pred }));
+    } catch (e: any) {
+      toast({ title: "Erro ao prever", description: e?.message || "Tente novamente", variant: "destructive" });
+    } finally {
+      setPredicting(null);
+    }
+  };
+
+  const data = brainQuery.data;
+  const insights = data?.insights || [];
+  const sev = data?.summary?.bySeverity || { alta: 0, media: 0, baixa: 0 };
+
+  return (
+    <Card data-testid="card-brain-insights" className="border-primary/30">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                IA Brain — Insights
+                {brainQuery.isFetching && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Co-piloto inteligente para o seu funil</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={withPrediction ? "default" : "outline"}
+              size="sm"
+              onClick={() => setWithPrediction(v => !v)}
+              data-testid="button-toggle-predictions"
+              className="gap-1.5"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              {withPrediction ? "Predições ativas" : "Ativar predições"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refreshMutation.mutate()}
+              disabled={brainQuery.isFetching}
+              data-testid="button-refresh-brain"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${brainQuery.isFetching ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Resumo de severidade */}
+        {!brainQuery.isLoading && insights.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            {(["alta", "media", "baixa"] as const).map(k => {
+              const s = SEVERITY_STYLE[k];
+              return (
+                <div key={k} className={`rounded-md border ${s.border} ${s.bg} px-2 py-1.5`} data-testid={`brain-sev-${k}`}>
+                  <div className={`text-xs font-medium ${s.text}`}>{s.label}</div>
+                  <div className={`text-lg font-bold ${s.text} tabular-nums`}>{sev[k] || 0}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent>
+        {brainQuery.isLoading ? (
+          <div className="space-y-3 py-4">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        ) : brainQuery.isError ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Erro ao carregar insights. Tente novamente.
+          </div>
+        ) : insights.length === 0 ? (
+          <div className="text-center py-8 space-y-2">
+            <Lightbulb className="h-10 w-10 text-muted-foreground mx-auto" />
+            <p className="text-sm font-medium">Tudo sob controle!</p>
+            <p className="text-xs text-muted-foreground">
+              Nenhum lead quente ou de alto score precisando de atenção no momento.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {insights.slice(0, 8).map(ins => {
+              const s = SEVERITY_STYLE[ins.severity];
+              const pred = ins.prediction || predictions[ins.contactId];
+              return (
+                <div
+                  key={ins.id}
+                  className={`rounded-lg border ${s.border} ${s.bg} p-3 space-y-2`}
+                  data-testid={`brain-insight-${ins.contactId}`}
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-full bg-background flex items-center justify-center flex-shrink-0 border border-border">
+                        <span className="text-xs font-medium">{ins.contactName.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold truncate">{ins.contactName}</span>
+                          <Badge variant="outline" className={`text-[10px] ${s.text} ${s.border}`}>{s.label}</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{ins.score} pts</Badge>
+                          {ins.hoursSinceLastContact !== null && (
+                            <span className="text-[10px] text-muted-foreground inline-flex items-center gap-0.5">
+                              <Clock className="h-3 w-3" />
+                              {ins.hoursSinceLastContact}h sem contato
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{ins.description}</p>
+                      </div>
+                    </div>
+                    <Link href={`/crm/contact/${ins.contactId}`}>
+                      <Button variant="ghost" size="sm" className="h-7 gap-1" data-testid={`button-open-${ins.contactId}`}>
+                        Abrir <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </Link>
+                  </div>
+
+                  {/* Predição */}
+                  {pred ? (
+                    <div className={`rounded-md border ${PROB_STYLE[pred.probability]} px-2 py-1.5 text-xs flex items-start gap-2`}>
+                      <Zap className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="font-semibold">Conversão {pred.probability}</span>
+                        <span className="opacity-70"> · {Math.round(pred.confidence * 100)}% conf.</span>
+                        <p className="opacity-90 mt-0.5">{pred.reasoning}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    !withPrediction && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => predictOne(ins.contactId)}
+                        disabled={predicting === ins.contactId}
+                        className="h-7 text-xs gap-1.5 w-full justify-start text-muted-foreground hover:text-foreground"
+                        data-testid={`button-predict-${ins.contactId}`}
+                      >
+                        {predicting === ins.contactId ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Zap className="h-3 w-3" />
+                        )}
+                        Prever conversão com IA
+                      </Button>
+                    )
+                  )}
+
+                  {/* Ações sugeridas */}
+                  {ins.suggestedActions.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-border/50">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                        <Lightbulb className="h-3 w-3" />
+                        Ações sugeridas
+                      </div>
+                      <ul className="space-y-0.5">
+                        {ins.suggestedActions.slice(0, 3).map((a, i) => (
+                          <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
+                            <ArrowRight className="h-3 w-3 mt-0.5 text-primary flex-shrink-0" />
+                            {a.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {insights.length > 8 && (
+              <p className="text-xs text-center text-muted-foreground pt-1">
+                Mostrando 8 de {insights.length} insights
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -385,6 +668,8 @@ export default function Dashboard() {
                     </CardContent>
                   </Card>
                 </div>
+
+                <BrainInsightsCard />
 
                 <Card data-testid="card-recent-contacts">
                   <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
