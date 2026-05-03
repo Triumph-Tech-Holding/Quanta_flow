@@ -2517,6 +2517,16 @@ Return ONLY the JSON array, no markdown.`,
     }
   });
 
+  app.post("/api/brain/scan-now", authenticateToken, async (_req: AuthRequest, res: Response) => {
+    try {
+      const { triggerBrainScanNow } = await import("./services/brainWorker");
+      await triggerBrainScanNow();
+      res.json({ ok: true, message: "Varredura disparada" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Erro ao disparar varredura", error: error?.message });
+    }
+  });
+
   app.get("/api/brain/insights/:contactId/prediction", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const { iaBrainService } = await import("./services/iaBrainService");

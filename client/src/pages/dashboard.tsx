@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSocket } from "@/hooks/useSocket";
 import { QuantaLogo } from "@/components/quanta-logo";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -431,6 +432,7 @@ function BrainInsightsCard() {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  useSocket(); // ouve eventos brain:new-insight em tempo real
 
   const statsQuery = useQuery<DashboardStats>({
     queryKey: ["/api/crm/dashboard"],

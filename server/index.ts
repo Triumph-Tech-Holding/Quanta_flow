@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
 import { startLearningWorker } from "./learningWorker";
 import { startCampaignWorker } from "./campaignWorker";
+import { startBrainWorker } from "./services/brainWorker";
 
 const RBAC_SEED = {
   roles: [
@@ -537,6 +538,7 @@ app.use((req, res, next) => {
   jobQueue.start();
   startLearningWorker();
   startCampaignWorker();
+  startBrainWorker();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

@@ -2,11 +2,25 @@ import { useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
+
+interface BrainNewInsightEvent {
+  id: string;
+  contactId: string;
+  contactName: string;
+  severity: "alta" | "media" | "baixa";
+  title: string;
+  description: string;
+  score: number;
+  hoursSinceLastContact: number | null;
+  generatedAt: string;
+}
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!user || !token) return;
@@ -46,6 +60,22 @@ export function useSocket() {
     socket.on("instance:connected", (data) => {
       console.log("Instance connected:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/evolution/status"] });
+    });
+
+    socket.on("brain:new-insight", (data: BrainNewInsightEvent) => {
+      console.log("[brain] new critical insight:", data);
+      const hoursTxt = data.hoursSinceLastContact ? `${data.hoursSinceLastContact}h sem contato · ` : "";
+      toast({
+        title: `🚨 ${data.title}`,
+        description: `${data.contactName} (${data.score} pts) — ${hoursTxt}${data.description}`,
+        duration: 10000,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/insights"] });
+    });
+
+    socket.on("brain:scan-complete", (data: { newCriticals: number; totalInsights: number }) => {
+      console.log("[brain] scan complete:", data);
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/insights"] });
     });
 
     socket.on("connect_error", (error) => {
