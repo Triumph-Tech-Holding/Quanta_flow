@@ -4,7 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocket } from "./socket";
 import { db } from "./db";
-import { users, roles, permissions, rolePermissions, userRoles, flowTemplates, documentationVersions } from "@shared/schema";
+import { users, roles, permissions, rolePermissions, userRoles, flowTemplates, documentationVersions, projectStatusItems } from "@shared/schema";
 import { eq, gte, like } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { jobQueue } from "./jobQueue";
@@ -386,6 +386,51 @@ publication_schedules (UUID PK)
   }
 }
 
+async function seedProjectStatusItems() {
+  try {
+    const existing = await db.select({ id: projectStatusItems.id }).from(projectStatusItems).limit(1);
+    if (existing.length > 0) {
+      log("Project status items seed OK (already seeded)", "seed");
+      return;
+    }
+
+    const items = [
+      { featureId: "F01", featureName: "Autenticação JWT + tokenVersion", category: "Auth & Segurança", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 1 },
+      { featureId: "F02", featureName: "RBAC — 18 permissões / 3 roles", category: "Auth & Segurança", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 2 },
+      { featureId: "F03", featureName: "Criptografia AES-256-CBC de settings", category: "Auth & Segurança", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 3 },
+      { featureId: "F04", featureName: "Inbox Omnichannel (WhatsApp/Telegram/Instagram/Email)", category: "Comunicação", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 4 },
+      { featureId: "F05", featureName: "Real-time Socket.io (/inbox namespace)", category: "Comunicação", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 5 },
+      { featureId: "F06", featureName: "CRM / Pipeline Kanban", category: "CRM", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 6 },
+      { featureId: "F07", featureName: "AI Intent Detection (score 0-20, temperatura)", category: "CRM", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 7 },
+      { featureId: "F08", featureName: "Fila de Atendimento + SLA Timer", category: "CRM", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 8 },
+      { featureId: "F09", featureName: "Builder Visual de Fluxos (React Flow + 10 blocos)", category: "Automação", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 9 },
+      { featureId: "F10", featureName: "Simulador de Conversa Interativo (Lab → Flow Sim)", category: "Automação", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 10 },
+      { featureId: "F11", featureName: "Fábrica de Agentes IA (CRUD + chat preview + TTS)", category: "IA", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 11 },
+      { featureId: "F12", featureName: "Campanhas Omnichannel (Broadcast + Drip)", category: "Marketing", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 12 },
+      { featureId: "F13", featureName: "Biblioteca de Templates de Mensagem", category: "Marketing", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 13 },
+      { featureId: "F14", featureName: "Microlearning (Trilhas + LearningWorker)", category: "Conteúdo", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 14 },
+      { featureId: "F15", featureName: "Webhooks Outbound + HMAC-SHA256", category: "Integrações", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 15 },
+      { featureId: "F16", featureName: "Google Sheets OAuth2 Integration", category: "Integrações", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 16 },
+      { featureId: "F17", featureName: "Branding White-label (companyName, cores, logo)", category: "Config", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 17 },
+      { featureId: "F18", featureName: "Estúdio de Conteúdo Omnichannel (Social/Ads)", category: "Social", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 18 },
+      { featureId: "F19", featureName: "Chat Wizard MFORTE (enriquecimento de ideia)", category: "Social", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 19 },
+      { featureId: "F20", featureName: "Clonagem de Voz (ElevenLabs) + Avatar (HeyGen)", category: "Social", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 20 },
+      { featureId: "F21", featureName: "Lab (5 abas: Flow Sim, TTS, Imagem IA, Webhooks, WhatsApp)", category: "Dev/Testes", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 21 },
+      { featureId: "F22", featureName: "Manual de Uso (PDF + visualizador inline)", category: "Documentação", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 22 },
+      { featureId: "F23", featureName: "Apresentação Comercial (.pptx)", category: "Documentação", priority: "baixa" as const, status: "concluido" as const, progress: 100, sortOrder: 23 },
+      { featureId: "F24", featureName: "FLOW Standard: CLAUDE.md, CHANGELOG, Dicionário, Status", category: "Dev/Testes", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 24 },
+      { featureId: "F25", featureName: "Lab → Aba Protocolos (Smoke Tests + DoD)", category: "Dev/Testes", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 25 },
+    ];
+
+    for (const item of items) {
+      await db.insert(projectStatusItems).values(item);
+    }
+    log(`Project status items seeded (${items.length} features)`, "seed");
+  } catch (err) {
+    console.error("Error seeding project status items:", err);
+  }
+}
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -454,6 +499,7 @@ app.use((req, res, next) => {
   await ensureAdminUser();
   await seedFlowTemplates();
   await seedDocumentationVersions();
+  await seedProjectStatusItems();
   jobQueue.start();
   startLearningWorker();
   startCampaignWorker();

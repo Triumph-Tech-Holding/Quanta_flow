@@ -3282,6 +3282,83 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  app.get("/api/documentation/claude-md", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(process.cwd(), "CLAUDE.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      console.error("[GET /api/documentation/claude-md]", err);
+      res.status(500).json({ message: "Erro ao carregar CLAUDE.md" });
+    }
+  });
+
+  app.get("/api/documentation/changelog", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(process.cwd(), "CHANGELOG.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      console.error("[GET /api/documentation/changelog]", err);
+      res.status(500).json({ message: "Erro ao carregar CHANGELOG.md" });
+    }
+  });
+
+  // Project Status Items CRUD
+  app.get("/api/admin/project-status", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const items = await storage.getProjectStatusItems();
+      res.json(items);
+    } catch (err) {
+      console.error("[GET /api/admin/project-status]", err);
+      res.status(500).json({ message: "Erro ao buscar status" });
+    }
+  });
+
+  app.post("/api/admin/project-status", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { insertProjectStatusItemSchema } = await import("@shared/schema");
+      const parsed = insertProjectStatusItemSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const item = await storage.createProjectStatusItem(parsed.data);
+      res.status(201).json(item);
+    } catch (err) {
+      console.error("[POST /api/admin/project-status]", err);
+      res.status(500).json({ message: "Erro ao criar item" });
+    }
+  });
+
+  app.put("/api/admin/project-status/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const { updateProjectStatusItemSchema } = await import("@shared/schema");
+      const parsed = updateProjectStatusItemSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+      const item = await storage.updateProjectStatusItem(req.params.id, parsed.data);
+      if (!item) return res.status(404).json({ message: "Item não encontrado" });
+      res.json(item);
+    } catch (err) {
+      console.error("[PUT /api/admin/project-status/:id]", err);
+      res.status(500).json({ message: "Erro ao atualizar item" });
+    }
+  });
+
+  app.delete("/api/admin/project-status/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      const ok = await storage.deleteProjectStatusItem(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Item não encontrado" });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[DELETE /api/admin/project-status/:id]", err);
+      res.status(500).json({ message: "Erro ao deletar item" });
+    }
+  });
+
   app.get("/api/documentation/manual-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });

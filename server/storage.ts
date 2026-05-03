@@ -6,6 +6,7 @@ import {
   quickReplies, automationFlows, brandingConfig, userRoles, roles,
   agentAssignments, learningTracks, learningDeliveries,
   outboundWebhooks, sheetIntegrations, emailConfigs, documentationVersions,
+  projectStatusItems,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -34,6 +35,7 @@ import {
   type SocialProject, type InsertSocialProject, type UpdateSocialProject,
   type ContentAsset, type InsertContentAsset, type UpdateContentAsset,
   type PublicationSchedule, type InsertPublicationSchedule,
+  type ProjectStatusItem, type InsertProjectStatusItem, type UpdateProjectStatusItem,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -157,6 +159,12 @@ export interface IStorage {
   createPublicationSchedule(data: InsertPublicationSchedule): Promise<PublicationSchedule>;
   updatePublicationSchedule(id: string, status: "planned" | "sent" | "manual"): Promise<PublicationSchedule | undefined>;
   deletePublicationSchedule(id: string): Promise<boolean>;
+  // Project Status Items
+  getProjectStatusItems(): Promise<ProjectStatusItem[]>;
+  getProjectStatusItem(id: string): Promise<ProjectStatusItem | undefined>;
+  createProjectStatusItem(data: InsertProjectStatusItem): Promise<ProjectStatusItem>;
+  updateProjectStatusItem(id: string, data: UpdateProjectStatusItem): Promise<ProjectStatusItem | undefined>;
+  deleteProjectStatusItem(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1187,6 +1195,33 @@ export class DatabaseStorage implements IStorage {
 
   async deletePublicationSchedule(id: string): Promise<boolean> {
     const result = await db.delete(publicationSchedules).where(eq(publicationSchedules.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getProjectStatusItems(): Promise<ProjectStatusItem[]> {
+    return db.select().from(projectStatusItems).orderBy(asc(projectStatusItems.sortOrder), asc(projectStatusItems.createdAt));
+  }
+
+  async getProjectStatusItem(id: string): Promise<ProjectStatusItem | undefined> {
+    const [item] = await db.select().from(projectStatusItems).where(eq(projectStatusItems.id, id)).limit(1);
+    return item;
+  }
+
+  async createProjectStatusItem(data: InsertProjectStatusItem): Promise<ProjectStatusItem> {
+    const [item] = await db.insert(projectStatusItems).values(data).returning();
+    return item;
+  }
+
+  async updateProjectStatusItem(id: string, data: UpdateProjectStatusItem): Promise<ProjectStatusItem | undefined> {
+    const [item] = await db.update(projectStatusItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projectStatusItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteProjectStatusItem(id: string): Promise<boolean> {
+    const result = await db.delete(projectStatusItems).where(eq(projectStatusItems.id, id)).returning();
     return result.length > 0;
   }
 }

@@ -830,6 +830,43 @@ export const insertDocumentationVersionSchema = createInsertSchema(documentation
 export type DocumentationVersion = typeof documentationVersions.$inferSelect;
 export type InsertDocumentationVersion = z.infer<typeof insertDocumentationVersionSchema>;
 
+// ==================== Project Status Items (FLOW Standard) ====================
+
+export const projectStatusPriorityEnum = pgEnum("project_status_priority", ["alta", "media", "baixa"]);
+export const projectStatusStatusEnum = pgEnum("project_status_status", ["concluido", "em_curso", "pendente", "pausado"]);
+
+export const projectStatusItems = pgTable("project_status_items", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  featureId: varchar("feature_id", { length: 50 }).notNull(),
+  featureName: varchar("feature_name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull().default("geral"),
+  priority: projectStatusPriorityEnum("priority").notNull().default("media"),
+  status: projectStatusStatusEnum("status").notNull().default("pendente"),
+  progress: integer("progress").notNull().default(0),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProjectStatusItemSchema = createInsertSchema(projectStatusItems).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const updateProjectStatusItemSchema = z.object({
+  featureName: z.string().min(1).optional(),
+  category: z.string().optional(),
+  priority: z.enum(["alta", "media", "baixa"]).optional(),
+  status: z.enum(["concluido", "em_curso", "pendente", "pausado"]).optional(),
+  progress: z.number().int().min(0).max(100).optional(),
+  notes: z.string().optional().nullable(),
+  sortOrder: z.number().int().optional(),
+});
+
+export type ProjectStatusItem = typeof projectStatusItems.$inferSelect;
+export type InsertProjectStatusItem = z.infer<typeof insertProjectStatusItemSchema>;
+export type UpdateProjectStatusItem = z.infer<typeof updateProjectStatusItemSchema>;
+
 // ==================== Campaigns & Sequences ====================
 
 export const campaignStatusEnum = pgEnum("campaign_status", ["draft", "scheduled", "running", "paused", "completed"]);

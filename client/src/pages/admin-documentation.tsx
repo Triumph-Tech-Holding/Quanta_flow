@@ -45,7 +45,16 @@ import {
   ChevronDown,
   ChevronUp,
   Presentation,
+  Code2,
+  History,
+  Database,
+  BarChart3,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const createDocSchema = z.object({
@@ -238,6 +247,58 @@ function renderMarkdown(content: string) {
   return elements;
 }
 
+interface ProjectStatusItem {
+  id: string;
+  featureId: string;
+  featureName: string;
+  category: string;
+  priority: "alta" | "media" | "baixa";
+  status: "concluido" | "em_curso" | "pendente" | "pausado";
+  progress: number;
+  notes?: string | null;
+  sortOrder: number;
+}
+
+const DATA_DICT = [
+  { table: "users", desc: "Usuários do sistema com autenticação, status e tokenVersion" },
+  { table: "leads", desc: "Leads legados associados a um usuário dono" },
+  { table: "api_configs", desc: "Configurações de API por usuário (chaves, tokens)" },
+  { table: "evolution_configs", desc: "Configurações da instância WhatsApp (Evolution/Z-API)" },
+  { table: "conversations", desc: "Conversas abertas por canal (whatsapp, telegram, etc.)" },
+  { table: "messages", desc: "Mensagens individuais dentro de uma conversa" },
+  { table: "settings", desc: "Configurações criptografadas do sistema (AES-256-CBC)" },
+  { table: "settings_audit", desc: "Histórico de alterações nas configurações" },
+  { table: "roles", desc: "Papéis do sistema (super_admin, admin, user)" },
+  { table: "permissions", desc: "Permissões granulares por recurso e ação" },
+  { table: "role_permissions", desc: "Relacionamento N:N entre roles e permissions" },
+  { table: "user_roles", desc: "Atribuição de roles a usuários" },
+  { table: "audit_logs", desc: "Log de auditoria de todas as ações administrativas" },
+  { table: "channels", desc: "Canais de comunicação configurados por usuário" },
+  { table: "unified_contacts", desc: "Contatos unificados com pipeline, temperatura, intenção e SLA" },
+  { table: "contact_identifiers", desc: "Identificadores multi-canal por contato (jid, username, etc.)" },
+  { table: "omnichannel_messages", desc: "Mensagens unificadas de todos os canais por contato" },
+  { table: "pipeline_stages", desc: "Estágios customizados do pipeline por usuário" },
+  { table: "agent_assignments", desc: "Atribuição de contatos a agentes humanos" },
+  { table: "quick_replies", desc: "Respostas rápidas com atalho de texto" },
+  { table: "automation_flows", desc: "Fluxos de automação com blocos visuais e agentId" },
+  { table: "flow_templates", desc: "Templates built-in de fluxo (5 pré-configurados)" },
+  { table: "branding_config", desc: "Configurações de branding white-label por usuário" },
+  { table: "learning_tracks", desc: "Trilhas de microlearning com gatilho por estágio" },
+  { table: "learning_deliveries", desc: "Rastreamento de entregas de microlearning por contato" },
+  { table: "outbound_webhooks", desc: "Webhooks outbound com eventos e HMAC-SHA256" },
+  { table: "sheet_integrations", desc: "Integrações com Google Sheets via OAuth2" },
+  { table: "email_configs", desc: "Configurações SMTP/IMAP por usuário" },
+  { table: "ai_agents", desc: "Agentes IA configuráveis (model, tone, systemPrompt, TTS)" },
+  { table: "documentation_versions", desc: "Versões da documentação técnica da plataforma" },
+  { table: "campaigns", desc: "Campanhas omnichannel (broadcast e drip sequence)" },
+  { table: "campaign_deliveries", desc: "Entregas individuais de campanha por contato" },
+  { table: "message_templates", desc: "Templates de mensagem reutilizáveis por categoria" },
+  { table: "social_projects", desc: "Projetos de marca do Estúdio de Conteúdo (UUID PK, brand JSONB)" },
+  { table: "content_assets", desc: "Assets de conteúdo gerado por IA (UUID PK, formats JSONB)" },
+  { table: "publication_schedules", desc: "Agendamentos de publicação de conteúdo (UUID PK)" },
+  { table: "project_status_items", desc: "Painel de status de features do projeto (FLOW Standard)" },
+];
+
 export default function AdminDocumentation() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -246,9 +307,67 @@ export default function AdminDocumentation() {
   const [showGuide, setShowGuide] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [editStatusValues, setEditStatusValues] = useState<Partial<ProjectStatusItem>>({});
+  const [addingStatus, setAddingStatus] = useState(false);
+  const [newStatusValues, setNewStatusValues] = useState({ featureId: "", featureName: "", category: "geral", priority: "media" as const, status: "pendente" as const, progress: 0 });
 
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
+  });
+
+  const { data: claudeContent, isLoading: loadingClaude } = useQuery<string>({
+    queryKey: ["/api/documentation/claude-md"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/documentation/claude-md");
+      return res.text();
+    },
+  });
+
+  const { data: changelogContent, isLoading: loadingChangelog } = useQuery<string>({
+    queryKey: ["/api/documentation/changelog"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/documentation/changelog");
+      return res.text();
+    },
+  });
+
+  const { data: statusItems = [], isLoading: loadingStatus } = useQuery<ProjectStatusItem[]>({
+    queryKey: ["/api/admin/project-status"],
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ProjectStatusItem> }) => {
+      return apiRequest("PUT", `/api/admin/project-status/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      setEditingStatusId(null);
+      toast({ title: "Status atualizado!" });
+    },
+    onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+
+  const deleteStatusMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/admin/project-status/${id}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      toast({ title: "Item removido!" });
+    },
+  });
+
+  const createStatusMutation = useMutation({
+    mutationFn: async (data: typeof newStatusValues) => {
+      return apiRequest("POST", "/api/admin/project-status", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      setAddingStatus(false);
+      setNewStatusValues({ featureId: "", featureName: "", category: "geral", priority: "media", status: "pendente", progress: 0 });
+      toast({ title: "Feature adicionada!" });
+    },
   });
 
   const { data: manualContent, isLoading: loadingManual } = useQuery<string>({
@@ -577,9 +696,13 @@ export default function AdminDocumentation() {
       </Card>
 
       <Tabs defaultValue="versions" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="versions">Versões da Documentação</TabsTrigger>
-          <TabsTrigger value="info">Informações do Sistema</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="versions" data-testid="tab-versions">Versões</TabsTrigger>
+          <TabsTrigger value="info" data-testid="tab-info">Sistema</TabsTrigger>
+          <TabsTrigger value="claude" data-testid="tab-claude">CLAUDE.md</TabsTrigger>
+          <TabsTrigger value="changelog" data-testid="tab-changelog">CHANGELOG</TabsTrigger>
+          <TabsTrigger value="dict" data-testid="tab-dict">Dicionário</TabsTrigger>
+          <TabsTrigger value="status" data-testid="tab-status">Painel de Status</TabsTrigger>
         </TabsList>
 
         <TabsContent value="versions" className="space-y-4 mt-4">
@@ -683,6 +806,264 @@ export default function AdminDocumentation() {
               <div>
                 <h3 className="font-semibold mb-2">📝 Versionamento</h3>
                 <p className="text-muted-foreground">Cada versão documenta o estado da plataforma em um momento específico. Use "Nova Versão" quando há atualizações significativas no sistema.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {/* === CLAUDE.MD === */}
+        <TabsContent value="claude" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted"><Code2 className="w-5 h-5" /></div>
+                <div>
+                  <CardTitle className="text-base">CLAUDE.md — Contexto Técnico</CardTitle>
+                  <CardDescription>Stack, padrões de nomenclatura, regras invioláveis e guia de onboarding para IAs e devs</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+                <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
+                  <Code2 className="w-4 h-4" /><span>CLAUDE.md</span>
+                </div>
+                <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="claude-reader-content">
+                  {loadingClaude ? (
+                    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                      <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
+                    </div>
+                  ) : claudeContent ? (
+                    <div className="prose-sm max-w-none">{renderMarkdown(claudeContent)}</div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-12">Arquivo CLAUDE.md não encontrado.</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* === CHANGELOG === */}
+        <TabsContent value="changelog" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted"><History className="w-5 h-5" /></div>
+                <div>
+                  <CardTitle className="text-base">CHANGELOG — Histórico de Versões</CardTitle>
+                  <CardDescription>Histórico semântico de todas as versões do projeto seguindo Keep a Changelog</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+                <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
+                  <History className="w-4 h-4" /><span>CHANGELOG.md</span>
+                </div>
+                <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="changelog-reader-content">
+                  {loadingChangelog ? (
+                    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                      <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
+                    </div>
+                  ) : changelogContent ? (
+                    <div className="prose-sm max-w-none">{renderMarkdown(changelogContent)}</div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-12">Arquivo CHANGELOG.md não encontrado.</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* === DICIONÁRIO DE DADOS === */}
+        <TabsContent value="dict" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted"><Database className="w-5 h-5" /></div>
+                <div>
+                  <CardTitle className="text-base">Dicionário de Dados</CardTitle>
+                  <CardDescription>{DATA_DICT.length} tabelas do banco de dados PostgreSQL — gerado automaticamente do schema</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-muted">
+                      <th className="border border-border px-3 py-2 text-left font-semibold w-8">#</th>
+                      <th className="border border-border px-3 py-2 text-left font-semibold">Tabela</th>
+                      <th className="border border-border px-3 py-2 text-left font-semibold">Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DATA_DICT.map((row, i) => (
+                      <tr key={row.table} className={i % 2 === 0 ? "bg-background" : "bg-muted/30"} data-testid={`dict-row-${row.table}`}>
+                        <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{i + 1}</td>
+                        <td className="border border-border px-3 py-2">
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-primary">{row.table}</code>
+                        </td>
+                        <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{row.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* === PAINEL DE STATUS === */}
+        <TabsContent value="status" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-muted"><BarChart3 className="w-5 h-5" /></div>
+                  <div>
+                    <CardTitle className="text-base">Painel de Status — Features</CardTitle>
+                    <CardDescription>Matriz editável de features do projeto com prioridade, status e progresso</CardDescription>
+                  </div>
+                </div>
+                <Button size="sm" className="gap-2" onClick={() => setAddingStatus(true)} data-testid="button-add-feature">
+                  <Plus className="w-4 h-4" />Nova Feature
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loadingStatus ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" /><span>Carregando...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-12">ID</th>
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs">Feature</th>
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Categoria</th>
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20">Prioridade</th>
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-24">Status</th>
+                        <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Progresso</th>
+                        <th className="border border-border px-2 py-2 text-center font-semibold text-xs w-16">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {addingStatus && (
+                        <tr className="bg-primary/5 border border-primary/20">
+                          <td className="border border-border px-2 py-1">
+                            <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.featureId} onChange={e => setNewStatusValues(v => ({ ...v, featureId: e.target.value }))} placeholder="F26" />
+                          </td>
+                          <td className="border border-border px-2 py-1">
+                            <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.featureName} onChange={e => setNewStatusValues(v => ({ ...v, featureName: e.target.value }))} placeholder="Nome da feature" />
+                          </td>
+                          <td className="border border-border px-2 py-1">
+                            <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.category} onChange={e => setNewStatusValues(v => ({ ...v, category: e.target.value }))} placeholder="Categoria" />
+                          </td>
+                          <td className="border border-border px-2 py-1">
+                            <select className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.priority} onChange={e => setNewStatusValues(v => ({ ...v, priority: e.target.value as "alta" | "media" | "baixa" }))}>
+                              <option value="alta">Alta</option>
+                              <option value="media">Média</option>
+                              <option value="baixa">Baixa</option>
+                            </select>
+                          </td>
+                          <td className="border border-border px-2 py-1">
+                            <select className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.status} onChange={e => setNewStatusValues(v => ({ ...v, status: e.target.value as "concluido" | "em_curso" | "pendente" | "pausado" }))}>
+                              <option value="concluido">Concluído</option>
+                              <option value="em_curso">Em curso</option>
+                              <option value="pendente">Pendente</option>
+                              <option value="pausado">Pausado</option>
+                            </select>
+                          </td>
+                          <td className="border border-border px-2 py-1">
+                            <input type="number" min={0} max={100} className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.progress} onChange={e => setNewStatusValues(v => ({ ...v, progress: Number(e.target.value) }))} />
+                          </td>
+                          <td className="border border-border px-2 py-1 text-center">
+                            <div className="flex gap-1 justify-center">
+                              <button onClick={() => createStatusMutation.mutate(newStatusValues)} className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900" data-testid="button-save-new-feature"><Check className="w-3 h-3 text-green-600" /></button>
+                              <button onClick={() => setAddingStatus(false)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900"><X className="w-3 h-3 text-red-500" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {statusItems.map((item, i) => {
+                        const isEditing = editingStatusId === item.id;
+                        const priorityColor = item.priority === "alta" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" : item.priority === "media" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+                        const statusColor = item.status === "concluido" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" : item.status === "em_curso" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : item.status === "pausado" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" : "bg-muted text-muted-foreground";
+                        return (
+                          <tr key={item.id} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"} data-testid={`status-row-${item.featureId}`}>
+                            <td className="border border-border px-2 py-1.5 text-xs font-mono text-muted-foreground">{item.featureId}</td>
+                            <td className="border border-border px-2 py-1.5">
+                              {isEditing ? (
+                                <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.featureName} onChange={e => setEditStatusValues(v => ({ ...v, featureName: e.target.value }))} />
+                              ) : (
+                                <span className="text-xs font-medium">{item.featureName}</span>
+                              )}
+                            </td>
+                            <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground">{item.category}</td>
+                            <td className="border border-border px-2 py-1.5">
+                              {isEditing ? (
+                                <select className="text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.priority} onChange={e => setEditStatusValues(v => ({ ...v, priority: e.target.value as "alta" | "media" | "baixa" }))}>
+                                  <option value="alta">Alta</option>
+                                  <option value="media">Média</option>
+                                  <option value="baixa">Baixa</option>
+                                </select>
+                              ) : (
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${priorityColor}`}>{item.priority === "alta" ? "Alta" : item.priority === "media" ? "Média" : "Baixa"}</span>
+                              )}
+                            </td>
+                            <td className="border border-border px-2 py-1.5">
+                              {isEditing ? (
+                                <select className="text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.status} onChange={e => setEditStatusValues(v => ({ ...v, status: e.target.value as "concluido" | "em_curso" | "pendente" | "pausado" }))}>
+                                  <option value="concluido">Concluído</option>
+                                  <option value="em_curso">Em curso</option>
+                                  <option value="pendente">Pendente</option>
+                                  <option value="pausado">Pausado</option>
+                                </select>
+                              ) : (
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${statusColor}`}>{item.status === "concluido" ? "Concluído" : item.status === "em_curso" ? "Em curso" : item.status === "pausado" ? "Pausado" : "Pendente"}</span>
+                              )}
+                            </td>
+                            <td className="border border-border px-2 py-1.5">
+                              {isEditing ? (
+                                <input type="number" min={0} max={100} className="w-full text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.progress} onChange={e => setEditStatusValues(v => ({ ...v, progress: Number(e.target.value) }))} />
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <Progress value={item.progress} className="h-1.5 flex-1" />
+                                  <span className="text-xs text-muted-foreground w-8 shrink-0">{item.progress}%</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="border border-border px-2 py-1.5 text-center">
+                              <div className="flex gap-1 justify-center">
+                                {isEditing ? (
+                                  <>
+                                    <button onClick={() => updateStatusMutation.mutate({ id: item.id, data: editStatusValues })} className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900" data-testid={`button-save-status-${item.featureId}`}><Check className="w-3 h-3 text-green-600" /></button>
+                                    <button onClick={() => setEditingStatusId(null)} className="p-1 rounded hover:bg-muted"><X className="w-3 h-3 text-muted-foreground" /></button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button onClick={() => { setEditingStatusId(item.id); setEditStatusValues({}); }} className="p-1 rounded hover:bg-muted" data-testid={`button-edit-status-${item.featureId}`}><Pencil className="w-3 h-3 text-muted-foreground" /></button>
+                                    <button onClick={() => deleteStatusMutation.mutate(item.id)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900" data-testid={`button-delete-status-${item.featureId}`}><Trash2 className="w-3 h-3 text-red-500" /></button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex gap-4 pt-2 text-xs text-muted-foreground border-t border-border">
+                <span>Total: <strong>{statusItems.length}</strong> features</span>
+                <span>Concluídas: <strong className="text-green-600">{statusItems.filter(i => i.status === "concluido").length}</strong></span>
+                <span>Em curso: <strong className="text-blue-600">{statusItems.filter(i => i.status === "em_curso").length}</strong></span>
+                <span>Pendentes: <strong className="text-muted-foreground">{statusItems.filter(i => i.status === "pendente").length}</strong></span>
               </div>
             </CardContent>
           </Card>

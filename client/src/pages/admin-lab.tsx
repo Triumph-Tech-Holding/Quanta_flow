@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader2, PlayCircle, Volume2, Zap, CheckCircle2, XCircle,
-  Webhook, Smartphone, Image as ImageIcon,
+  Webhook, Smartphone, Image as ImageIcon, ShieldCheck, RefreshCw,
 } from "lucide-react";
 
 type TtsVoice = "alloy" | "echo" | "fable";
@@ -86,6 +86,72 @@ export default function AdminLab() {
   const [wpPhone, setWpPhone] = useState("");
   const [wpMessage, setWpMessage] = useState("Mensagem de teste do Quanta Flow Lab 🧪");
   const [wpResult, setWpResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // --- Protocolos ---
+  const SMOKE_TESTS = [
+    { id: "health", label: "Health Check", endpoint: "/api/health", method: "GET" },
+    { id: "auth_me", label: "Auth /me (token válido)", endpoint: "/api/auth/me", method: "GET" },
+    { id: "flows", label: "Listar Fluxos", endpoint: "/api/automation-flows", method: "GET" },
+    { id: "contacts", label: "Listar Contatos (CRM)", endpoint: "/api/contacts", method: "GET" },
+    { id: "agents", label: "Listar Agentes IA", endpoint: "/api/admin/agents", method: "GET" },
+    { id: "campaigns", label: "Listar Campanhas", endpoint: "/api/admin/campaigns", method: "GET" },
+    { id: "webhooks", label: "Listar Webhooks", endpoint: "/api/webhooks/outbound", method: "GET" },
+    { id: "social", label: "Listar Projetos Sociais", endpoint: "/api/admin/social/projects", method: "GET" },
+    { id: "status", label: "Painel de Status (FLOW Standard)", endpoint: "/api/admin/project-status", method: "GET" },
+    { id: "templates", label: "Listar Templates", endpoint: "/api/admin/templates", method: "GET" },
+  ];
+  const DOD_ITEMS = [
+    { id: "dod_auth", label: "Auth: Login/logout funcionando, token expira em 24h" },
+    { id: "dod_rbac", label: "RBAC: Endpoints admin bloqueados para role 'user'" },
+    { id: "dod_inbox", label: "Inbox: Mensagens chegam via Socket.io em tempo real" },
+    { id: "dod_crm", label: "CRM: Lead criado automaticamente na 1ª mensagem" },
+    { id: "dod_kanban", label: "CRM: Drag-and-drop do Kanban funcionando" },
+    { id: "dod_flow", label: "Automação: Flow Sim executa blocos corretamente" },
+    { id: "dod_agent", label: "Agentes IA: Chat preview responde via OpenAI" },
+    { id: "dod_campaign", label: "Campanhas: Worker processa deliveries a cada 60s" },
+    { id: "dod_social", label: "Social: Geração de conteúdo AI retorna formatos" },
+    { id: "dod_settings", label: "Settings: Valores criptografados (AES-256-CBC)" },
+    { id: "dod_sla", label: "Fila: Timer SLA fica vermelho ao ultrapassar prazo" },
+    { id: "dod_manual", label: "Doc: Manual PDF e visualizador inline funcionando" },
+  ];
+  const [smokeResults, setSmokeResults] = useState<Record<string, "ok" | "fail" | "running">>({});
+  const [runningAllSmoke, setRunningAllSmoke] = useState(false);
+  const [dodChecked, setDodChecked] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("quanta_dod_checklist");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const toggleDod = (id: string) => {
+    setDodChecked(prev => {
+      const updated = { ...prev, [id]: !prev[id] };
+      localStorage.setItem("quanta_dod_checklist", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const runSmokeTest = async (endpoint: string, method: string, id: string) => {
+    setSmokeResults(prev => ({ ...prev, [id]: "running" }));
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(endpoint, {
+        method,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setSmokeResults(prev => ({ ...prev, [id]: res.status < 500 ? "ok" : "fail" }));
+    } catch {
+      setSmokeResults(prev => ({ ...prev, [id]: "fail" }));
+    }
+  };
+
+  const runAllSmokeTests = async () => {
+    setRunningAllSmoke(true);
+    for (const test of SMOKE_TESTS) {
+      await runSmokeTest(test.endpoint, test.method, test.id);
+    }
+    setRunningAllSmoke(false);
+  };
 
   const { data: allFlows = [] } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
@@ -252,12 +318,13 @@ export default function AdminLab() {
 
         <main className="flex-1 p-6">
           <Tabs defaultValue="flow" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="flow" data-testid="tab-flow">Flow Sim</TabsTrigger>
               <TabsTrigger value="tts" data-testid="tab-tts">TTS</TabsTrigger>
               <TabsTrigger value="image" data-testid="tab-image">Imagem IA</TabsTrigger>
               <TabsTrigger value="webhook" data-testid="tab-webhook">Webhooks</TabsTrigger>
               <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>
+              <TabsTrigger value="protocolos" data-testid="tab-protocolos">Protocolos</TabsTrigger>
             </TabsList>
 
             {/* === FLOW SIMULATOR === */}
@@ -644,6 +711,163 @@ export default function AdminLab() {
                       <p className="text-xs mt-1 text-muted-foreground">{wpResult.message}</p>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* === PROTOCOLOS === */}
+            <TabsContent value="protocolos" className="space-y-4">
+              {/* Smoke Tests */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShieldCheck className="h-4 w-4" />
+                      Smoke Tests — Endpoints Críticos
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      className="gap-2"
+                      onClick={runAllSmokeTests}
+                      disabled={runningAllSmoke}
+                      data-testid="button-run-all-smoke"
+                    >
+                      {runningAllSmoke ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Executar Todos
+                    </Button>
+                  </div>
+                  <CardDescription>
+                    Testa endpoints críticos do sistema e retorna status HTTP. Verde = 2xx/3xx/4xx, Vermelho = 5xx/timeout.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {SMOKE_TESTS.map(test => {
+                      const result = smokeResults[test.id];
+                      return (
+                        <div key={test.id} className="flex items-center justify-between p-2 border rounded-lg bg-muted/30" data-testid={`smoke-test-${test.id}`}>
+                          <div className="flex items-center gap-3">
+                            {result === "ok" ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : result === "fail" ? (
+                              <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                            ) : result === "running" ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                            ) : (
+                              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium">{test.label}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{test.method} {test.endpoint}</p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7"
+                            onClick={() => runSmokeTest(test.endpoint, test.method, test.id)}
+                            disabled={result === "running"}
+                            data-testid={`button-smoke-${test.id}`}
+                          >
+                            Testar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {Object.keys(smokeResults).length > 0 && (
+                    <div className="mt-3 flex gap-4 text-xs text-muted-foreground border-t pt-3">
+                      <span>OK: <strong className="text-green-600">{Object.values(smokeResults).filter(v => v === "ok").length}</strong></span>
+                      <span>Falha: <strong className="text-red-600">{Object.values(smokeResults).filter(v => v === "fail").length}</strong></span>
+                      <span>Pendentes: <strong>{SMOKE_TESTS.length - Object.keys(smokeResults).length}</strong></span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Definition of Done */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Definition of Done — Critérios de Aceite
+                  </CardTitle>
+                  <CardDescription>
+                    Checklist persistente de qualidade por área funcional. Estado salvo no navegador.
+                    {" "}<strong>{Object.values(dodChecked).filter(Boolean).length}/{DOD_ITEMS.length}</strong> concluídos.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {DOD_ITEMS.map(item => (
+                      <label
+                        key={item.id}
+                        className={`flex items-center gap-3 p-2.5 border rounded-lg cursor-pointer transition-colors ${dodChecked[item.id] ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" : "bg-background hover:bg-muted/30"}`}
+                        data-testid={`dod-item-${item.id}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!dodChecked[item.id]}
+                          onChange={() => toggleDod(item.id)}
+                          className="h-4 w-4 accent-primary"
+                          data-testid={`checkbox-dod-${item.id}`}
+                        />
+                        <span className={`text-sm ${dodChecked[item.id] ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                          {item.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {Object.values(dodChecked).filter(Boolean).length === DOD_ITEMS.length && (
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-center">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">Definition of Done completo! Feature pronta para deploy.</p>
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setDodChecked({});
+                      localStorage.removeItem("quanta_dod_checklist");
+                    }}
+                    data-testid="button-reset-dod"
+                  >
+                    Limpar checklist
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Erros Comuns */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                    Erros Comuns e Soluções
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {[
+                      { error: "req.user!.id is undefined", cause: "Usar .id em vez de .userId no JWT payload", fix: "Usar req.user!.userId em todos os handlers de rota" },
+                      { error: "SelectItem value=\"\"", cause: "Shadcn SelectItem não aceita value vazio", fix: "Usar value=\"_none_\" como sentinel para opção vazia" },
+                      { error: "array(text()) inválido", cause: "Sintaxe errada no schema Drizzle", fix: "Usar text().array() como método encadeado" },
+                      { error: "useQuery(['key'])", cause: "Sintaxe TanStack Query v4 incompatível", fix: "Usar useQuery({ queryKey: ['key'] }) — sintaxe v5" },
+                      { error: "JWT 401 após troca de senha", cause: "tokenVersion desatualizado no token local", fix: "Re-login obrigatório após mudança de senha" },
+                      { error: "CORS 404 em /api/*", cause: "Proxy do Vite não configurado corretamente", fix: "Não modificar vite.config.ts — já está configurado" },
+                    ].map((item, i) => (
+                      <div key={i} className="border rounded-lg p-3 text-xs space-y-1 bg-muted/20" data-testid={`error-pattern-${i}`}>
+                        <p className="font-mono text-red-600 dark:text-red-400 font-medium">{item.error}</p>
+                        <p className="text-muted-foreground"><span className="font-medium">Causa:</span> {item.cause}</p>
+                        <p className="text-foreground"><span className="font-medium text-green-600 dark:text-green-400">Fix:</span> {item.fix}</p>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
