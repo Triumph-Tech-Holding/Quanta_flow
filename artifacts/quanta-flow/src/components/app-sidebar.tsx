@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Cpu,
   Building2,
+  FileText,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -192,9 +193,15 @@ const automationSubItems = [
     icon: Megaphone,
     permission: "edit_settings",
   },
+  {
+    title: "Landing Pages",
+    url: "/admin/landing-pages",
+    icon: FileText,
+    permission: "edit_settings",
+  },
 ];
 
-const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns"];
+const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns", "/admin/landing-pages"];
 
 const engenhariaMenuItems = [
   {

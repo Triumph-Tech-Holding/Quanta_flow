@@ -31,6 +31,10 @@ import AdminCampaigns from "@/pages/admin-campaigns";
 import AdminLab from "@/pages/admin-lab";
 import FlowPublicEnroll from "@/pages/flow-public-enroll";
 import CampaignPublicEnroll from "@/pages/campaign-public-enroll";
+import AdminLandingPages from "@/pages/admin-landing-pages";
+import AdminLandingEditor from "@/pages/admin-landing-editor";
+import AdminLandingMetrics from "@/pages/admin-landing-metrics";
+import LandingPublic from "@/pages/landing-public";
 import SocialAds from "@/pages/social-ads";
 import NotFound from "@/pages/not-found";
 
@@ -155,8 +159,18 @@ function Router() {
       <Route path="/social">
         <ProtectedRoute component={SocialAds} />
       </Route>
+      <Route path="/admin/landing-pages">
+        <ProtectedRoute component={AdminLandingPages} />
+      </Route>
+      <Route path="/admin/landing-pages/:id/metrics">
+        <ProtectedRoute component={AdminLandingMetrics} />
+      </Route>
+      <Route path="/admin/landing-pages/:id">
+        <ProtectedRoute component={AdminLandingEditor} />
+      </Route>
       <Route path="/f/:token" component={FlowPublicEnroll} />
       <Route path="/c/:token" component={CampaignPublicEnroll} />
+      <Route path="/p/:slug" component={LandingPublic} />
       <Route component={NotFound} />
     </Switch>
   );

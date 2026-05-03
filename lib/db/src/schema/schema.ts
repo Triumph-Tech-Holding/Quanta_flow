@@ -28,6 +28,7 @@ export const users = pgTable("users", {
 });
 
 export const workspacePlanEnum = pgEnum("workspace_plan", ["free", "pro", "business", "enterprise"]);
+export const landingPageStatusEnum = pgEnum("landing_page_status", ["draft", "published", "archived"]);
 
 export const workspaces = pgTable("workspaces", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -56,6 +57,74 @@ export const workspaceMembers = pgTable("workspace_members", {
   role: workspaceMemberRoleEnum("role").notNull().default("member"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// === Landing Pages (F41) ===
+export const landingPages = pgTable("landing_pages", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  ownerUserId: varchar("owner_user_id", { length: 36 }).notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 120 }).notNull(),
+  status: landingPageStatusEnum("status").notNull().default("draft"),
+  draftBlocks: jsonb("draft_blocks").notNull().default(sql`'[]'::jsonb`),
+  publishedBlocks: jsonb("published_blocks"),
+  publishedVersion: integer("published_version"),
+  seo: jsonb("seo").notNull().default(sql`'{}'::jsonb`),
+  settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
+  flowId: varchar("flow_id", { length: 36 }),
+  campaignId: varchar("campaign_id", { length: 36 }),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const landingPageVersions = pgTable("landing_page_versions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  pageId: varchar("page_id", { length: 36 }).notNull().references(() => landingPages.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  blocks: jsonb("blocks").notNull(),
+  seo: jsonb("seo"),
+  createdByUserId: varchar("created_by_user_id", { length: 36 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const landingPageSubmissions = pgTable("landing_page_submissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  pageId: varchar("page_id", { length: 36 }).notNull().references(() => landingPages.id, { onDelete: "cascade" }),
+  versionId: varchar("version_id", { length: 36 }).references(() => landingPageVersions.id, { onDelete: "set null" }),
+  contactId: varchar("contact_id", { length: 36 }),
+  payload: jsonb("payload").notNull(),
+  utm: jsonb("utm"),
+  ip: varchar("ip", { length: 64 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const landingPageEvents = pgTable("landing_page_events", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  pageId: varchar("page_id", { length: 36 }).notNull().references(() => landingPages.id, { onDelete: "cascade" }),
+  eventType: varchar("event_type", { length: 40 }).notNull(),
+  blockId: varchar("block_id", { length: 64 }),
+  value: integer("value"),
+  sessionId: varchar("session_id", { length: 64 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertLandingPageSchema = createInsertSchema(landingPages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+  publishedVersion: true,
+  publishedBlocks: true,
+}).extend({
+  name: z.string().min(2, "Nome precisa ter pelo menos 2 caracteres"),
+  slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, "Slug deve conter apenas letras minúsculas, números e hífens"),
+});
+export type InsertLandingPage = z.infer<typeof insertLandingPageSchema>;
+export type LandingPage = typeof landingPages.$inferSelect;
+export type LandingPageVersion = typeof landingPageVersions.$inferSelect;
+export type LandingPageSubmission = typeof landingPageSubmissions.$inferSelect;
 
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({
   id: true,

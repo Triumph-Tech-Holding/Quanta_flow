@@ -1397,4 +1397,77 @@ export class WorkspaceStorage implements IWorkspaceStorage {
 
 export const workspaceStorage = new WorkspaceStorage();
 
+// === Landing Pages (F41) ===
+import { landingPages, landingPageVersions, landingPageSubmissions, landingPageEvents, type LandingPage, type LandingPageVersion, type LandingPageSubmission, type InsertLandingPage } from "@workspace/db";
+
+class LandingPageStorage {
+  async listByWorkspace(workspaceId: string): Promise<LandingPage[]> {
+    return db.select().from(landingPages).where(eq(landingPages.workspaceId, workspaceId)).orderBy(desc(landingPages.updatedAt));
+  }
+  async getById(id: string, workspaceId: string): Promise<LandingPage | undefined> {
+    const [p] = await db.select().from(landingPages).where(and(eq(landingPages.id, id), eq(landingPages.workspaceId, workspaceId))).limit(1);
+    return p;
+  }
+  async getBySlug(workspaceId: string, slug: string): Promise<LandingPage | undefined> {
+    const [p] = await db.select().from(landingPages).where(and(eq(landingPages.workspaceId, workspaceId), eq(landingPages.slug, slug))).limit(1);
+    return p;
+  }
+  async getPublishedBySlug(slug: string): Promise<LandingPage | undefined> {
+    const [p] = await db.select().from(landingPages).where(and(eq(landingPages.slug, slug), eq(landingPages.status, "published"))).limit(1);
+    return p;
+  }
+  async create(data: InsertLandingPage): Promise<LandingPage> {
+    const [p] = await db.insert(landingPages).values(data).returning();
+    return p;
+  }
+  async update(id: string, workspaceId: string, data: Partial<LandingPage>): Promise<LandingPage | undefined> {
+    const { id: _i, workspaceId: _w, createdAt: _c, ...rest } = data as Record<string, unknown>;
+    const [p] = await db.update(landingPages)
+      .set({ ...rest, updatedAt: new Date() })
+      .where(and(eq(landingPages.id, id), eq(landingPages.workspaceId, workspaceId)))
+      .returning();
+    return p;
+  }
+  async remove(id: string, workspaceId: string): Promise<boolean> {
+    const result = await db.delete(landingPages).where(and(eq(landingPages.id, id), eq(landingPages.workspaceId, workspaceId))).returning();
+    return result.length > 0;
+  }
+  async createVersion(pageId: string, blocks: unknown, seo: unknown, userId: string): Promise<LandingPageVersion> {
+    const [last] = await db.select().from(landingPageVersions).where(eq(landingPageVersions.pageId, pageId)).orderBy(desc(landingPageVersions.version)).limit(1);
+    const nextVersion = (last?.version ?? 0) + 1;
+    const [v] = await db.insert(landingPageVersions).values({ pageId, version: nextVersion, blocks: blocks as object, seo: seo as object, createdByUserId: userId }).returning();
+    return v;
+  }
+  async listVersions(pageId: string, limit = 20): Promise<LandingPageVersion[]> {
+    return db.select().from(landingPageVersions).where(eq(landingPageVersions.pageId, pageId)).orderBy(desc(landingPageVersions.version)).limit(limit);
+  }
+  async createSubmission(data: { pageId: string; versionId?: string | null; contactId?: string | null; payload: unknown; utm?: unknown; ip?: string | null; userAgent?: string | null }): Promise<LandingPageSubmission> {
+    const [s] = await db.insert(landingPageSubmissions).values({
+      pageId: data.pageId,
+      versionId: data.versionId ?? null,
+      contactId: data.contactId ?? null,
+      payload: data.payload as object,
+      utm: (data.utm ?? null) as object | null,
+      ip: data.ip ?? null,
+      userAgent: data.userAgent ?? null,
+    }).returning();
+    return s;
+  }
+  async listSubmissions(pageId: string, limit = 100): Promise<LandingPageSubmission[]> {
+    return db.select().from(landingPageSubmissions).where(eq(landingPageSubmissions.pageId, pageId)).orderBy(desc(landingPageSubmissions.createdAt)).limit(limit);
+  }
+  async recordEvent(pageId: string, eventType: string, blockId?: string | null, sessionId?: string | null, value?: number | null): Promise<void> {
+    await db.insert(landingPageEvents).values({ pageId, eventType, blockId: blockId ?? null, sessionId: sessionId ?? null, value: value ?? null });
+  }
+  async aggregateMetrics(pageId: string): Promise<Array<{ eventType: string; count: number }>> {
+    const rows = await db.execute(sqlExpr`SELECT event_type, COUNT(*)::int AS count FROM landing_page_events WHERE page_id = ${pageId} GROUP BY event_type`);
+    return rows.rows.map((r: any) => ({ eventType: r.event_type, count: Number(r.count) }));
+  }
+  async countByWorkspace(workspaceId: string): Promise<number> {
+    const rows = await db.execute(sqlExpr`SELECT COUNT(*)::int AS count FROM landing_pages WHERE workspace_id = ${workspaceId}`);
+    return Number((rows.rows[0] as any)?.count ?? 0);
+  }
+}
+export const landingPageStorage = new LandingPageStorage();
+
 export const storage = new DatabaseStorage();

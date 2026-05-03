@@ -10,6 +10,7 @@ import fs from "fs";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 import { storage, workspaceStorage } from "../storage";
+import { registerLandingPageRoutes, LANDING_TEMPLATES } from "./landingPages";
 import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, insertDocumentationVersionSchema, unifiedContacts, type InsertWorkspace } from "@workspace/db";
 import OpenAI from "openai";
 import { z } from "zod/v4";
@@ -5172,6 +5173,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       res.status(500).json({ message: "Erro ao remover membro" });
     }
       return;
+  });
+
+  // === Landing Pages (F41) ===
+  registerLandingPageRoutes(app, authenticateToken);
+  app.get("/api/landing-templates", authenticateToken, async (_req: AuthRequest, res: Response) => {
+    res.json(LANDING_TEMPLATES);
   });
 
   return httpServer;
