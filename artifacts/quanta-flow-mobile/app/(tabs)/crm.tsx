@@ -21,11 +21,10 @@ import { useColors } from "@/hooks/useColors";
 
 type Contact = {
   id: string;
-  name?: string;
-  fullName?: string;
-  primaryPhone?: string;
-  primaryEmail?: string;
-  stage?: string;
+  nome?: string;
+  telefone?: string | null;
+  email?: string | null;
+  pipelineStage?: string;
   temperature?: string;
 };
 
@@ -33,9 +32,19 @@ const STAGES: { key: string; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "novo", label: "Novos" },
   { key: "qualificado", label: "Qualif." },
+  { key: "proposta", label: "Proposta" },
   { key: "negociacao", label: "Negoc." },
-  { key: "ganho", label: "Ganhos" },
+  { key: "fechado_ganho", label: "Ganhos" },
 ];
+
+const STAGE_LABEL: Record<string, string> = {
+  novo: "Novo",
+  qualificado: "Qualificado",
+  proposta: "Proposta",
+  negociacao: "Negociação",
+  fechado_ganho: "Ganho",
+  fechado_perdido: "Perdido",
+};
 
 export default function CrmScreen() {
   const colors = useColors();
@@ -57,12 +66,13 @@ export default function CrmScreen() {
   const filtered = useMemo(() => {
     const all = q.data ?? [];
     return all.filter((c) => {
-      if (stage !== "all" && (c.stage ?? "").toLowerCase() !== stage) return false;
+      if (stage !== "all" && (c.pipelineStage ?? "").toLowerCase() !== stage) return false;
       if (search) {
         const s = search.toLowerCase();
-        const name = (c.name ?? c.fullName ?? "").toLowerCase();
-        const phone = (c.primaryPhone ?? "").toLowerCase();
-        if (!name.includes(s) && !phone.includes(s)) return false;
+        const name = (c.nome ?? "").toLowerCase();
+        const phone = (c.telefone ?? "").toLowerCase();
+        const email = (c.email ?? "").toLowerCase();
+        if (!name.includes(s) && !phone.includes(s) && !email.includes(s)) return false;
       }
       return true;
     });
@@ -82,7 +92,7 @@ export default function CrmScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Buscar por nome ou telefone"
+            placeholder="Buscar por nome, telefone ou email"
             placeholderTextColor={colors.mutedForeground}
             style={[styles.searchInput, { color: colors.foreground }]}
           />
@@ -143,7 +153,9 @@ export default function CrmScreen() {
             </View>
           }
           renderItem={({ item }) => {
-            const name = item.name ?? item.fullName ?? item.primaryPhone ?? "Contato";
+            const name = item.nome ?? item.telefone ?? item.email ?? "Contato";
+            const sublabel = item.telefone ?? item.email ?? "—";
+            const stageLabel = item.pipelineStage ? STAGE_LABEL[item.pipelineStage] ?? item.pipelineStage : null;
             return (
               <TouchableOpacity
                 activeOpacity={0.85}
@@ -160,10 +172,10 @@ export default function CrmScreen() {
                     {name}
                   </Text>
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }} numberOfLines={1}>
-                    {item.primaryPhone ?? item.primaryEmail ?? "—"}
+                    {sublabel}
                   </Text>
                 </View>
-                {!!item.stage && (
+                {!!stageLabel && (
                   <View
                     style={[
                       styles.stageTag,
@@ -171,7 +183,7 @@ export default function CrmScreen() {
                     ]}
                   >
                     <Text style={{ color: colors.secondary, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>
-                      {item.stage}
+                      {stageLabel}
                     </Text>
                   </View>
                 )}

@@ -18,13 +18,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 type DashboardMetrics = {
-  totalLeads?: number;
-  leadsHoje?: number;
-  emAtendimento?: number;
-  conversao?: number;
-  novos?: number;
-  qualificados?: number;
-  ganhos?: number;
+  totalContacts?: number;
+  temperatureCounts?: { frio?: number; morno?: number; quente?: number };
+  pipelineCounts?: Record<string, number>;
+  avgScore?: number;
 };
 
 type BrainInsight = {
@@ -66,16 +63,18 @@ export default function DashboardScreen() {
   const insights = insightsQ.data ?? [];
   const refreshing = metricsQ.isFetching || insightsQ.isFetching;
 
+  const temp = m.temperatureCounts ?? {};
+  const pipe = m.pipelineCounts ?? {};
+  const ganhos = pipe.fechado_ganho ?? 0;
+  const novos = pipe.novo ?? 0;
+  const totalPipe = Object.values(pipe).reduce((a, b) => a + (b ?? 0), 0);
+  const conversao = totalPipe > 0 ? Math.round((ganhos / totalPipe) * 100) : 0;
+
   const cards: { label: string; value: number | string; icon: keyof typeof Feather.glyphMap; tint: string }[] = [
-    { label: "Leads totais", value: m.totalLeads ?? 0, icon: "users", tint: colors.secondary },
-    { label: "Leads hoje", value: m.leadsHoje ?? m.novos ?? 0, icon: "user-plus", tint: colors.primary },
-    { label: "Em atendimento", value: m.emAtendimento ?? m.qualificados ?? 0, icon: "message-square", tint: "#E0A02C" },
-    {
-      label: "Conversão",
-      value: m.conversao != null ? `${Math.round(Number(m.conversao))}%` : "—",
-      icon: "trending-up",
-      tint: colors.primary,
-    },
+    { label: "Contatos totais", value: m.totalContacts ?? 0, icon: "users", tint: colors.secondary },
+    { label: "Novos no pipeline", value: novos, icon: "user-plus", tint: colors.primary },
+    { label: "Quentes", value: temp.quente ?? 0, icon: "trending-up", tint: "#E0A02C" },
+    { label: "Conversão", value: `${conversao}%`, icon: "target", tint: colors.primary },
   ];
 
   return (
@@ -110,6 +109,20 @@ export default function DashboardScreen() {
               <Text style={[styles.cardValue, { color: colors.foreground }]}>{c.value}</Text>
             </View>
           ))}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Temperatura</Text>
+          <View style={styles.tempRow}>
+            <TempPill label="Frio" value={temp.frio ?? 0} color="#3B82F6" />
+            <TempPill label="Morno" value={temp.morno ?? 0} color="#E0A02C" />
+            <TempPill label="Quente" value={temp.quente ?? 0} color="#DC2626" />
+          </View>
+          {typeof m.avgScore === "number" && (
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
+              Score médio: {m.avgScore}
+            </Text>
+          )}
         </View>
 
         <View style={styles.sectionHead}>
@@ -173,6 +186,16 @@ export default function DashboardScreen() {
   );
 }
 
+function TempPill({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={[styles.tempPill, { borderColor: color }]}>
+      <View style={[styles.tempDot, { backgroundColor: color }]} />
+      <Text style={{ color, fontFamily: "Inter_700Bold", fontSize: 14 }}>{value}</Text>
+      <Text style={{ color, fontFamily: "Inter_500Medium", fontSize: 11 }}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: 16, gap: 12 },
@@ -196,6 +219,18 @@ const styles = StyleSheet.create({
   cardValue: { fontFamily: "Inter_700Bold", fontSize: 22 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  tempRow: { flexDirection: "row", gap: 8, marginTop: 6 },
+  tempPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  tempDot: { width: 8, height: 8, borderRadius: 4 },
   insight: {
     flexDirection: "row",
     alignItems: "center",

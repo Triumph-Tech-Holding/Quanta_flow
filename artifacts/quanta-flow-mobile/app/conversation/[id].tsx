@@ -22,7 +22,7 @@ type Message = {
   body?: string;
   text?: string;
   content?: string;
-  direction?: "inbound" | "outbound" | string;
+  direction?: "incoming" | "outgoing" | "inbound" | "outbound" | string;
   fromMe?: boolean;
   createdAt?: string;
   timestamp?: string;
@@ -30,7 +30,7 @@ type Message = {
 
 function isOutbound(m: Message) {
   if (typeof m.fromMe === "boolean") return m.fromMe;
-  return m.direction === "outbound";
+  return m.direction === "outgoing" || m.direction === "outbound";
 }
 
 function getText(m: Message) {
@@ -67,7 +67,7 @@ export default function ConversationScreen() {
     try {
       await apiFetch(`/api/conversations/${id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text, body: text, content: text }),
+        body: JSON.stringify({ content: text }),
       });
       setDraft("");
       await qc.invalidateQueries({ queryKey: ["conv-messages", id] });

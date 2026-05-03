@@ -9,14 +9,14 @@ import { useColors } from "@/hooks/useColors";
 
 type Contact = {
   id: string;
-  name?: string;
-  fullName?: string;
-  primaryPhone?: string;
-  primaryEmail?: string;
-  stage?: string;
+  nome?: string;
+  telefone?: string | null;
+  email?: string | null;
+  pipelineStage?: string;
   temperature?: string;
   notes?: string;
-  identifiers?: { type: string; value: string }[];
+  score?: number;
+  identifiers?: { channel?: string; type?: string; value?: string; identifier?: string }[];
 };
 
 type Message = {
@@ -25,7 +25,18 @@ type Message = {
   text?: string;
   content?: string;
   channel?: string;
+  direction?: string;
   createdAt?: string;
+  timestamp?: string;
+};
+
+const STAGE_LABEL: Record<string, string> = {
+  novo: "Novo",
+  qualificado: "Qualificado",
+  proposta: "Proposta",
+  negociacao: "Negociação",
+  fechado_ganho: "Ganho",
+  fechado_perdido: "Perdido",
 };
 
 export default function ContactScreen() {
@@ -59,7 +70,8 @@ export default function ContactScreen() {
   }
 
   const c = contactQ.data;
-  const name = c?.name ?? c?.fullName ?? c?.primaryPhone ?? "Contato";
+  const name = c?.nome ?? c?.telefone ?? c?.email ?? "Contato";
+  const stageLabel = c?.pipelineStage ? STAGE_LABEL[c.pipelineStage] ?? c.pipelineStage : null;
 
   return (
     <ScrollView
@@ -74,9 +86,9 @@ export default function ContactScreen() {
         </View>
         <Text style={styles.heroName}>{name}</Text>
         <View style={styles.heroMeta}>
-          {!!c?.stage && (
+          {!!stageLabel && (
             <View style={styles.heroTag}>
-              <Text style={styles.heroTagText}>Estágio: {c.stage}</Text>
+              <Text style={styles.heroTagText}>Estágio: {stageLabel}</Text>
             </View>
           )}
           {!!c?.temperature && (
@@ -84,16 +96,23 @@ export default function ContactScreen() {
               <Text style={styles.heroTagText}>{c.temperature}</Text>
             </View>
           )}
+          {typeof c?.score === "number" && (
+            <View style={styles.heroTag}>
+              <Text style={styles.heroTagText}>Score {c.score}</Text>
+            </View>
+          )}
         </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.section, { color: colors.foreground }]}>Contato</Text>
-        <Row icon="phone" label="Telefone" value={c?.primaryPhone ?? "—"} colors={colors} />
-        <Row icon="mail" label="Email" value={c?.primaryEmail ?? "—"} colors={colors} />
-        {c?.identifiers?.map((i) => (
-          <Row key={`${i.type}-${i.value}`} icon="hash" label={i.type} value={i.value} colors={colors} />
-        ))}
+        <Row icon="phone" label="Telefone" value={c?.telefone ?? "—"} colors={colors} />
+        <Row icon="mail" label="Email" value={c?.email ?? "—"} colors={colors} />
+        {c?.identifiers?.map((i, idx) => {
+          const label = i.channel ?? i.type ?? "id";
+          const value = i.value ?? i.identifier ?? "";
+          return <Row key={`${label}-${value}-${idx}`} icon="hash" label={label} value={value} colors={colors} />;
+        })}
       </View>
 
       {!!c?.notes && (
@@ -117,7 +136,9 @@ export default function ContactScreen() {
                 {m.body ?? m.text ?? m.content ?? ""}
               </Text>
               <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
-                {m.channel ?? "msg"} · {m.createdAt ? new Date(m.createdAt).toLocaleString() : ""}
+                {m.channel ?? "msg"}
+                {m.direction === "outgoing" ? " · enviada" : m.direction === "incoming" ? " · recebida" : ""}
+                {(m.createdAt ?? m.timestamp) ? ` · ${new Date(m.createdAt ?? m.timestamp!).toLocaleString()}` : ""}
               </Text>
             </View>
           </View>
