@@ -1199,7 +1199,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectStatusItems(): Promise<ProjectStatusItem[]> {
-    return db.select().from(projectStatusItems).orderBy(asc(projectStatusItems.sortOrder), asc(projectStatusItems.createdAt));
+    // Ordem: prioridade DESC (alta → media → baixa), depois data de entrada ASC
+    const items = await db.select().from(projectStatusItems);
+    const priorityWeight: Record<string, number> = { alta: 3, media: 2, baixa: 1 };
+    return items.sort((a, b) => {
+      const pw = (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0);
+      if (pw !== 0) return pw;
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return ta - tb;
+    });
   }
 
   async getProjectStatusItem(id: string): Promise<ProjectStatusItem | undefined> {
@@ -1208,13 +1217,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProjectStatusItem(data: InsertProjectStatusItem): Promise<ProjectStatusItem> {
-    const [item] = await db.insert(projectStatusItems).values(data).returning();
+    const completedAt = data.status === "concluido" ? new Date() : null;
+    const [item] = await db.insert(projectStatusItems).values({ ...data, completedAt } as any).returning();
     return item;
   }
 
   async updateProjectStatusItem(id: string, data: UpdateProjectStatusItem): Promise<ProjectStatusItem | undefined> {
+    // Auto-define completedAt: setar quando virar concluído, limpar se sair de concluído
+    const patch: any = { ...data, updatedAt: new Date() };
+    if (data.status !== undefined) {
+      const [current] = await db.select().from(projectStatusItems).where(eq(projectStatusItems.id, id)).limit(1);
+      if (current) {
+        if (data.status === "concluido" && current.status !== "concluido") {
+          patch.completedAt = new Date();
+          if (data.progress === undefined) patch.progress = 100;
+        } else if (data.status !== "concluido" && current.status === "concluido") {
+          patch.completedAt = null;
+        }
+      }
+    }
     const [item] = await db.update(projectStatusItems)
-      .set({ ...data, updatedAt: new Date() })
+      .set(patch)
       .where(eq(projectStatusItems.id, id))
       .returning();
     return item;

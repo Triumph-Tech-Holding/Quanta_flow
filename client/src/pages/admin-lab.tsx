@@ -31,7 +31,16 @@ interface ProjectStatusItem {
   progress: number;
   notes?: string | null;
   sortOrder: number;
+  createdAt?: string | Date | null;
+  completedAt?: string | Date | null;
 }
+
+const fmtDate = (d?: string | Date | null) => {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+};
 
 type TtsVoice = "alloy" | "echo" | "fable";
 
@@ -466,9 +475,11 @@ export default function AdminLab() {
                             <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-12">ID</th>
                             <th className="border border-border px-2 py-2 text-left font-semibold text-xs">Feature</th>
                             <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Categoria</th>
-                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20">Prioridade</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20" title="Ordenado por prioridade decrescente">Prioridade ↓</th>
                             <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-24">Status</th>
                             <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Progresso</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20">Entrada</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20">Conclusão</th>
                             <th className="border border-border px-2 py-2 text-center font-semibold text-xs w-16">Ações</th>
                           </tr>
                         </thead>
@@ -497,6 +508,8 @@ export default function AdminLab() {
                               <td className="border border-border px-2 py-1">
                                 <input type="number" min={0} max={100} className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.progress} onChange={e => setNewStatusValues(v => ({ ...v, progress: Number(e.target.value) }))} />
                               </td>
+                              <td className="border border-border px-2 py-1 text-xs text-muted-foreground italic">auto</td>
+                              <td className="border border-border px-2 py-1 text-xs text-muted-foreground italic">—</td>
                               <td className="border border-border px-2 py-1 text-center">
                                 <div className="flex gap-1 justify-center">
                                   <button onClick={() => createStatusMutation.mutate(newStatusValues)} className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900" data-testid="button-save-new-feature"><Check className="w-3 h-3 text-green-600" /></button>
@@ -540,6 +553,16 @@ export default function AdminLab() {
                                       <Progress value={item.progress} className="h-1.5 flex-1" />
                                       <span className="text-xs text-muted-foreground w-8 shrink-0">{item.progress}%</span>
                                     </div>
+                                  )}
+                                </td>
+                                <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground tabular-nums" data-testid={`date-created-${item.featureId}`}>
+                                  {fmtDate(item.createdAt)}
+                                </td>
+                                <td className="border border-border px-2 py-1.5 text-xs tabular-nums" data-testid={`date-completed-${item.featureId}`}>
+                                  {item.completedAt ? (
+                                    <span className="text-green-600 dark:text-green-400 font-medium">{fmtDate(item.completedAt)}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
                                   )}
                                 </td>
                                 <td className="border border-border px-2 py-1.5 text-center">

@@ -410,6 +410,8 @@ async function migrateProjectStatusItems() {
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
+      ALTER TABLE project_status_items ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;
+      UPDATE project_status_items SET completed_at = updated_at WHERE status = 'concluido' AND completed_at IS NULL;
     `);
     log("Project status items migration OK", "seed");
   } catch (err) {

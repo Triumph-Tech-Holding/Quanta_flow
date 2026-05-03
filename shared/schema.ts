@@ -847,10 +847,11 @@ export const projectStatusItems = pgTable("project_status_items", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
 });
 
 export const insertProjectStatusItemSchema = createInsertSchema(projectStatusItems).omit({
-  id: true, createdAt: true, updatedAt: true,
+  id: true, createdAt: true, updatedAt: true, completedAt: true,
 }).extend({
   featureId: z.string().min(1),
   featureName: z.string().min(1),
