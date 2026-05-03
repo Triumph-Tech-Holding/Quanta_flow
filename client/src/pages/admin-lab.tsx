@@ -229,6 +229,9 @@ export default function AdminLab() {
   const [statusFilter, setStatusFilter] = useState<"todos" | "pendente" | "em_curso" | "pausado" | "concluido">("todos");
   const [priorityFilter, setPriorityFilter] = useState<"todas" | "alta" | "media" | "baixa">("todas");
 
+  // --- Detalhe da Feature (modal de história) ---
+  const [detailFeature, setDetailFeature] = useState<ProjectStatusItem | null>(null);
+
   // --- Gerador de Backlog com IA ---
   const [aiOpen, setAiOpen] = useState(false);
   const [aiIdea, setAiIdea] = useState("");
@@ -584,7 +587,16 @@ export default function AdminLab() {
                                 <td className="border border-border px-2 py-1.5">
                                   {isEditing ? (
                                     <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.featureName} onChange={e => setEditStatusValues(v => ({ ...v, featureName: e.target.value }))} />
-                                  ) : (<span className="text-xs font-medium">{item.featureName}</span>)}
+                                  ) : (
+                                    <button
+                                      onClick={() => setDetailFeature(item)}
+                                      className="text-xs font-medium text-left hover:text-primary hover:underline transition cursor-pointer"
+                                      data-testid={`button-feature-detail-${item.featureId}`}
+                                      title="Ver história e detalhes"
+                                    >
+                                      {item.featureName}
+                                    </button>
+                                  )}
                                 </td>
                                 <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground">{item.category}</td>
                                 <td className="border border-border px-2 py-1.5">
@@ -651,6 +663,120 @@ export default function AdminLab() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Dialog: Detalhe / História da Feature */}
+              <Dialog open={!!detailFeature} onOpenChange={(o) => { if (!o) setDetailFeature(null); }}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  {detailFeature && (() => {
+                    const f = detailFeature;
+                    const priorityColor = f.priority === "alta" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" : f.priority === "media" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+                    const statusColor = f.status === "concluido" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" : f.status === "em_curso" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : f.status === "pausado" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" : "bg-muted text-muted-foreground";
+                    const statusLabel = f.status === "concluido" ? "Concluído" : f.status === "em_curso" ? "Em curso" : f.status === "pausado" ? "Pausado" : "Pendente";
+                    const priorityLabel = f.priority === "alta" ? "Alta" : f.priority === "media" ? "Média" : "Baixa";
+
+                    // Parse notes: "Sprint N\n\n<summary>\n\nUser Stories:\n1. ..."
+                    const notes = (f.notes || "").trim();
+                    const sprintMatch = /^Sprint\s+(\d+)/i.exec(notes);
+                    const sprint = sprintMatch ? sprintMatch[1] : null;
+                    const storiesIdx = notes.indexOf("User Stories:");
+                    const beforeStories = storiesIdx >= 0 ? notes.slice(0, storiesIdx).trim() : notes;
+                    const summary = beforeStories.replace(/^Sprint\s+\d+\s*/i, "").trim();
+                    const storiesText = storiesIdx >= 0 ? notes.slice(storiesIdx + "User Stories:".length).trim() : "";
+                    const storyLines = storiesText.split("\n").map(s => s.trim()).filter(s => s.length > 0);
+
+                    const renderInlineMd = (s: string) => {
+                      const parts = s.split(/(\*\*[^*]+\*\*)/g);
+                      return parts.map((part, idx) =>
+                        part.startsWith("**") && part.endsWith("**")
+                          ? <strong key={idx} className="text-foreground">{part.slice(2, -2)}</strong>
+                          : <span key={idx}>{part}</span>
+                      );
+                    };
+
+                    return (
+                      <>
+                        <DialogHeader>
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-mono text-muted-foreground">{f.featureId}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${priorityColor}`}>{priorityLabel}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusColor}`}>{statusLabel}</span>
+                                {sprint && <Badge variant="outline" className="text-[10px]">Sprint {sprint}</Badge>}
+                                <Badge variant="outline" className="text-[10px]">{f.category}</Badge>
+                              </div>
+                              <DialogTitle className="text-lg">{f.featureName}</DialogTitle>
+                            </div>
+                          </div>
+                        </DialogHeader>
+
+                        <div className="space-y-4 mt-2">
+                          {/* Progresso */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Progresso</span>
+                              <span className="font-medium">{f.progress}%</span>
+                            </div>
+                            <Progress value={f.progress} className="h-2" />
+                          </div>
+
+                          {/* Resumo */}
+                          {summary && (
+                            <div className="space-y-1">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resumo</h4>
+                              <p className="text-sm leading-relaxed">{summary}</p>
+                            </div>
+                          )}
+
+                          {/* User Stories */}
+                          {storyLines.length > 0 ? (
+                            <div className="space-y-2">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">User Stories</h4>
+                              <ul className="space-y-2">
+                                {storyLines.map((line, idx) => (
+                                  <li key={idx} className="text-sm border-l-2 border-primary/40 pl-3 py-1 bg-muted/30 rounded-r leading-relaxed">
+                                    {renderInlineMd(line.replace(/^\d+\.\s*/, ""))}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : !summary && (
+                            <div className="text-sm text-muted-foreground italic border border-dashed border-border rounded-md p-4 text-center">
+                              Esta feature ainda não tem história registrada. Use o botão "Gerar Backlog com IA" para criar features com user stories automaticamente, ou edite a feature e adicione notas.
+                            </div>
+                          )}
+
+                          {/* Datas */}
+                          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border text-xs">
+                            <div>
+                              <div className="text-muted-foreground">Data de entrada</div>
+                              <div className="font-medium tabular-nums">{fmtDate(f.createdAt)}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Data de conclusão</div>
+                              <div className={`font-medium tabular-nums ${f.completedAt ? "text-green-600 dark:text-green-400" : ""}`}>
+                                {f.completedAt ? fmtDate(f.completedAt) : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <DialogFooter className="gap-2 mt-4">
+                          <Button variant="ghost" onClick={() => setDetailFeature(null)}>Fechar</Button>
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => { setEditingStatusId(f.id); setEditStatusValues({}); setDetailFeature(null); }}
+                            data-testid="button-detail-edit"
+                          >
+                            <Pencil className="w-4 h-4" /> Editar
+                          </Button>
+                        </DialogFooter>
+                      </>
+                    );
+                  })()}
+                </DialogContent>
+              </Dialog>
 
               {/* Dialog: Gerador de Backlog com IA */}
               <Dialog open={aiOpen} onOpenChange={(o) => { setAiOpen(o); if (!o) { setAiPreview(null); } }}>
