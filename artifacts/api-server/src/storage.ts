@@ -379,7 +379,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateUnifiedContact(id: string, data: UpdateUnifiedContact): Promise<UnifiedContact | undefined> {
     const [updated] = await db.update(unifiedContacts)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...(data as Record<string, unknown>), updatedAt: new Date() })
       .where(eq(unifiedContacts.id, id))
       .returning();
     return updated;

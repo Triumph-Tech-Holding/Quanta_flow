@@ -305,7 +305,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 // ==================== OMNICHANNEL CRM ====================
 
 export const channelTypeEnum = pgEnum("channel_type", [
-  "whatsapp", "instagram", "facebook", "linkedin", "youtube", "tiktok", "x", "email", "sms"
+  "whatsapp", "telegram", "instagram", "facebook", "linkedin", "youtube", "tiktok", "x", "email", "sms"
 ]);
 
 export const pipelineStageEnum = pgEnum("pipeline_stage", [

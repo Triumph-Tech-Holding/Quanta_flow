@@ -6,4 +6,5 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export const db = drizzle(pool, { schema });
+// drizzle-orm 0.36+ overloads conflict between connectionString and config object — cast to satisfy
+export const db = drizzle(pool as never, { schema });

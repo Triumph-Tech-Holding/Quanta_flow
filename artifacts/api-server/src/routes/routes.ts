@@ -10,7 +10,7 @@ import fs from "fs";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 import { storage, workspaceStorage } from "../storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, unifiedContacts } from "@workspace/db";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, insertDocumentationVersionSchema, unifiedContacts } from "@workspace/db";
 import OpenAI from "openai";
 import { z } from "zod/v4";
 import { createEvolutionService } from "../services/evolutionService";
@@ -38,6 +38,7 @@ if (!process.env.SESSION_SECRET) {
 const JWT_EXPIRATION = "24h";
 
 interface JwtPayload {
+  tipoAtor?: string;
   userId: string;
   email: string;
   tokenVersion: number;
@@ -92,6 +93,7 @@ async function authenticateToken(req: AuthRequest, res: Response, next: NextFunc
   } catch (error) {
     return res.status(403).json({ message: "Token inválido ou expirado" });
   }
+    return;
 }
 
 function getWebhookUrl(provider: "zapi" | "evolution" = "zapi"): string {
@@ -242,17 +244,18 @@ export async function registerRoutes(
 
   app.get("/api/public/flow/:token", async (req: Request, res: Response) => {
     try {
-      const flow = await storage.getFlowByShareToken(req.params.token);
+      const flow = await storage.getFlowByShareToken(String(req.params.token));
       if (!flow) return res.status(404).json({ message: "Fluxo não encontrado" });
       res.json({ id: flow.id, name: flow.name, description: flow.initialMessage || "", isActive: flow.isActive });
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar fluxo" });
     }
+      return;
   });
 
   app.post("/api/public/flow/:token/enroll", async (req: Request, res: Response) => {
     try {
-      const flow = await storage.getFlowByShareToken(req.params.token);
+      const flow = await storage.getFlowByShareToken(String(req.params.token));
       if (!flow) return res.status(404).json({ message: "Fluxo não encontrado" });
       if (!flow.isActive) return res.status(400).json({ message: "Fluxo inativo" });
       const { name, phone } = req.body;
@@ -263,7 +266,6 @@ export async function registerRoutes(
           userId: flow.userId,
           nome: name || phone,
           telefone: phone,
-          channel: "whatsapp",
           activeFlowId: flow.id,
         });
       } else {
@@ -274,21 +276,23 @@ export async function registerRoutes(
       console.error("Error enrolling in flow:", error);
       res.status(500).json({ message: "Erro ao inscrever no fluxo" });
     }
+      return;
   });
 
   app.get("/api/public/campaign/:token", async (req: Request, res: Response) => {
     try {
-      const campaign = await storage.getCampaignByShareToken(req.params.token);
+      const campaign = await storage.getCampaignByShareToken(String(req.params.token));
       if (!campaign) return res.status(404).json({ message: "Campanha não encontrada" });
       res.json({ id: campaign.id, name: campaign.name, description: campaign.description || "", status: campaign.status });
     } catch (error) {
       res.status(500).json({ message: "Erro ao buscar campanha" });
     }
+      return;
   });
 
   app.post("/api/public/campaign/:token/enroll", async (req: Request, res: Response) => {
     try {
-      const campaign = await storage.getCampaignByShareToken(req.params.token);
+      const campaign = await storage.getCampaignByShareToken(String(req.params.token));
       if (!campaign) return res.status(404).json({ message: "Campanha não encontrada" });
       if (campaign.status === "completed") return res.status(400).json({ message: "Campanha encerrada" });
       const { name, phone } = req.body;
@@ -299,14 +303,13 @@ export async function registerRoutes(
           userId: campaign.userId,
           nome: name || phone,
           telefone: phone,
-          channel: "whatsapp",
         });
       }
       const { db } = await import("../db");
       const { campaignDeliveries } = await import("@workspace/db");
-      const { v4: uuidv4 } = await import("uuid");
+      const { randomUUID } = await import("node:crypto");
       await db.insert(campaignDeliveries).values({
-        id: uuidv4(),
+        id: randomUUID(),
         campaignId: campaign.id,
         contactId: contact.id,
         channel: "whatsapp",
@@ -318,6 +321,7 @@ export async function registerRoutes(
       console.error("Error enrolling in campaign:", error);
       res.status(500).json({ message: "Erro ao inscrever na campanha" });
     }
+      return;
   });
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
@@ -350,11 +354,12 @@ export async function registerRoutes(
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0]?.message || "Dados inválidos" });
+        return res.status(400).json({ message: error.issues[0]?.message || "Dados inválidos" });
       }
       console.error("Register error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
@@ -391,11 +396,12 @@ export async function registerRoutes(
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0]?.message || "Dados inválidos" });
+        return res.status(400).json({ message: error.issues[0]?.message || "Dados inválidos" });
       }
       console.error("Login error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.get("/api/auth/me", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -412,6 +418,7 @@ export async function registerRoutes(
       console.error("Get user error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.post("/api/auth/change-password", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -467,6 +474,7 @@ export async function registerRoutes(
       console.error("Change password error:", error);
       res.status(500).json({ message: "Erro ao alterar senha" });
     }
+      return;
   });
 
   app.get("/api/leads", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -490,11 +498,12 @@ export async function registerRoutes(
       res.status(201).json(lead);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0]?.message || "Dados inválidos" });
+        return res.status(400).json({ message: error.issues[0]?.message || "Dados inválidos" });
       }
       console.error("Create lead error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.patch("/api/leads/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -515,11 +524,12 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0]?.message || "Dados inválidos" });
+        return res.status(400).json({ message: error.issues[0]?.message || "Dados inválidos" });
       }
       console.error("Update lead error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.delete("/api/leads/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -541,6 +551,7 @@ export async function registerRoutes(
       console.error("Delete lead error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.get("/api/api-configs", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -572,11 +583,12 @@ export async function registerRoutes(
       res.status(201).json(safeConfig);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0]?.message || "Dados inválidos" });
+        return res.status(400).json({ message: error.issues[0]?.message || "Dados inválidos" });
       }
       console.error("Create api config error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.delete("/api/api-configs/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -596,6 +608,7 @@ export async function registerRoutes(
       console.error("Delete api config error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.post("/api/evolution/connect", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -648,6 +661,7 @@ export async function registerRoutes(
       console.error("Evolution connect error:", error);
       res.status(500).json({ message: "Erro ao conectar Evolution API" });
     }
+      return;
   });
 
   app.get("/api/evolution/status", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -676,6 +690,7 @@ export async function registerRoutes(
       console.error("Evolution status error:", error);
       res.status(500).json({ message: "Erro ao verificar status" });
     }
+      return;
   });
 
   app.get("/api/evolution/qrcode", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -699,6 +714,7 @@ export async function registerRoutes(
       console.error("Evolution QR code error:", error);
       res.status(500).json({ message: "Erro ao obter QR Code" });
     }
+      return;
   });
 
   app.post("/api/evolution/disconnect", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -794,6 +810,7 @@ export async function registerRoutes(
       console.error("Z-API connect error:", error);
       res.status(500).json({ message: "Erro ao conectar Z-API" });
     }
+      return;
   });
 
   app.get("/api/zapi/status", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -820,7 +837,7 @@ export async function registerRoutes(
         return res.json({ status: "disconnected", instanceName: config.instanceName });
       }
 
-      const statusData = await response.json();
+      const statusData = (await response.json()) as { connected?: boolean };
       const status = statusData.connected ? "connected" : "disconnected";
 
       if (config.status !== status) {
@@ -836,6 +853,7 @@ export async function registerRoutes(
       console.error("Z-API status error:", error);
       res.json({ status: "disconnected" });
     }
+      return;
   });
 
   app.post("/api/zapi/disconnect", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -885,6 +903,7 @@ export async function registerRoutes(
       console.error("Z-API refresh webhooks error:", error);
       res.status(500).json({ message: "Erro ao atualizar webhooks" });
     }
+      return;
   });
 
   // ─── WhatsApp Provider Management ─────────────────────────────────────────
@@ -923,6 +942,7 @@ export async function registerRoutes(
       console.error("Switch provider error:", error);
       res.status(500).json({ message: "Erro ao trocar provedor" });
     }
+      return;
   });
 
   // ─── Baileys (WhatsApp Local) Management ───────────────────────────────────
@@ -983,6 +1003,7 @@ export async function registerRoutes(
       console.error("Get QR code error:", error);
       res.status(500).json({ message: "Erro ao buscar QR Code" });
     }
+      return;
   });
 
   // ─── Agent Assignment ──────────────────────────────────────────────────────
@@ -1011,6 +1032,7 @@ export async function registerRoutes(
       console.error("Assign contact error:", error);
       res.status(500).json({ message: "Erro ao atribuir contato" });
     }
+      return;
   });
 
   app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1038,6 +1060,7 @@ export async function registerRoutes(
       console.error("Get messages error:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
+      return;
   });
 
   app.post("/api/conversations/:id/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1108,6 +1131,7 @@ export async function registerRoutes(
       console.error("Send message error:", error);
       res.status(500).json({ message: "Erro ao enviar mensagem" });
     }
+      return;
   });
 
   app.get("/api/admin/settings", authenticateToken, checkPermission("view_settings"), async (req: AuthRequest, res: Response) => {
@@ -1132,6 +1156,7 @@ export async function registerRoutes(
       console.error("Get setting value error:", error);
       res.status(500).json({ message: "Erro ao buscar valor" });
     }
+      return;
   });
 
   app.post("/api/admin/settings", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
@@ -1162,6 +1187,7 @@ export async function registerRoutes(
       console.error("Create setting error:", error);
       res.status(500).json({ message: "Erro ao criar configuração" });
     }
+      return;
   });
 
   app.put("/api/admin/settings/:key", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
@@ -1190,6 +1216,7 @@ export async function registerRoutes(
       console.error("Update setting error:", error);
       res.status(500).json({ message: "Erro ao atualizar configuração" });
     }
+      return;
   });
 
   app.delete("/api/admin/settings/:key", authenticateToken, checkPermission("delete_settings"), async (req: AuthRequest, res: Response) => {
@@ -1212,6 +1239,7 @@ export async function registerRoutes(
       console.error("Delete setting error:", error);
       res.status(500).json({ message: "Erro ao deletar configuração" });
     }
+      return;
   });
 
   app.post("/api/admin/settings/refresh", authenticateToken, checkPermission("edit_settings"), async (req: AuthRequest, res: Response) => {
@@ -1332,6 +1360,7 @@ export async function registerRoutes(
       console.error("Update user error:", error);
       res.status(500).json({ message: "Erro ao atualizar usuário" });
     }
+      return;
   });
 
   app.post("/api/admin/users/:id/reset-password", authenticateToken, checkPermission("edit_users"), async (req: AuthRequest, res: Response) => {
@@ -1370,6 +1399,7 @@ export async function registerRoutes(
       console.error("Reset password error:", error);
       res.status(500).json({ message: "Erro ao resetar senha" });
     }
+      return;
   });
 
   app.post("/api/admin/users", authenticateToken, checkPermission("create_users"), async (req: AuthRequest, res: Response) => {
@@ -1434,6 +1464,7 @@ export async function registerRoutes(
       console.error("Create user error:", error);
       res.status(500).json({ message: "Erro ao criar usuário" });
     }
+      return;
   });
 
   app.get("/api/admin/audit-logs", authenticateToken, checkPermission("view_audit_logs"), async (req: AuthRequest, res: Response) => {
@@ -1540,6 +1571,7 @@ export async function registerRoutes(
       console.error("Get contact error:", error);
       res.status(500).json({ message: "Erro ao buscar contato" });
     }
+      return;
   });
 
   app.post("/api/crm/contacts", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1560,11 +1592,12 @@ export async function registerRoutes(
       res.status(201).json(contact);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Create contact error:", error);
       res.status(500).json({ message: "Erro ao criar contato" });
     }
+      return;
   });
 
   app.patch("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1577,11 +1610,12 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Update contact error:", error);
       res.status(500).json({ message: "Erro ao atualizar contato" });
     }
+      return;
   });
 
   app.patch("/api/crm/contacts/:id/stage", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1599,6 +1633,7 @@ export async function registerRoutes(
       console.error("Update stage error:", error);
       res.status(500).json({ message: "Erro ao atualizar estágio" });
     }
+      return;
   });
 
   app.patch("/api/crm/contacts/:id/temperature", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1616,6 +1651,7 @@ export async function registerRoutes(
       console.error("Update temperature error:", error);
       res.status(500).json({ message: "Erro ao atualizar temperatura" });
     }
+      return;
   });
 
   app.delete("/api/crm/contacts/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1629,6 +1665,7 @@ export async function registerRoutes(
       console.error("Delete contact error:", error);
       res.status(500).json({ message: "Erro ao remover contato" });
     }
+      return;
   });
 
   app.post("/api/crm/contacts/:id/identifiers", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1641,11 +1678,12 @@ export async function registerRoutes(
       res.status(201).json(identifier);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Create identifier error:", error);
       res.status(500).json({ message: "Erro ao criar identificador" });
     }
+      return;
   });
 
   app.get("/api/crm/dashboard", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1698,6 +1736,7 @@ export async function registerRoutes(
       console.error("Error triggering flow:", error);
       res.status(500).json({ message: "Erro ao enviar fluxo" });
     }
+      return;
   });
 
   // ==================== AI INTENT DETECTION ====================
@@ -1725,6 +1764,7 @@ export async function registerRoutes(
       console.error("Intent detection error:", error);
       res.status(500).json({ message: "Erro na detecção de intenção" });
     }
+      return;
   });
 
   // ==================== QUICK REPLIES ====================
@@ -1746,11 +1786,12 @@ export async function registerRoutes(
       res.status(201).json(reply);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Error creating quick reply:", error);
       res.status(500).json({ message: "Erro ao criar resposta rápida" });
     }
+      return;
   });
 
   app.put("/api/quick-replies/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1765,11 +1806,12 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Error updating quick reply:", error);
       res.status(500).json({ message: "Erro ao atualizar resposta rápida" });
     }
+      return;
   });
 
   app.delete("/api/quick-replies/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1785,6 +1827,7 @@ export async function registerRoutes(
       console.error("Error deleting quick reply:", error);
       res.status(500).json({ message: "Erro ao excluir resposta rápida" });
     }
+      return;
   });
 
   // ==================== AUTOMATION FLOWS ====================
@@ -1871,6 +1914,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/flows/generate]", err);
       res.status(500).json({ message: "Erro ao gerar fluxo com IA" });
     }
+      return;
   });
 
   app.post("/api/flows/tts", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1901,6 +1945,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/flows/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
     }
+      return;
   });
 
   app.get("/api/flows/tts/file/:filename", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1908,7 +1953,7 @@ Return ONLY the JSON array, no markdown.`,
       const fs = await import("fs");
       const path = await import("path");
       const os = await import("os");
-      const basename = path.default.basename(req.params.filename);
+      const basename = path.default.basename(String(req.params.filename));
       if (!/^tts_\d+\.mp3$/.test(basename)) {
         return res.status(400).json({ message: "Nome de arquivo inválido" });
       }
@@ -1919,6 +1964,7 @@ Return ONLY the JSON array, no markdown.`,
     } catch {
       res.status(500).json({ message: "Erro ao servir áudio" });
     }
+      return;
   });
 
   app.post("/api/flows/image-gen", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1938,12 +1984,13 @@ Return ONLY the JSON array, no markdown.`,
         n: 1,
         size: "1024x1024",
       });
-      const imageUrl = imageResponse.data[0]?.url || null;
+      const imageUrl = imageResponse.data?.[0]?.url || null;
       res.json({ imageUrl });
     } catch (err) {
       console.error("[POST /api/flows/image-gen]", err);
       res.status(500).json({ message: "Erro ao gerar imagem" });
     }
+      return;
   });
 
   app.get("/api/admin/flows/templates", authenticateToken, checkRole(["super_admin", "admin"]), async (_req: AuthRequest, res: Response) => {
@@ -1959,7 +2006,7 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/automation-flows/:id/export", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const flow = await storage.getAutomationFlow(req.params.id);
+      const flow = await storage.getAutomationFlow(String(req.params.id));
       if (!flow || flow.userId !== req.user.userId) {
         return res.status(404).json({ message: "Fluxo não encontrado" });
       }
@@ -1968,6 +2015,7 @@ Return ONLY the JSON array, no markdown.`,
     } catch (err) {
       res.status(500).json({ message: "Erro ao exportar fluxo" });
     }
+      return;
   });
 
   app.post("/api/automation-flows/import", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1987,10 +2035,11 @@ Return ONLY the JSON array, no markdown.`,
       res.status(201).json(flow);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: err.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: err.issues });
       }
       res.status(500).json({ message: "Erro ao importar fluxo" });
     }
+      return;
   });
 
   // ==================== AUTOMATION FLOWS (LEGACY + NEW) ====================
@@ -2032,11 +2081,12 @@ Return ONLY the JSON array, no markdown.`,
       res.status(201).json(flow);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Error creating automation flow:", error);
       res.status(500).json({ message: "Erro ao criar fluxo de automação" });
     }
+      return;
   });
 
   app.put("/api/automation-flows/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2071,11 +2121,12 @@ Return ONLY the JSON array, no markdown.`,
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Error updating automation flow:", error);
       res.status(500).json({ message: "Erro ao atualizar fluxo de automação" });
     }
+      return;
   });
 
   app.delete("/api/automation-flows/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2091,6 +2142,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("Error deleting automation flow:", error);
       res.status(500).json({ message: "Erro ao excluir fluxo de automação" });
     }
+      return;
   });
 
   // ==================== BRANDING CONFIG ====================
@@ -2112,11 +2164,12 @@ Return ONLY the JSON array, no markdown.`,
       res.json(config);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+        return res.status(400).json({ message: "Dados inválidos", errors: error.issues });
       }
       console.error("Error updating branding config:", error);
       res.status(500).json({ message: "Erro ao atualizar branding" });
     }
+      return;
   });
 
   // ==================== FILE UPLOAD ====================
@@ -2163,6 +2216,7 @@ Return ONLY the JSON array, no markdown.`,
       }
       const url = `/uploads/${req.file.filename}`;
       res.json({ url, filename: req.file.filename });
+        return;
     });
   });
 
@@ -2270,6 +2324,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("Z-API webhook error:", error);
       return res.status(200).json({ received: true, error: "Processing error" });
     }
+      return;
   });
 
   // ---- Evolution API Webhook (legacy) ----
@@ -2378,6 +2433,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("Webhook error:", error);
       res.status(500).json({ message: "Webhook error" });
     }
+      return;
   });
 
   // Auto-refresh Z-API webhook URLs ONLY in production (when WEBHOOK_BASE_URL is set)
@@ -2436,7 +2492,7 @@ Return ONLY the JSON array, no markdown.`,
 
   app.post("/api/queue/:contactId/assign", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { contactId } = req.params;
+      const contactId = String(req.params.contactId);
       const { agentId } = req.body;
       const targetAgent = agentId || req.user!.userId;
       const contact = await storage.assignContactToAgent(contactId, targetAgent);
@@ -2445,17 +2501,19 @@ Return ONLY the JSON array, no markdown.`,
     } catch (error) {
       res.status(500).json({ message: "Erro ao atribuir agente" });
     }
+      return;
   });
 
   app.post("/api/queue/:contactId/resolve", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { contactId } = req.params;
+      const contactId = String(req.params.contactId);
       const contact = await storage.resolveContact(contactId, req.user!.userId);
       if (!contact) return res.status(404).json({ message: "Contato não encontrado" });
       res.json(contact);
     } catch (error) {
       res.status(500).json({ message: "Erro ao resolver atendimento" });
     }
+      return;
   });
 
   // ==================== Learning Tracks Endpoints ====================
@@ -2472,34 +2530,37 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/learning-tracks", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = insertLearningTrackSchema.safeParse({ ...req.body, userId: req.user!.userId });
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
       const track = await storage.createLearningTrack(parsed.data);
       res.status(201).json(track);
     } catch (error) {
       res.status(500).json({ message: "Erro ao criar trilha" });
     }
+      return;
   });
 
   app.put("/api/learning-tracks/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = updateLearningTrackSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
-      const track = await storage.updateLearningTrack(req.params.id, parsed.data);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
+      const track = await storage.updateLearningTrack(String(req.params.id), parsed.data);
       if (!track) return res.status(404).json({ message: "Trilha não encontrada" });
       res.json(track);
     } catch (error) {
       res.status(500).json({ message: "Erro ao atualizar trilha" });
     }
+      return;
   });
 
   app.delete("/api/learning-tracks/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const deleted = await storage.deleteLearningTrack(req.params.id);
+      const deleted = await storage.deleteLearningTrack(String(req.params.id));
       if (!deleted) return res.status(404).json({ message: "Trilha não encontrada" });
       res.json({ message: "Trilha removida" });
     } catch (error) {
       res.status(500).json({ message: "Erro ao remover trilha" });
     }
+      return;
   });
 
   // ─── Health Check ──────────────────────────────────────────────────────────
@@ -2553,6 +2614,7 @@ Return ONLY the JSON array, no markdown.`,
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao mover pipeline", error: error?.message });
     }
+      return;
   });
 
   app.post("/api/brain/actions/assign-agent", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2571,6 +2633,7 @@ Return ONLY the JSON array, no markdown.`,
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao atribuir agente", error: error?.message });
     }
+      return;
   });
 
   app.post("/api/brain/actions/dispatch-microlearning", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2601,6 +2664,7 @@ Return ONLY the JSON array, no markdown.`,
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao disparar microlearning", error: error?.message });
     }
+      return;
   });
 
   app.post("/api/brain/scan-now", authenticateToken, async (_req: AuthRequest, res: Response) => {
@@ -2616,7 +2680,7 @@ Return ONLY the JSON array, no markdown.`,
   app.get("/api/brain/insights/:contactId/prediction", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const { iaBrainService } = await import("../services/iaBrainService");
-      const prediction = await iaBrainService.predictConversion(req.params.contactId);
+      const prediction = await iaBrainService.predictConversion(String(req.params.contactId));
       res.json(prediction);
     } catch (error: any) {
       console.error("[brain] predictConversion failed:", error?.message || error);
@@ -2636,33 +2700,36 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = insertOutboundWebhookSchema.safeParse({ ...req.body, userId: req.user!.userId });
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
       const wh = await storage.createOutboundWebhook(parsed.data);
       res.status(201).json(wh);
     } catch { res.status(500).json({ message: "Erro ao criar webhook" }); }
+      return;
   });
 
   app.put("/api/webhooks/outbound/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = updateOutboundWebhookSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
-      const wh = await storage.updateOutboundWebhook(req.params.id, parsed.data);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
+      const wh = await storage.updateOutboundWebhook(String(req.params.id), parsed.data);
       if (!wh) return res.status(404).json({ message: "Webhook não encontrado" });
       res.json(wh);
     } catch { res.status(500).json({ message: "Erro ao atualizar webhook" }); }
+      return;
   });
 
   app.delete("/api/webhooks/outbound/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const deleted = await storage.deleteOutboundWebhook(req.params.id);
+      const deleted = await storage.deleteOutboundWebhook(String(req.params.id));
       if (!deleted) return res.status(404).json({ message: "Webhook não encontrado" });
       res.json({ message: "Webhook removido" });
     } catch { res.status(500).json({ message: "Erro ao remover webhook" }); }
+      return;
   });
 
   app.post("/api/webhooks/outbound/:id/test", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const wh = await storage.getOutboundWebhook(req.params.id);
+      const wh = await storage.getOutboundWebhook(String(req.params.id));
       if (!wh) return res.status(404).json({ message: "Webhook não encontrado" });
       const payload = JSON.stringify({
         event: "test",
@@ -2690,6 +2757,7 @@ Return ONLY the JSON array, no markdown.`,
         res.status(502).json({ ok: false, message: msg });
       }
     } catch { res.status(500).json({ message: "Erro ao testar webhook" }); }
+      return;
   });
 
   // ─── Google Sheets Integrations ────────────────────────────────────────────
@@ -2704,28 +2772,31 @@ Return ONLY the JSON array, no markdown.`,
   app.post("/api/integrations/sheets", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = insertSheetIntegrationSchema.safeParse({ ...req.body, userId: req.user!.userId });
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
       const si = await storage.createSheetIntegration(parsed.data);
       res.status(201).json(si);
     } catch { res.status(500).json({ message: "Erro ao criar integração" }); }
+      return;
   });
 
   app.put("/api/integrations/sheets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = updateSheetIntegrationSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
-      const si = await storage.updateSheetIntegration(req.params.id, parsed.data);
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
+      const si = await storage.updateSheetIntegration(String(req.params.id), parsed.data);
       if (!si) return res.status(404).json({ message: "Integração não encontrada" });
       res.json(si);
     } catch { res.status(500).json({ message: "Erro ao atualizar integração" }); }
+      return;
   });
 
   app.delete("/api/integrations/sheets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const deleted = await storage.deleteSheetIntegration(req.params.id);
+      const deleted = await storage.deleteSheetIntegration(String(req.params.id));
       if (!deleted) return res.status(404).json({ message: "Integração não encontrada" });
       res.json({ message: "Integração removida" });
     } catch { res.status(500).json({ message: "Erro ao remover integração" }); }
+      return;
   });
 
   app.get("/api/integrations/sheets/auth", authenticateToken, async (_req: Request, res: Response) => {
@@ -2734,6 +2805,7 @@ Return ONLY the JSON array, no markdown.`,
     const { getAuthUrl } = await import("../services/googleSheetsService");
     const redirectUri = `${process.env.WEBHOOK_BASE_URL || "http://localhost:5000"}/api/integrations/sheets/callback`;
     res.json({ authUrl: getAuthUrl(clientId, redirectUri) });
+      return;
   });
 
   app.get("/api/integrations/sheets/callback", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2746,6 +2818,7 @@ Return ONLY the JSON array, no markdown.`,
     const tokens = await exchangeCodeForToken(code, clientId, clientSecret, redirectUri);
     if (!tokens) return res.status(400).json({ message: "Falha ao trocar código por token" });
     res.json({ message: "Autenticação realizada com sucesso", token: tokens.access_token });
+      return;
   });
 
   // ─── Email Config ──────────────────────────────────────────────────────────
@@ -2756,15 +2829,17 @@ Return ONLY the JSON array, no markdown.`,
       if (!cfg) return res.json(null);
       res.json({ ...cfg, smtpPass: cfg.smtpPass ? "••••••••" : "" });
     } catch { res.status(500).json({ message: "Erro ao buscar config de e-mail" }); }
+      return;
   });
 
   app.post("/api/settings/email", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const parsed = insertEmailConfigSchema.safeParse({ ...req.body, userId: req.user!.userId });
-      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.errors });
+      if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.issues });
       const cfg = await storage.upsertEmailConfig(req.user!.userId, parsed.data);
       res.json({ ...cfg, smtpPass: "••••••••" });
     } catch { res.status(500).json({ message: "Erro ao salvar config de e-mail" }); }
+      return;
   });
 
   app.post("/api/settings/email/test", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2774,6 +2849,7 @@ Return ONLY the JSON array, no markdown.`,
       const ok = await testSmtpConnection({ smtpHost, smtpPort: Number(smtpPort) || 587, smtpUser, smtpPass });
       res.json({ ok, message: ok ? "Conexão estabelecida com sucesso" : "Falha na conexão SMTP" });
     } catch { res.status(500).json({ message: "Erro ao testar conexão" }); }
+      return;
   });
 
   // ─── Telegram Webhook ──────────────────────────────────────────────────────
@@ -2817,6 +2893,7 @@ Return ONLY the JSON array, no markdown.`,
       const result = await registerTelegramWebhook(botToken, `${baseUrl}/api/webhooks/telegram`);
       res.json({ ok: result.ok, botName: botInfo.result?.username, description: result.description });
     } catch { res.status(500).json({ message: "Erro ao conectar Telegram" }); }
+      return;
   });
 
   // ─── Instagram Webhook ────────────────────────────────────────────────────
@@ -2829,6 +2906,7 @@ Return ONLY the JSON array, no markdown.`,
     const result = verifyInstagramWebhook(mode, token, challenge, verifyToken);
     if (result) return res.status(200).send(result);
     res.status(403).send("Forbidden");
+      return;
   });
 
   app.post("/api/webhooks/instagram", async (req: Request, res: Response) => {
@@ -2867,6 +2945,7 @@ Return ONLY the JSON array, no markdown.`,
       const info = await verifyRes.json() as { name?: string; id?: string };
       res.json({ ok: true, name: info.name, id: info.id });
     } catch { res.status(500).json({ message: "Erro ao verificar token do Instagram" }); }
+      return;
   });
 
   // ─── Meta (WhatsApp Cloud API) Webhook ──────────────────────────────────────
@@ -2885,6 +2964,7 @@ Return ONLY the JSON array, no markdown.`,
     }
     log(`Meta webhook verification failed`, "meta-webhook");
     res.status(403).send("Forbidden");
+      return;
   });
 
   app.post("/api/webhooks/meta", async (req: Request, res: Response) => {
@@ -2945,11 +3025,12 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[GET /api/documentation/versions]", err);
       res.status(500).json({ message: "Erro ao buscar versões" });
     }
+      return;
   });
 
   app.get("/api/documentation/versions/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const version = await storage.getDocumentationVersion(id);
       if (!version) return res.status(404).json({ message: "Versão não encontrada" });
       res.json(version);
@@ -2957,6 +3038,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[GET /api/documentation/versions/:id]", err);
       res.status(500).json({ message: "Erro ao buscar versão" });
     }
+      return;
   });
 
   app.post("/api/documentation/versions", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -2967,32 +3049,34 @@ Return ONLY the JSON array, no markdown.`,
         ...schema,
         userId: req.user.userId,
       });
-      await logAudit(req.user.userId, "CREATE", "documentation_versions", doc.id, null, JSON.stringify(doc));
+      await db.insert(auditLogs).values({ userId: req.user.userId, action: "CREATE", resource: "documentation_versions", resourceId: doc.id, oldValue: null, newValue: JSON.stringify(doc) }).catch(() => {});
       res.json(doc);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.issues });
       console.error("[POST /api/documentation/versions]", err);
       res.status(500).json({ message: "Erro ao criar documentação" });
     }
+      return;
   });
 
   app.delete("/api/documentation/versions/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const { id } = req.params;
+      const id = String(req.params.id);
       const doc = await storage.getDocumentationVersion(id);
       if (!doc) return res.status(404).json({ message: "Versão não encontrada" });
-      if (doc.userId !== req.user.userId && !["super_admin", "admin"].includes(req.user.tipoAtor)) {
+      if (doc.userId !== req.user.userId && !["super_admin", "admin"].includes(req.user.tipoAtor ?? "")) {
         return res.status(403).json({ message: "Sem permissão" });
       }
       const deleted = await storage.deleteDocumentationVersion(id);
       if (!deleted) return res.status(404).json({ message: "Falha ao deletar" });
-      await logAudit(req.user.userId, "DELETE", "documentation_versions", id, JSON.stringify(doc), null);
+      await db.insert(auditLogs).values({ userId: req.user.userId, action: "DELETE", resource: "documentation_versions", resourceId: id, oldValue: JSON.stringify(doc), newValue: null }).catch(() => {});
       res.json({ ok: true });
     } catch (err) {
       console.error("[DELETE /api/documentation/versions/:id]", err);
       res.status(500).json({ message: "Erro ao deletar documentação" });
     }
+      return;
   });
 
   // ==================== AI Agents ====================
@@ -3011,18 +3095,20 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[GET /api/admin/agents]", err);
       res.status(500).json({ message: "Erro ao buscar agentes" });
     }
+      return;
   });
 
   app.get("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const agent = await storage.getAiAgent(req.params.id);
+      const agent = await storage.getAiAgent(String(req.params.id));
       if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
       res.json(agent);
     } catch (err) {
       console.error("[GET /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao buscar agente" });
     }
+      return;
   });
 
   app.post("/api/admin/agents", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -3032,45 +3118,48 @@ Return ONLY the JSON array, no markdown.`,
       const agent = await storage.createAiAgent(data);
       res.status(201).json(agent);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.issues });
       console.error("[POST /api/admin/agents]", err);
       res.status(500).json({ message: "Erro ao criar agente" });
     }
+      return;
   });
 
   app.put("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getAiAgent(req.params.id);
+      const existing = await storage.getAiAgent(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
       const data = updateAiAgentSchema.parse(req.body);
-      const agent = await storage.updateAiAgent(req.params.id, data);
+      const agent = await storage.updateAiAgent(String(req.params.id), data);
       res.json(agent);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.errors });
+      if (err instanceof z.ZodError) return res.status(400).json({ errors: err.issues });
       console.error("[PUT /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar agente" });
     }
+      return;
   });
 
   app.delete("/api/admin/agents/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getAiAgent(req.params.id);
+      const existing = await storage.getAiAgent(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
-      const deleted = await storage.deleteAiAgent(req.params.id);
+      const deleted = await storage.deleteAiAgent(String(req.params.id));
       if (!deleted) return res.status(404).json({ message: "Falha ao deletar" });
       res.json({ ok: true });
     } catch (err) {
       console.error("[DELETE /api/admin/agents/:id]", err);
       res.status(500).json({ message: "Erro ao deletar agente" });
     }
+      return;
   });
 
   app.post("/api/admin/agents/:id/chat", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const agent = await storage.getAiAgent(req.params.id);
+      const agent = await storage.getAiAgent(String(req.params.id));
       if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
 
       const { message, history } = req.body;
@@ -3105,12 +3194,13 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/agents/:id/chat]", err);
       res.status(500).json({ message: "Erro no chat do agente" });
     }
+      return;
   });
 
   const ttsHandler = async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const agent = await storage.getAiAgent(req.params.id);
+      const agent = await storage.getAiAgent(String(req.params.id));
       if (!agent || agent.userId !== req.user.userId) return res.status(404).json({ message: "Agente não encontrado" });
 
       const { text } = req.body;
@@ -3128,6 +3218,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/agents/:id/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS" });
     }
+      return;
   };
   app.post("/api/admin/agents/:id/tts", authenticateToken, ttsHandler);
   app.post("/api/agents/:id/tts", authenticateToken, ttsHandler);
@@ -3153,6 +3244,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/agents/generate-avatar]", err);
       res.status(500).json({ message: "Erro ao gerar avatar" });
     }
+      return;
   });
 
   // ==================== Campaigns ====================
@@ -3166,18 +3258,20 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[GET /api/admin/campaigns]", err);
       res.status(500).json({ message: "Erro ao listar campanhas" });
     }
+      return;
   });
 
   app.get("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const campaign = await storage.getCampaign(req.params.id);
+      const campaign = await storage.getCampaign(String(req.params.id));
       if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
       res.json(campaign);
     } catch (err) {
       console.error("[GET /api/admin/campaigns/:id]", err);
       res.status(500).json({ message: "Erro ao buscar campanha" });
     }
+      return;
   });
 
   app.post("/api/admin/campaigns", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -3190,39 +3284,42 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/campaigns]", err);
       res.status(400).json({ message: "Erro ao criar campanha", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.patch("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getCampaign(req.params.id);
+      const existing = await storage.getCampaign(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
       const parsed = updateCampaignSchema.parse(req.body);
-      const campaign = await storage.updateCampaign(req.params.id, parsed);
+      const campaign = await storage.updateCampaign(String(req.params.id), parsed);
       res.json(campaign);
     } catch (err) {
       console.error("[PATCH /api/admin/campaigns/:id]", err);
       res.status(400).json({ message: "Erro ao atualizar campanha", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.delete("/api/admin/campaigns/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getCampaign(req.params.id);
+      const existing = await storage.getCampaign(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
-      await storage.deleteCampaign(req.params.id);
+      await storage.deleteCampaign(String(req.params.id));
       res.json({ message: "Campanha excluída" });
     } catch (err) {
       console.error("[DELETE /api/admin/campaigns/:id]", err);
       res.status(500).json({ message: "Erro ao excluir campanha" });
     }
+      return;
   });
 
   app.post("/api/admin/campaigns/:id/start", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const campaign = await storage.getCampaign(req.params.id);
+      const campaign = await storage.getCampaign(String(req.params.id));
       if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
       if (!["draft", "paused", "scheduled"].includes(campaign.status)) {
         return res.status(400).json({ message: `Campanha com status '${campaign.status}' não pode ser iniciada` });
@@ -3264,12 +3361,13 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/campaigns/:id/start]", err);
       res.status(500).json({ message: "Erro ao iniciar campanha" });
     }
+      return;
   });
 
   app.post("/api/admin/campaigns/:id/pause", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const campaign = await storage.getCampaign(req.params.id);
+      const campaign = await storage.getCampaign(String(req.params.id));
       if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
       if (campaign.status !== "running") return res.status(400).json({ message: "Campanha não está em execução" });
       const updated = await storage.updateCampaign(campaign.id, { status: "paused" });
@@ -3278,12 +3376,13 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/campaigns/:id/pause]", err);
       res.status(500).json({ message: "Erro ao pausar campanha" });
     }
+      return;
   });
 
   app.get("/api/admin/campaigns/:id/metrics", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const campaign = await storage.getCampaign(req.params.id);
+      const campaign = await storage.getCampaign(String(req.params.id));
       if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
       const metrics = await storage.getCampaignMetrics(campaign.id);
       res.json({ campaign, metrics });
@@ -3291,6 +3390,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[GET /api/admin/campaigns/:id/metrics]", err);
       res.status(500).json({ message: "Erro ao buscar métricas" });
     }
+      return;
   });
 
   app.post("/api/admin/campaigns/preview-segment", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -3312,6 +3412,7 @@ Return ONLY the JSON array, no markdown.`,
       console.error("[POST /api/admin/campaigns/preview-segment]", err);
       res.status(500).json({ message: "Erro ao pré-visualizar segmento" });
     }
+      return;
   });
 
   app.post("/api/admin/campaigns/generate-copy", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -3404,6 +3505,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/manual-md]", err);
       res.status(500).json({ message: "Erro ao carregar manual" });
     }
+      return;
   });
 
   app.get("/api/documentation/claude-md", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -3418,6 +3520,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/claude-md]", err);
       res.status(500).json({ message: "Erro ao carregar CLAUDE.md" });
     }
+      return;
   });
 
   app.get("/api/documentation/changelog", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -3432,6 +3535,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/changelog]", err);
       res.status(500).json({ message: "Erro ao carregar CHANGELOG.md" });
     }
+      return;
   });
 
   // === Documentação Técnica do LAB (genérica, com whitelist) ===
@@ -3458,12 +3562,13 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/tech]", err);
       res.status(500).json({ message: "Erro ao listar documentos" });
     }
+      return;
   });
 
   app.get("/api/documentation/tech/:name", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const meta = TECH_DOCS[req.params.name];
+      const meta = TECH_DOCS[String(req.params.name)];
       if (!meta) return res.status(404).json({ message: "Documento não encontrado" });
       const filePath = path.join(DATA_DIR, meta.file);
       if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado no disco" });
@@ -3474,12 +3579,13 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/tech/:name]", err);
       res.status(500).json({ message: "Erro ao carregar documento" });
     }
+      return;
   });
 
   app.get("/api/documentation/tech/:name/pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const meta = TECH_DOCS[req.params.name];
+      const meta = TECH_DOCS[String(req.params.name)];
       if (!meta) return res.status(404).json({ message: "Documento não encontrado" });
       const filePath = path.join(DATA_DIR, meta.file);
       if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado no disco" });
@@ -3524,6 +3630,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[GET /api/documentation/tech/:name/pdf]", err);
       res.status(500).json({ message: "Erro ao gerar PDF" });
     }
+      return;
   });
 
   // Project Status Items CRUD
@@ -3548,6 +3655,7 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       console.error("[POST /api/admin/project-status]", err);
       res.status(500).json({ message: "Erro ao criar item" });
     }
+      return;
   });
 
   app.put("/api/admin/project-status/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -3555,24 +3663,26 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       const { updateProjectStatusItemSchema } = await import("@workspace/db");
       const parsed = updateProjectStatusItemSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
-      const item = await storage.updateProjectStatusItem(req.params.id, parsed.data);
+      const item = await storage.updateProjectStatusItem(String(req.params.id), parsed.data);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       res.json(item);
     } catch (err) {
       console.error("[PUT /api/admin/project-status/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar item" });
     }
+      return;
   });
 
   app.delete("/api/admin/project-status/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const ok = await storage.deleteProjectStatusItem(req.params.id);
+      const ok = await storage.deleteProjectStatusItem(String(req.params.id));
       if (!ok) return res.status(404).json({ message: "Item não encontrado" });
       res.json({ ok: true });
     } catch (err) {
       console.error("[DELETE /api/admin/project-status/:id]", err);
       res.status(500).json({ message: "Erro ao deletar item" });
     }
+      return;
   });
 
   // Gerar backlog (features + stories + sprints) com IA a partir de uma ideia
@@ -3691,6 +3801,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/backlog/generate]", err);
       res.status(500).json({ message: err?.message || "Erro ao gerar backlog" });
     }
+      return;
   });
 
   app.get("/api/documentation/manual-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -3753,6 +3864,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[GET /api/documentation/manual-pdf]", err);
       res.status(500).json({ message: "Erro ao gerar PDF" });
     }
+      return;
   });
 
   // ==================== Presentation PPTX ====================
@@ -3798,6 +3910,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/lab/simulate-chat]", err);
       res.status(500).json({ message: "Erro ao processar mensagem" });
     }
+      return;
   });
 
   app.post("/api/admin/lab/simulate-flow-chat", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -3914,6 +4027,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/lab/simulate-flow-chat]", err);
       res.status(500).json({ message: "Erro ao processar conversa" });
     }
+      return;
   });
 
   app.post("/api/admin/lab/simulate-flow", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4089,6 +4203,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/lab/simulate-flow]", err);
       res.status(500).json({ message: "Erro ao simular fluxo" });
     }
+      return;
   });
 
   app.post("/api/admin/lab/generate-tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4115,6 +4230,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/lab/generate-tts]", err);
       res.status(500).json({ message: "Erro ao gerar TTS" });
     }
+      return;
   });
 
   app.post("/api/admin/lab/generate-image", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4130,7 +4246,7 @@ Retorne APENAS JSON válido neste formato exato:
         size: "1024x1024",
       });
 
-      const imageUrl = imageResponse.data[0]?.url || null;
+      const imageUrl = imageResponse.data?.[0]?.url || null;
       if (!imageUrl) return res.status(500).json({ message: "Falha ao gerar imagem" });
 
       res.json({ imageUrl });
@@ -4138,6 +4254,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/lab/generate-image]", err);
       res.status(500).json({ message: "Erro ao gerar imagem" });
     }
+      return;
   });
 
   app.post("/api/admin/lab/test-whatsapp", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4171,6 +4288,7 @@ Retorne APENAS JSON válido neste formato exato:
       const errMsg = err instanceof Error ? err.message : "Verifique a integração WhatsApp em Configurações.";
       res.json({ success: false, message: `Erro: ${errMsg}` });
     }
+      return;
   });
 
   // ==================== Message Templates ====================
@@ -4184,6 +4302,7 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[GET /api/admin/templates]", err);
       res.status(500).json({ message: "Erro ao listar templates" });
     }
+      return;
   });
 
   app.post("/api/admin/templates", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4196,33 +4315,36 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/templates]", err);
       res.status(400).json({ message: "Erro ao criar template", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.patch("/api/admin/templates/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getMessageTemplate(req.params.id);
+      const existing = await storage.getMessageTemplate(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Template não encontrado" });
       const parsed = updateMessageTemplateSchema.parse(req.body);
-      const template = await storage.updateMessageTemplate(req.params.id, parsed);
+      const template = await storage.updateMessageTemplate(String(req.params.id), parsed);
       res.json(template);
     } catch (err) {
       console.error("[PATCH /api/admin/templates/:id]", err);
       res.status(400).json({ message: "Erro ao atualizar template", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.delete("/api/admin/templates/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const existing = await storage.getMessageTemplate(req.params.id);
+      const existing = await storage.getMessageTemplate(String(req.params.id));
       if (!existing || existing.userId !== req.user.userId) return res.status(404).json({ message: "Template não encontrado" });
-      await storage.deleteMessageTemplate(req.params.id);
+      await storage.deleteMessageTemplate(String(req.params.id));
       res.json({ message: "Template excluído" });
     } catch (err) {
       console.error("[DELETE /api/admin/templates/:id]", err);
       res.status(500).json({ message: "Erro ao excluir template" });
     }
+      return;
   });
 
   // ==================== Social/Ads Routes ====================
@@ -4272,7 +4394,7 @@ Retorne APENAS JSON válido neste formato exato:
 
       // Preserve existing cloningIds — only overwrite fields that were explicitly provided
       if (parsed.brand !== undefined && parsed.brand !== null) {
-        const existing = await storage.getSocialProject(req.params.id, req.user!.userId);
+        const existing = await storage.getSocialProject(String(req.params.id), req.user!.userId);
         if (!existing) return res.status(404).json({ message: "Projeto não encontrado" });
         const existingCloning = existing.brand?.cloningIds;
         const newCloning = parsed.brand.cloningIds;
@@ -4284,18 +4406,19 @@ Retorne APENAS JSON válido neste formato exato:
         };
       }
 
-      const project = await storage.updateSocialProject(req.params.id, req.user!.userId, parsed);
+      const project = await storage.updateSocialProject(String(req.params.id), req.user!.userId, parsed);
       if (!project) return res.status(404).json({ message: "Projeto não encontrado" });
       res.json(sanitizeSocialProject(project as unknown as { brand?: Record<string, unknown> | null; [key: string]: unknown }));
     } catch (err) {
       console.error("[PATCH /api/admin/social/projects/:id]", err);
       res.status(400).json({ message: "Erro ao atualizar projeto" });
     }
+      return;
   });
 
   app.delete("/api/admin/social/projects/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      await storage.deleteSocialProject(req.params.id, req.user!.userId);
+      await storage.deleteSocialProject(String(req.params.id), req.user!.userId);
       res.json({ message: "Projeto excluído" });
     } catch (err) {
       console.error("[DELETE /api/admin/social/projects/:id]", err);
@@ -4321,13 +4444,14 @@ Retorne APENAS JSON válido neste formato exato:
 
   app.get("/api/admin/social/assets/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       res.json(asset);
     } catch (err) {
       res.status(500).json({ message: "Erro ao buscar ativo" });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4345,34 +4469,37 @@ Retorne APENAS JSON válido neste formato exato:
       console.error("[POST /api/admin/social/assets]", err);
       res.status(400).json({ message: "Erro ao criar ativo" });
     }
+      return;
   });
 
   app.patch("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const existing = await storage.getContentAsset(req.params.id);
+      const existing = await storage.getContentAsset(String(req.params.id));
       if (!existing) return res.status(404).json({ message: "Ativo não encontrado" });
       if (existing.userId && existing.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const { updateContentAssetSchema } = await import("@workspace/db");
       const parsed = updateContentAssetSchema.parse(req.body);
-      const asset = await storage.updateContentAsset(req.params.id, parsed);
+      const asset = await storage.updateContentAsset(String(req.params.id), parsed);
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       res.json(asset);
     } catch (err) {
       console.error("[PATCH /api/admin/social/assets/:id]", err);
       res.status(400).json({ message: "Erro ao atualizar ativo" });
     }
+      return;
   });
 
   app.delete("/api/admin/social/assets/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const existing = await storage.getContentAsset(req.params.id);
+      const existing = await storage.getContentAsset(String(req.params.id));
       if (!existing) return res.status(404).json({ message: "Ativo não encontrado" });
       if (existing.userId && existing.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
-      await storage.deleteContentAsset(req.params.id);
+      await storage.deleteContentAsset(String(req.params.id));
       res.json({ message: "Ativo excluído" });
     } catch (err) {
       res.status(500).json({ message: "Erro ao excluir ativo" });
     }
+      return;
   });
 
   app.get("/api/admin/social/calendar", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -4471,6 +4598,7 @@ Ideia: "${idea.trim()}"`;
       console.error("[POST /api/admin/social/wizard/start]", err);
       res.status(500).json({ message: "Erro ao analisar ideia", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.post("/api/admin/social/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
@@ -4566,11 +4694,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/generate]", err);
       res.status(500).json({ message: "Erro ao gerar conteúdo", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets/:id/tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
@@ -4606,11 +4735,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/assets/:id/tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio TTS", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets/:id/elevenlabs-tts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
@@ -4664,11 +4794,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/assets/:id/elevenlabs-tts]", err);
       res.status(500).json({ message: "Erro ao gerar áudio ElevenLabs", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets/:id/heygen-video", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
@@ -4727,11 +4858,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/assets/:id/heygen-video]", err);
       res.status(500).json({ message: "Erro ao gerar vídeo HeyGen", error: err instanceof Error ? err.message : err });
     }
+      return;
   });
 
   app.get("/api/admin/social/assets/:id/heygen-status", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
@@ -4771,11 +4903,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[GET /api/admin/social/assets/:id/heygen-status]", err);
       res.status(500).json({ message: "Erro ao verificar status HeyGen" });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets/:id/generate-utm", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
 
@@ -4795,31 +4928,33 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/assets/:id/generate-utm]", err);
       res.status(500).json({ message: "Erro ao gerar link UTM" });
     }
+      return;
   });
 
   // Publication schedules
   app.get("/api/admin/social/assets/:id/schedules", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const asset = await storage.getContentAsset(req.params.id);
+      const asset = await storage.getContentAsset(String(req.params.id));
       if (!asset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (!asset.userId || asset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
-      const schedules = await storage.getPublicationSchedulesByAsset(req.params.id);
+      const schedules = await storage.getPublicationSchedulesByAsset(String(req.params.id));
       res.json(schedules);
     } catch (err) {
       console.error("[GET /api/admin/social/assets/:id/schedules]", err);
       res.status(500).json({ message: "Erro ao listar agendamentos" });
     }
+      return;
   });
 
   app.post("/api/admin/social/assets/:id/schedules", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const ownerAsset = await storage.getContentAsset(req.params.id);
+      const ownerAsset = await storage.getContentAsset(String(req.params.id));
       if (!ownerAsset) return res.status(404).json({ message: "Ativo não encontrado" });
       if (ownerAsset.userId && ownerAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
       const { platform, scheduledTime, notes } = req.body;
       if (!platform || !scheduledTime) return res.status(400).json({ message: "Platform e scheduledTime são obrigatórios" });
       const schedule = await storage.createPublicationSchedule({
-        assetId: req.params.id,
+        assetId: String(req.params.id),
         platform,
         scheduledTime: new Date(scheduledTime),
         status: "planned",
@@ -4830,11 +4965,12 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/admin/social/assets/:id/schedules]", err);
       res.status(500).json({ message: "Erro ao criar agendamento" });
     }
+      return;
   });
 
   app.patch("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const existingSched = await storage.getPublicationSchedule(req.params.id);
+      const existingSched = await storage.getPublicationSchedule(String(req.params.id));
       if (!existingSched) return res.status(404).json({ message: "Agendamento não encontrado" });
       const schedAsset = await storage.getContentAsset(existingSched.assetId);
       if (schedAsset && schedAsset.userId && schedAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
@@ -4845,27 +4981,29 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
         return res.status(400).json({ message: "Status inválido" });
       }
       const status = rawStatus as ScheduleStatus;
-      const schedule = await storage.updatePublicationSchedule(req.params.id, status);
+      const schedule = await storage.updatePublicationSchedule(String(req.params.id), status);
       if (!schedule) return res.status(404).json({ message: "Agendamento não encontrado" });
       res.json(schedule);
     } catch (err) {
       console.error("[PATCH /api/admin/social/schedules/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar agendamento" });
     }
+      return;
   });
 
   app.delete("/api/admin/social/schedules/:id", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
-      const existingSched = await storage.getPublicationSchedule(req.params.id);
+      const existingSched = await storage.getPublicationSchedule(String(req.params.id));
       if (!existingSched) return res.status(404).json({ message: "Agendamento não encontrado" });
       const schedAsset = await storage.getContentAsset(existingSched.assetId);
       if (schedAsset && schedAsset.userId && schedAsset.userId !== req.user!.userId) return res.status(403).json({ message: "Acesso negado" });
-      await storage.deletePublicationSchedule(req.params.id);
+      await storage.deletePublicationSchedule(String(req.params.id));
       res.status(204).end();
     } catch (err) {
       console.error("[DELETE /api/admin/social/schedules/:id]", err);
       res.status(500).json({ message: "Erro ao excluir agendamento" });
     }
+      return;
   });
 
   // === F39 — Workspaces (Multi-tenant MVP) ===
@@ -4891,13 +5029,14 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[GET /api/workspaces/current]", err);
       res.status(500).json({ message: "Erro ao carregar workspace atual" });
     }
+      return;
   });
 
   app.post("/api/workspaces", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const { insertWorkspaceSchema } = await import("@workspace/db");
       const parsed = insertWorkspaceSchema.omit({ ownerUserId: true } as any).safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message || "Dados inválidos" });
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Dados inválidos" });
       const existing = await workspaceStorage.getWorkspaceBySlug(parsed.data.slug);
       if (existing) return res.status(409).json({ message: "Já existe um workspace com este slug" });
       const ws = await workspaceStorage.createWorkspace(parsed.data as any, req.user!.userId);
@@ -4911,13 +5050,14 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/workspaces]", err);
       res.status(500).json({ message: "Erro ao criar workspace" });
     }
+      return;
   });
 
   app.post("/api/workspaces/:id/switch", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const membership = await workspaceStorage.isWorkspaceMember(req.params.id, req.user!.userId);
+      const membership = await workspaceStorage.isWorkspaceMember(String(req.params.id), req.user!.userId);
       if (!membership.isMember) return res.status(403).json({ message: "Você não é membro deste workspace" });
-      const updated = await workspaceStorage.setUserCurrentWorkspace(req.user!.userId, req.params.id);
+      const updated = await workspaceStorage.setUserCurrentWorkspace(req.user!.userId, String(req.params.id));
       if (!updated) return res.status(404).json({ message: "Workspace não encontrado" });
       // Reemite token com novo workspaceId
       const token = jwt.sign(
@@ -4930,21 +5070,23 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       console.error("[POST /api/workspaces/:id/switch]", err);
       res.status(500).json({ message: "Erro ao trocar de workspace" });
     }
+      return;
   });
 
   app.patch("/api/workspaces/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const membership = await workspaceStorage.isWorkspaceMember(req.params.id, req.user!.userId);
+      const membership = await workspaceStorage.isWorkspaceMember(String(req.params.id), req.user!.userId);
       if (!membership.isMember || (membership.role !== "owner" && membership.role !== "admin")) {
         return res.status(403).json({ message: "Apenas owner/admin pode editar o workspace" });
       }
-      const ws = await workspaceStorage.updateWorkspace(req.params.id, req.body);
+      const ws = await workspaceStorage.updateWorkspace(String(req.params.id), req.body);
       if (!ws) return res.status(404).json({ message: "Workspace não encontrado" });
       res.json(ws);
     } catch (err) {
       console.error("[PATCH /api/workspaces/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar workspace" });
     }
+      return;
   });
 
   return httpServer;

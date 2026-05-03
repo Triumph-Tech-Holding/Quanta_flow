@@ -145,7 +145,7 @@ async function seedFlowTemplates() {
     const existingIds = new Set(existing.map((t) => t.id));
     for (const tpl of FLOW_TEMPLATE_SEEDS) {
       if (!existingIds.has(tpl.id)) {
-        await db.insert(flowTemplates).values(tpl);
+        await db.insert(flowTemplates).values(tpl as typeof flowTemplates.$inferInsert);
       }
     }
     log(`Flow templates seed OK (${FLOW_TEMPLATE_SEEDS.length} templates)`, "seed");

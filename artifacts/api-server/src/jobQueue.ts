@@ -282,7 +282,7 @@ class JobQueue {
           n: 1,
           size: "1024x1024",
         });
-        const imageUrl = imageResponse.data[0]?.url;
+        const imageUrl = imageResponse.data?.[0]?.url;
         if (imageUrl) {
           if (p.channel === "whatsapp") {
             const provider = await getWhatsAppProvider(p.userId);

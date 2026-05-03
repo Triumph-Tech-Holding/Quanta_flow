@@ -1485,9 +1485,9 @@ function splitRow(line: string): string[] {
   return trimmed.split("|").map(c => c.trim());
 }
 
-function renderMarkdownInline(content: string): JSX.Element[] {
+function renderMarkdownInline(content: string): React.ReactElement[] {
   const lines = content.split("\n");
-  const elements: JSX.Element[] = [];
+  const elements: React.ReactElement[] = [];
   let codeBlock: string[] | null = null;
   let listBuf: string[] = [];
   let tableBuf: string[] | null = null;

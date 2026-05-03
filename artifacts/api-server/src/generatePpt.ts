@@ -1,7 +1,14 @@
 import { createRequire } from "node:module";
+import type PptxGenJSType from "pptxgenjs";
 import { captureScreenshots } from "./screenshotCapture";
 const _require = createRequire(import.meta.url);
-const PptxGenJS = _require("pptxgenjs");
+const PptxGenJS = _require("pptxgenjs") as typeof PptxGenJSType;
+type PptxGenJS = PptxGenJSType;
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace PptxGenJS {
+  export type Slide = PptxGenJSType.Slide;
+  export type TextProps = PptxGenJSType.TextProps;
+}
 
 const GREEN = "00A86B";
 const NAVY = "1B3A57";

@@ -12,7 +12,7 @@ import { emailConfigs, campaigns as campaignsTable } from "@workspace/db";
 import { eq, sql as sqlExpr } from "drizzle-orm";
 import OpenAI from "openai";
 
-export type MessageChannel = "whatsapp" | "telegram" | "instagram" | "email";
+export type MessageChannel = "whatsapp" | "telegram" | "instagram" | "email" | "facebook" | "linkedin" | "youtube" | "tiktok" | "x" | "sms";
 
 export interface IncomingMessageParams {
   userId: string;
@@ -33,8 +33,9 @@ async function sendChannelMessage(
   metadata?: Record<string, unknown>
 ): Promise<void> {
   if (channel === "whatsapp") {
-    const { sendWhatsAppMessage } = await import("./whatsappProvider");
-    await sendWhatsAppMessage(userId, phone, message);
+    const { getWhatsAppProvider } = await import("./whatsappProvider");
+    const provider = await getWhatsAppProvider(userId);
+    await provider.sendMessage(phone, message);
   } else if (channel === "telegram") {
     const botToken = (metadata?.botToken as string) || "";
     if (botToken) await sendTelegramMessage(phone, message, botToken);
@@ -353,7 +354,7 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
         });
         await storage.createContactIdentifier({
           unifiedContactId: crmContact.id,
-          channelType: channel,
+          channelType: channel as "email" | "whatsapp" | "telegram" | "instagram" | "facebook" | "linkedin" | "youtube" | "tiktok" | "x" | "sms",
           identifier: phone,
           displayName: contactName || phone,
         });
@@ -389,7 +390,7 @@ export async function processIncomingMessage(params: IncomingMessageParams): Pro
       if (intentResult) {
         await storage.createOmnichannelMessage({
           unifiedContactId: crmContact.id,
-          channelType: channel,
+          channelType: channel as "email" | "whatsapp" | "telegram" | "instagram" | "facebook" | "linkedin" | "youtube" | "tiktok" | "x" | "sms",
           direction: "incoming",
           content: messageContent,
           externalMessageId: msgId,

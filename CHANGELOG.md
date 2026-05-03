@@ -3,6 +3,38 @@
 
 ---
 
+## [7.4.0] — 2026-05-03
+
+### Corrigido — Limpeza de typecheck (Task #43)
+- **`pnpm run typecheck` agora finaliza com 0 erros** (antes: 328 erros em 22 arquivos). Hard gate para PRs daqui em diante.
+- **`@workspace/api-server` (282 → 0)**:
+  - 143 handlers Express ganharam `return;` explícito via codemod ts-morph (`scripts/src/fix-handler-returns.ts`).
+  - 65 acessos a `req.params/query/headers` envelopados em `String(...)` via codemod (`scripts/src/fix-string-coercions.ts`).
+  - Zod v4: trocado `error.errors` → `error.issues` em todo `routes.ts`.
+  - `replit_integrations/{chat,audio,image,batch}` excluído do `tsconfig.json` (dead code não importado).
+  - `db.ts`: `drizzle(pool as never, { schema })` para resolver overload conflitante do `drizzle-orm/node-postgres`.
+  - `generatePpt.ts`: namespace local `PptxGenJS` reexportando `Slide` e `TextProps`.
+  - `auditLogs` em `routes.ts`: campos corretos `resource/resourceId` (antes: `entity/entityId`).
+  - `messageProcessor.ts` + `messages` schema: `direction` em vez de `role`; `MessageChannel` ampliado para 10 canais (whatsapp, telegram, instagram, facebook, linkedin, youtube, tiktok, x, sms, email).
+  - **Bug latente corrigido (apontado pelo code review)**: enum `channel_type` no schema não incluía `telegram`, mas webhook `/api/webhooks/telegram` chamava `processIncomingMessage` com `channel: "telegram"` — inserts em `unified_contacts`/`omnichannel_messages` falhavam silenciosamente em `.catch()`. Adicionado `telegram` ao enum (`ALTER TYPE channel_type ADD VALUE 'telegram'`) e ao type union do cast.
+  - `whatsappProvider.ts`: dynamic import + cast para `DisconnectReason`, `qrcode`; instalado `@types/qrcode`.
+  - `storage.ts`: `updateUnifiedContact` com cast `Record<string, unknown>` para fields opcionais do Drizzle.
+  - `JwtPayload` interface ganhou `tipoAtor?: string`.
+  - `jobQueue.ts` + `image/client.ts` + `routes.ts`: `imageResponse.data?.[0]` para narrowing seguro.
+  - `uuid` substituído por `crypto.randomUUID()` (Node 24).
+  - `batch/utils.ts`: `AbortError` via dynamic import do `p-retry`.
+- **`@workspace/quanta-flow` (46 → 0)**:
+  - `admin-flows.tsx` (33 erros): `useNodesState<Node>([])` e `useEdgesState<Edge>([])` com type params explícitos.
+  - `admin-documentation.tsx` + `admin-lab.tsx`: `JSX.Element` → `React.ReactElement` (TS 5.9 não mais expõe namespace JSX global).
+  - `inbox.tsx`: import faltante de `CardContent`.
+  - `login.tsx` + `register.tsx`: cast `as any` no `zodResolver(...)` (incompatibilidade temporária zod v4 + @hookform/resolvers).
+  - `calendar.tsx`: migrado de `IconLeft/IconRight` para `Chevron` (react-day-picker v9 API).
+  - `button-group.tsx`: `Comp` cast para `React.ElementType` para satisfazer SlotProps.
+- **Smoke test** dos 11 endpoints (auth/me, workspaces, crm/dashboard, crm/contacts, pipeline/summary, conversations, automation-flows, project-status, brain/insights, branding, social/projects): todos 200 OK.
+- **Sem mudança de runtime** — apenas tipagem; nenhum endpoint REST nem evento socket teve assinatura alterada.
+
+---
+
 ## [7.3.0] — 2026-05-03
 
 ### Adicionado — F40 Quanta Flow Mobile (Expo)

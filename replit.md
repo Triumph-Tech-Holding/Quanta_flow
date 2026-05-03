@@ -54,6 +54,7 @@ pnpm workspace monorepo using TypeScript. Contains the Quanta Flow WhatsApp/omni
 
 ## Important Notes
 
+- **`pnpm run typecheck` is a hard gate** — must finalize with 0 errors before any PR/merge. Codemods em `scripts/src/fix-handler-returns.ts` e `scripts/src/fix-string-coercions.ts` automatizam fixes recorrentes.
 - The server uses `registerRoutes(httpServer, app)` pattern (not Router-based) because it hosts Socket.io on the same server
 - Workers: jobQueue (5s), learningWorker (5min), campaignWorker (60s), brainWorker (5min)
 - SESSION_SECRET env var is required for JWT

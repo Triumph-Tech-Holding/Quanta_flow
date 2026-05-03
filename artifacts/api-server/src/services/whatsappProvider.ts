@@ -219,7 +219,7 @@ export class BaileysProvider implements IWhatsAppProvider {
         version,
         auth: state,
         printQRInTerminal: false,
-        logger: { level: "silent", trace: () => {}, debug: () => {}, info: () => {}, warn: (m: unknown) => log(`Baileys: ${m}`, "baileys"), error: (m: unknown) => log(`Baileys error: ${m}`, "baileys"), fatal: (m: unknown) => log(`Baileys fatal: ${m}`, "baileys"), child: () => ({ level: "silent", trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({} as unknown) }) },
+        logger: { level: "silent", trace: () => {}, debug: () => {}, info: () => {}, warn: (m: unknown) => log(`Baileys: ${m}`, "baileys"), error: (m: unknown) => log(`Baileys error: ${m}`, "baileys"), fatal: (m: unknown) => log(`Baileys fatal: ${m}`, "baileys"), child: () => ({ level: "silent", trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({} as unknown) }) } as unknown as never,
       }) as BaileysSocket;
 
       this.instance.socket = sock;
@@ -230,7 +230,7 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         if (qr) {
           log("Baileys QR code generated", "baileys");
-          const QRCode = await import("qrcode");
+          const QRCode = await import("qrcode") as unknown as { toDataURL: (s: string) => Promise<string> };
           this.instance.qrCode = await QRCode.toDataURL(qr);
           this.instance.connected = false;
         }
@@ -253,7 +253,7 @@ export class BaileysProvider implements IWhatsAppProvider {
         if (connection === "close") {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
           const { Boom } = await import("@hapi/boom");
-          const shouldReconnect = statusCode !== (DisconnectReason as Record<string, number>).loggedOut;
+          const shouldReconnect = statusCode !== (DisconnectReason as unknown as Record<string, number>).loggedOut;
           log(`Baileys connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`, "baileys");
           this.instance.connected = false;
           await storage.updateEvolutionConfig(this.userId, { status: "disconnected" });
@@ -344,7 +344,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       audio: audioBuffer,
       mimetype: "audio/mpeg",
       ptt: true,
-    });
+    } as unknown as { text: string });
     return { messageId: result?.key?.id || `baileys_audio_${Date.now()}` };
   }
 
@@ -356,7 +356,7 @@ export class BaileysProvider implements IWhatsAppProvider {
     const result = await this.instance.socket.sendMessage(jid, {
       image: { url: imageUrl },
       caption: caption || "",
-    });
+    } as unknown as { text: string });
     return { messageId: result?.key?.id || `baileys_img_${Date.now()}` };
   }
 

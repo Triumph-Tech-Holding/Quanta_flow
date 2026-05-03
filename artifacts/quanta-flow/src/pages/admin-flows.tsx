@@ -204,8 +204,8 @@ function AdminFlowsInner() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareFlow, setShareFlow] = useState<AutomationFlow | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const blockLabelRefs = useRef<Record<string, string>>({});
   const reactFlowWrapper = useRef<HTMLDivElement>(null);

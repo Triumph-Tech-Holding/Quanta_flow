@@ -107,7 +107,8 @@ export async function batchProcess<T, R>(
               throw error; // Rethrow to trigger p-retry
             }
             // For non-rate-limit errors, abort immediately
-            throw new pRetry.AbortError(
+            const { AbortError } = await import("p-retry");
+            throw new AbortError(
               error instanceof Error ? error : new Error(String(error))
             );
           }
@@ -154,9 +155,10 @@ export async function batchProcessWithSSE<T, R>(
           minTimeout,
           maxTimeout,
           factor: 2,
-          onFailedAttempt: (error) => {
+          onFailedAttempt: async (error) => {
             if (!isRateLimitError(error)) {
-              throw new pRetry.AbortError(
+              const { AbortError } = await import("p-retry");
+              throw new AbortError(
                 error instanceof Error ? error : new Error(String(error))
               );
             }

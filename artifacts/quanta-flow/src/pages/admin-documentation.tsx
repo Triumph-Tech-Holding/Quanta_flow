@@ -73,7 +73,7 @@ interface DocumentationVersion {
 
 function renderMarkdown(content: string) {
   const lines = content.split("\n");
-  const elements: JSX.Element[] = [];
+  const elements: React.ReactElement[] = [];
   let key = 0;
   let inCode = false;
   let codeLines: string[] = [];
@@ -114,8 +114,8 @@ function renderMarkdown(content: string) {
     isFirstTableRow = true;
   };
 
-  const applyInline = (text: string): (string | JSX.Element)[] => {
-    const parts: (string | JSX.Element)[] = [];
+  const applyInline = (text: string): (string | React.ReactElement)[] => {
+    const parts: (string | React.ReactElement)[] = [];
     let remaining = text;
     let k = 0;
     while (remaining.length > 0) {
