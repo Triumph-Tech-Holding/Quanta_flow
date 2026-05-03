@@ -851,6 +851,10 @@ export const projectStatusItems = pgTable("project_status_items", {
 
 export const insertProjectStatusItemSchema = createInsertSchema(projectStatusItems).omit({
   id: true, createdAt: true, updatedAt: true,
+}).extend({
+  featureId: z.string().min(1),
+  featureName: z.string().min(1),
+  progress: z.number().int().min(0).max(100).default(0),
 });
 
 export const updateProjectStatusItemSchema = z.object({
