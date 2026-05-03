@@ -215,6 +215,25 @@ function BrainInsightsCard() {
   const [withPrediction, setWithPrediction] = useState(false);
   const [predicting, setPredicting] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<Record<string, BrainPrediction>>({});
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [doneActions, setDoneActions] = useState<Set<string>>(new Set());
+
+  const runAction = async (actionKey: string, endpoint: string, body: Record<string, unknown>, successMsg: string) => {
+    setActionLoading(actionKey);
+    try {
+      const res = await apiRequest("POST", endpoint, body);
+      const data = await res.json();
+      toast({ title: data?.message || successMsg });
+      setDoneActions(prev => new Set(prev).add(actionKey));
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/insights"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard"] });
+    } catch (e: any) {
+      const msg = e?.message || "Falha ao executar ação";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const brainQuery = useQuery<BrainResponse>({
     queryKey: ["/api/brain/insights", { withPrediction }],
@@ -398,21 +417,64 @@ function BrainInsightsCard() {
                     )
                   )}
 
-                  {/* Ações sugeridas */}
+                  {/* Ações executáveis */}
                   {ins.suggestedActions.length > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-border/50">
+                    <div className="space-y-1.5 pt-1 border-t border-border/50">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                         <Lightbulb className="h-3 w-3" />
                         Ações sugeridas
                       </div>
-                      <ul className="space-y-0.5">
-                        {ins.suggestedActions.slice(0, 3).map((a, i) => (
-                          <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
-                            <ArrowRight className="h-3 w-3 mt-0.5 text-primary flex-shrink-0" />
-                            {a.label}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="flex flex-wrap gap-1.5">
+                        {ins.suggestedActions.map((a, i) => {
+                          const key = `${ins.contactId}:${a.type}:${i}`;
+                          const loading = actionLoading === key;
+                          const done = doneActions.has(key);
+                          let endpoint = "";
+                          let body: Record<string, unknown> = { contactId: ins.contactId };
+                          let canExecute = true;
+                          if (a.type === "mover_pipeline") {
+                            endpoint = "/api/brain/actions/move-pipeline";
+                            body = { contactId: ins.contactId, toStage: (a.payload as any)?.toStage };
+                          } else if (a.type === "atribuir_agente") {
+                            endpoint = "/api/brain/actions/assign-agent";
+                          } else if (a.type === "disparar_microlearning") {
+                            endpoint = "/api/brain/actions/dispatch-microlearning";
+                            body = { contactId: ins.contactId, trackId: (a.payload as any)?.trackId };
+                          } else if (a.type === "enviar_mensagem") {
+                            canExecute = false;
+                          }
+                          if (!canExecute) {
+                            return (
+                              <Link key={key} href={`/inbox?contact=${ins.contactId}`}>
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" data-testid={`action-${ins.contactId}-${a.type}`}>
+                                  <MessageSquare className="h-3 w-3" />
+                                  {a.label}
+                                </Button>
+                              </Link>
+                            );
+                          }
+                          return (
+                            <Button
+                              key={key}
+                              variant={done ? "secondary" : "default"}
+                              size="sm"
+                              disabled={loading || done}
+                              onClick={() => runAction(key, endpoint, body, a.label)}
+                              className="h-7 text-xs gap-1.5"
+                              data-testid={`action-${ins.contactId}-${a.type}`}
+                            >
+                              {loading ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : done ? (
+                                <span className="text-emerald-600">✓</span>
+                              ) : (
+                                <ArrowRight className="h-3 w-3" />
+                              )}
+                              {done ? "Feito" : a.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

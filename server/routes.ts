@@ -2517,6 +2517,73 @@ Return ONLY the JSON array, no markdown.`,
     }
   });
 
+  // Ações executáveis do IA Brain
+  app.post("/api/brain/actions/move-pipeline", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { contactId, toStage } = req.body as { contactId: string; toStage: string };
+      const allowed = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
+      if (!contactId || !allowed.includes(toStage)) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+      const contact = await storage.getUnifiedContact(contactId);
+      if (!contact || contact.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      const updated = await storage.updateUnifiedContact(contactId, { pipelineStage: toStage as any });
+      res.json({ ok: true, contact: updated, message: `Lead movido para '${toStage}'` });
+    } catch (error: any) {
+      res.status(500).json({ message: "Erro ao mover pipeline", error: error?.message });
+    }
+  });
+
+  app.post("/api/brain/actions/assign-agent", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { contactId } = req.body as { contactId: string };
+      if (!contactId) return res.status(400).json({ message: "contactId obrigatório" });
+      const contact = await storage.getUnifiedContact(contactId);
+      if (!contact || contact.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+      const updated = await storage.autoAssignContact(req.user!.userId, contactId);
+      if (!updated) {
+        return res.status(400).json({ message: "Nenhum agente disponível para round-robin" });
+      }
+      res.json({ ok: true, contact: updated, message: "Lead atribuído via round-robin" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Erro ao atribuir agente", error: error?.message });
+    }
+  });
+
+  app.post("/api/brain/actions/dispatch-microlearning", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { contactId, trackId } = req.body as { contactId: string; trackId?: string };
+      if (!contactId) return res.status(400).json({ message: "contactId obrigatório" });
+      const contact = await storage.getUnifiedContact(contactId);
+      if (!contact || contact.userId !== req.user!.userId) {
+        return res.status(404).json({ message: "Contato não encontrado" });
+      }
+
+      let chosenTrackId = trackId;
+      if (!chosenTrackId) {
+        const tracks = await storage.getLearningTracksByUser(req.user!.userId);
+        const active = tracks.find(t => t.isActive);
+        if (!active) return res.status(400).json({ message: "Nenhuma trilha ativa cadastrada" });
+        chosenTrackId = active.id;
+      }
+
+      const delivery = await storage.createLearningDelivery({
+        contactId,
+        trackId: chosenTrackId,
+        stepOrder: 1,
+        status: "pending",
+      } as any);
+
+      res.json({ ok: true, delivery, message: "Trilha de microlearning agendada" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Erro ao disparar microlearning", error: error?.message });
+    }
+  });
+
   app.post("/api/brain/scan-now", authenticateToken, async (_req: AuthRequest, res: Response) => {
     try {
       const { triggerBrainScanNow } = await import("./services/brainWorker");

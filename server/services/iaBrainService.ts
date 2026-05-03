@@ -65,12 +65,11 @@ export interface IBrainSummary {
 const STAGNANT_HOURS = 48;
 const HOT_LEAD_SCORE = 70;
 
-const STAGE_NEXT: Record<string, string> = {
-  novo: "Qualificado",
-  qualificado: "Proposta",
-  proposta: "Negociação",
-  negociacao: "Fechamento",
-  fechamento: "Ganho",
+const STAGE_NEXT: Record<string, { key: string; label: string }> = {
+  novo:        { key: "qualificado",    label: "Qualificado" },
+  qualificado: { key: "proposta",       label: "Proposta" },
+  proposta:    { key: "negociacao",     label: "Negociação" },
+  negociacao:  { key: "fechado_ganho",  label: "Fechado (Ganho)" },
 };
 
 export class IABrainService {
@@ -210,8 +209,8 @@ Considere: tom do cliente, perguntas de fechamento, objeções, urgência, hist�
     if (next && (contact.score >= HOT_LEAD_SCORE || contact.temperature === "quente")) {
       actions.push({
         type: "mover_pipeline",
-        label: `Mover lead manualmente para o pipeline '${next}'`,
-        payload: { fromStage: stage, toStage: next.toLowerCase() },
+        label: `Mover lead manualmente para o pipeline '${next.label}'`,
+        payload: { fromStage: stage, toStage: next.key },
       });
     }
 
