@@ -703,13 +703,12 @@ export default function AdminDocumentation() {
       </Card>
 
       <Tabs defaultValue="versions" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="versions" data-testid="tab-versions">Versões</TabsTrigger>
           <TabsTrigger value="info" data-testid="tab-info">Sistema</TabsTrigger>
           <TabsTrigger value="claude" data-testid="tab-claude">CLAUDE.md</TabsTrigger>
           <TabsTrigger value="changelog" data-testid="tab-changelog">CHANGELOG</TabsTrigger>
           <TabsTrigger value="dict" data-testid="tab-dict">Dicionário</TabsTrigger>
-          <TabsTrigger value="status" data-testid="tab-status">Painel de Status</TabsTrigger>
         </TabsList>
 
         <TabsContent value="versions" className="space-y-4 mt-4">
@@ -922,8 +921,8 @@ export default function AdminDocumentation() {
           </Card>
         </TabsContent>
 
-        {/* === PAINEL DE STATUS === */}
-        <TabsContent value="status" className="mt-4">
+        {/* === PAINEL DE STATUS movido para Admin/Lab → Progresso === */}
+        {false && <TabsContent value="status" className="mt-4">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1074,7 +1073,7 @@ export default function AdminDocumentation() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       {/* Modal de visualização de versão técnica */}

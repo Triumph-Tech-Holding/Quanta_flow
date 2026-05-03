@@ -15,7 +15,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader2, PlayCircle, Volume2, Zap, CheckCircle2, XCircle,
   Webhook, Smartphone, Image as ImageIcon, ShieldCheck, RefreshCw,
+  BarChart3, Pencil, Plus, Check, X, Trash2,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { queryClient } from "@/lib/queryClient";
+
+interface ProjectStatusItem {
+  id: string;
+  featureId: string;
+  featureName: string;
+  category: string;
+  priority: "alta" | "media" | "baixa";
+  status: "concluido" | "em_curso" | "pendente" | "pausado";
+  progress: number;
+  notes?: string | null;
+  sortOrder: number;
+}
 
 type TtsVoice = "alloy" | "echo" | "fable";
 
@@ -152,6 +167,53 @@ export default function AdminLab() {
     }
     setRunningAllSmoke(false);
   };
+
+  // --- Progresso (Painel de Status) ---
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [editStatusValues, setEditStatusValues] = useState<Partial<ProjectStatusItem>>({});
+  const [addingStatus, setAddingStatus] = useState(false);
+  const [newStatusValues, setNewStatusValues] = useState<{
+    featureId: string;
+    featureName: string;
+    category: string;
+    priority: "alta" | "media" | "baixa";
+    status: "concluido" | "em_curso" | "pendente" | "pausado";
+    progress: number;
+  }>({ featureId: "", featureName: "", category: "geral", priority: "media", status: "pendente", progress: 0 });
+
+  const { data: statusItems = [], isLoading: loadingStatus } = useQuery<ProjectStatusItem[]>({
+    queryKey: ["/api/admin/project-status"],
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ProjectStatusItem> }) => {
+      return apiRequest("PUT", `/api/admin/project-status/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      setEditingStatusId(null);
+      toast({ title: "Status atualizado!" });
+    },
+    onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+
+  const deleteStatusMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest("DELETE", `/api/admin/project-status/${id}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      toast({ title: "Item removido!" });
+    },
+  });
+
+  const createStatusMutation = useMutation({
+    mutationFn: async (data: typeof newStatusValues) => apiRequest("POST", "/api/admin/project-status", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      setAddingStatus(false);
+      setNewStatusValues({ featureId: "", featureName: "", category: "geral", priority: "media", status: "pendente", progress: 0 });
+      toast({ title: "Feature adicionada!" });
+    },
+  });
 
   const { data: allFlows = [] } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
@@ -317,15 +379,154 @@ export default function AdminLab() {
         </header>
 
         <main className="flex-1 p-6">
-          <Tabs defaultValue="flow" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-6">
+          <Tabs defaultValue="progresso" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-7">
+              <TabsTrigger value="progresso" data-testid="tab-progresso">Progresso</TabsTrigger>
+              <TabsTrigger value="protocolos" data-testid="tab-protocolos">Protocolos</TabsTrigger>
               <TabsTrigger value="flow" data-testid="tab-flow">Flow Sim</TabsTrigger>
               <TabsTrigger value="tts" data-testid="tab-tts">TTS</TabsTrigger>
               <TabsTrigger value="image" data-testid="tab-image">Imagem IA</TabsTrigger>
               <TabsTrigger value="webhook" data-testid="tab-webhook">Webhooks</TabsTrigger>
               <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>
-              <TabsTrigger value="protocolos" data-testid="tab-protocolos">Protocolos</TabsTrigger>
             </TabsList>
+
+            {/* === PROGRESSO (Painel de Status / Engineering Cockpit) === */}
+            <TabsContent value="progresso" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-muted"><BarChart3 className="w-5 h-5" /></div>
+                      <div>
+                        <CardTitle className="text-base">Progresso por Módulo — Painel de Status</CardTitle>
+                        <CardDescription>Cockpit técnico interno: matriz editável de features com prioridade, status e progresso</CardDescription>
+                      </div>
+                    </div>
+                    <Button size="sm" className="gap-2" onClick={() => setAddingStatus(true)} data-testid="button-add-feature">
+                      <Plus className="w-4 h-4" />Nova Feature
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {loadingStatus ? (
+                    <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /><span>Carregando...</span>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="bg-muted">
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-12">ID</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs">Feature</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Categoria</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-20">Prioridade</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-24">Status</th>
+                            <th className="border border-border px-2 py-2 text-left font-semibold text-xs w-28">Progresso</th>
+                            <th className="border border-border px-2 py-2 text-center font-semibold text-xs w-16">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {addingStatus && (
+                            <tr className="bg-primary/5 border border-primary/20">
+                              <td className="border border-border px-2 py-1">
+                                <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.featureId} onChange={e => setNewStatusValues(v => ({ ...v, featureId: e.target.value }))} placeholder="F26" />
+                              </td>
+                              <td className="border border-border px-2 py-1">
+                                <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.featureName} onChange={e => setNewStatusValues(v => ({ ...v, featureName: e.target.value }))} placeholder="Nome da feature" />
+                              </td>
+                              <td className="border border-border px-2 py-1">
+                                <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.category} onChange={e => setNewStatusValues(v => ({ ...v, category: e.target.value }))} placeholder="Categoria" />
+                              </td>
+                              <td className="border border-border px-2 py-1">
+                                <select className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.priority} onChange={e => setNewStatusValues(v => ({ ...v, priority: e.target.value as "alta" | "media" | "baixa" }))}>
+                                  <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
+                                </select>
+                              </td>
+                              <td className="border border-border px-2 py-1">
+                                <select className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.status} onChange={e => setNewStatusValues(v => ({ ...v, status: e.target.value as "concluido" | "em_curso" | "pendente" | "pausado" }))}>
+                                  <option value="concluido">Concluído</option><option value="em_curso">Em curso</option><option value="pendente">Pendente</option><option value="pausado">Pausado</option>
+                                </select>
+                              </td>
+                              <td className="border border-border px-2 py-1">
+                                <input type="number" min={0} max={100} className="w-full text-xs border rounded px-1 py-0.5 bg-background" value={newStatusValues.progress} onChange={e => setNewStatusValues(v => ({ ...v, progress: Number(e.target.value) }))} />
+                              </td>
+                              <td className="border border-border px-2 py-1 text-center">
+                                <div className="flex gap-1 justify-center">
+                                  <button onClick={() => createStatusMutation.mutate(newStatusValues)} className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900" data-testid="button-save-new-feature"><Check className="w-3 h-3 text-green-600" /></button>
+                                  <button onClick={() => setAddingStatus(false)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900"><X className="w-3 h-3 text-red-500" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          {statusItems.map((item, i) => {
+                            const isEditing = editingStatusId === item.id;
+                            const priorityColor = item.priority === "alta" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" : item.priority === "media" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+                            const statusColor = item.status === "concluido" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" : item.status === "em_curso" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : item.status === "pausado" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" : "bg-muted text-muted-foreground";
+                            return (
+                              <tr key={item.id} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"} data-testid={`status-row-${item.featureId}`}>
+                                <td className="border border-border px-2 py-1.5 text-xs font-mono text-muted-foreground">{item.featureId}</td>
+                                <td className="border border-border px-2 py-1.5">
+                                  {isEditing ? (
+                                    <input className="w-full text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.featureName} onChange={e => setEditStatusValues(v => ({ ...v, featureName: e.target.value }))} />
+                                  ) : (<span className="text-xs font-medium">{item.featureName}</span>)}
+                                </td>
+                                <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground">{item.category}</td>
+                                <td className="border border-border px-2 py-1.5">
+                                  {isEditing ? (
+                                    <select className="text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.priority} onChange={e => setEditStatusValues(v => ({ ...v, priority: e.target.value as "alta" | "media" | "baixa" }))}>
+                                      <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
+                                    </select>
+                                  ) : (<span className={`text-xs px-1.5 py-0.5 rounded font-medium ${priorityColor}`}>{item.priority === "alta" ? "Alta" : item.priority === "media" ? "Média" : "Baixa"}</span>)}
+                                </td>
+                                <td className="border border-border px-2 py-1.5">
+                                  {isEditing ? (
+                                    <select className="text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.status} onChange={e => setEditStatusValues(v => ({ ...v, status: e.target.value as "concluido" | "em_curso" | "pendente" | "pausado" }))}>
+                                      <option value="concluido">Concluído</option><option value="em_curso">Em curso</option><option value="pendente">Pendente</option><option value="pausado">Pausado</option>
+                                    </select>
+                                  ) : (<span className={`text-xs px-1.5 py-0.5 rounded font-medium ${statusColor}`}>{item.status === "concluido" ? "Concluído" : item.status === "em_curso" ? "Em curso" : item.status === "pausado" ? "Pausado" : "Pendente"}</span>)}
+                                </td>
+                                <td className="border border-border px-2 py-1.5">
+                                  {isEditing ? (
+                                    <input type="number" min={0} max={100} className="w-full text-xs border rounded px-1 py-0.5 bg-background" defaultValue={item.progress} onChange={e => setEditStatusValues(v => ({ ...v, progress: Number(e.target.value) }))} />
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <Progress value={item.progress} className="h-1.5 flex-1" />
+                                      <span className="text-xs text-muted-foreground w-8 shrink-0">{item.progress}%</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="border border-border px-2 py-1.5 text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    {isEditing ? (
+                                      <>
+                                        <button onClick={() => updateStatusMutation.mutate({ id: item.id, data: editStatusValues })} className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900" data-testid={`button-save-status-${item.featureId}`}><Check className="w-3 h-3 text-green-600" /></button>
+                                        <button onClick={() => setEditingStatusId(null)} className="p-1 rounded hover:bg-muted"><X className="w-3 h-3 text-muted-foreground" /></button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button onClick={() => { setEditingStatusId(item.id); setEditStatusValues({}); }} className="p-1 rounded hover:bg-muted" data-testid={`button-edit-status-${item.featureId}`}><Pencil className="w-3 h-3 text-muted-foreground" /></button>
+                                        <button onClick={() => deleteStatusMutation.mutate(item.id)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900" data-testid={`button-delete-status-${item.featureId}`}><Trash2 className="w-3 h-3 text-red-500" /></button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="flex gap-4 pt-2 text-xs text-muted-foreground border-t border-border">
+                    <span>Total: <strong>{statusItems.length}</strong> features</span>
+                    <span>Concluídas: <strong className="text-green-600">{statusItems.filter(i => i.status === "concluido").length}</strong></span>
+                    <span>Em curso: <strong className="text-blue-600">{statusItems.filter(i => i.status === "em_curso").length}</strong></span>
+                    <span>Pendentes: <strong className="text-muted-foreground">{statusItems.filter(i => i.status === "pendente").length}</strong></span>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* === FLOW SIMULATOR === */}
             <TabsContent value="flow" className="space-y-4">
