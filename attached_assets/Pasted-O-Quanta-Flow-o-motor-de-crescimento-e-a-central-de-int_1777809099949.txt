@@ -1,0 +1,23 @@
+O Quanta Flow é o motor de crescimento e a central de inteligência do ecossistema Quanta Shop
+. Em sua essência, ele atua como um CRM inteligente e uma plataforma de automação de vendas omnichannel, projetada para gerenciar leads, conversar com clientes e fechar vendas de forma totalmente automática
+. Seu objetivo é dominar toda a jornada do usuário, transformando o primeiro clique de um completo desconhecido na formação de um parceiro de negócios altamente produtivo e engajado
+.
+A arquitetura da plataforma foi baseada em princípios de alta performance comercial, aplicando em escala a regra de influência 7-11-4 (7 horas de consumo de conteúdo, 11 pontos de contato, em 4 canais ou locais diferentes) para garantir um processo de aquecimento e conversão profundo
+.
+Como explorado em nossas interações anteriores, a plataforma é sustentada pelos seguintes pilares e módulos:
+Captação e Qualificação por Inteligência Artificial: O sistema atrai leads de diversas fontes (anúncios, redes sociais, páginas de captura) e os qualifica em tempo real usando IA
+. A inteligência classifica automaticamente a intenção da mensagem (ex: compra_quente, dúvida, reclamação) e atualiza o score (nota de interesse de 0 a 100) e a temperatura (frio, morno ou quente) do lead sem necessidade de intervenção humana
+.
+Inbox Omnichannel e CRM Visual: Centraliza o atendimento de WhatsApp, Instagram Direct, Telegram e E-mail em uma única tela, permitindo uma comunicação fluida que não perde o histórico se o cliente trocar de aplicativo
+. O CRM funciona em formato Kanban (funil de vendas visual), registrando cada clique, leitura e objeção superada para fornecer o contexto absoluto da negociação
+.
+Fábrica de Agentes IA e Automações: A plataforma permite a criação de um exército de Agentes de IA (especialistas virtuais configurados com personalidade, tom de voz e contexto específico) que atendem clientes 24 horas por dia
+. Além disso, conta com um construtor de fluxos estilo "arrastar e soltar", capaz de enviar textos, respostas em áudio geradas por IA (Text-to-Speech) e gerar imagens automáticas
+.
+Microlearning (A Escola no WhatsApp): O grande motor de escala educacional pós-conversão. O Quanta Flow entrega treinamentos em "pílulas" (vídeos rápidos, quizzes e áudios) diretamente no WhatsApp do usuário
+. Essa trilha automatizada exige o cumprimento de tarefas práticas, possui gamificação por pontos e constrói uma mentalidade focada em métricas de produtividade, como os Resultados por Minuto (RPM)
+.
+Branding (White-Label) e Dashboards de BI: O sistema permite customização completa (cores, logos e nome) para que agências e empresas revendam a plataforma como um software próprio
+. Toda a operação é monitorada através de Dashboards avançados que mostram as métricas de aquisição, tempo de resposta (SLA) e o raio-x completo do engajamento da rede nos treinamentos
+.
+Em resumo, o Quanta Flow não é apenas um disparador de mensagens; é uma "máquina de ecossistema" que capta com inteligência, vende em múltiplos canais simultaneamente e educa a rede de forma autônoma para garantir um crescimento escalável
