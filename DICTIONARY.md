@@ -190,6 +190,17 @@ Agendamentos de publicação.
 Versões da documentação técnica.
 - `id` · `version` · `title` · `content` · `releasedAt`
 
+### IA Brain — Insights (sem tabela própria)
+Insights são **gerados em runtime** pelo `IABrainService` (server/services/iaBrainService.ts) consultando `unified_contacts` (filtro por `lastContactAt < now - 48h` AND (`temperature='quente'` OR `score>=70`)). Cache de fingerprints de críticos vive em memória no `BrainWorker` (`Map<userId, Set<fingerprint>>`) — não persistido em DB.
+
+**Ações executáveis** mutam tabelas existentes:
+- `mover_pipeline` → atualiza `unified_contacts.pipelineStage`
+- `atribuir_agente` (round-robin) → atualiza `unified_contacts.assignedToUserId` via `autoAssignContact`
+- `disparar_microlearning` → cria linha em `learning_deliveries` (step 1, pending)
+- `enviar_mensagem` → navega para `/inbox?contact={id}` (sem mutação backend)
+
+---
+
 ### project_status_items
 Painel de status do FLOW Standard.
 - `id` UUID PK · `featureId` (F01..) · `featureName` · `category`

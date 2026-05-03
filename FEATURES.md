@@ -14,8 +14,9 @@
 8. [Estúdio de Conteúdo Social/Ads](#8-estúdio-de-conteúdo-socialads)
 9. [Branding & Settings](#9-branding--settings)
 10. [Integrações Externas](#10-integrações-externas)
-11. [Lab — Cockpit Técnico](#11-lab--cockpit-técnico)
-12. [Documentação Técnica](#12-documentação-técnica)
+11. [IA Brain — Insights & Ações Executáveis](#11-ia-brain--insights--ações-executáveis)
+12. [Lab — Cockpit Técnico](#12-lab--cockpit-técnico)
+13. [Documentação Técnica](#13-documentação-técnica)
 
 ---
 
@@ -167,7 +168,27 @@
 
 ---
 
-## 11. Lab — Cockpit Técnico
+## 11. IA Brain — Insights & Ações Executáveis
+
+> Card "IA Brain — Insights" no Dashboard com geração de insights, predição de conversão e **botões 1-clique** para executar ações sugeridas direto no card.
+
+| Feature | Status | Endpoint | Notas |
+|---|---|---|---|
+| Detecção de leads estagnados | OK | GET /api/brain/insights | >48h sem contato, quentes ou score≥70 |
+| Predição de conversão on-demand | OK | GET /api/brain/insights/:contactId/prediction | gpt-4o-mini |
+| Worker de varredura periódica | OK | `BrainWorker` (5min) | emite Socket.io ao detectar críticos |
+| Notificação real-time | OK | event `brain:new-insight` | toast 10s + invalidate cache |
+| Scan manual | OK | POST /api/brain/scan-now | dev/teste |
+| **Ação: Mover pipeline** | OK | POST /api/brain/actions/move-pipeline | valida toStage contra `pipeline_stage` enum |
+| **Ação: Atribuir agente (round-robin)** | OK | POST /api/brain/actions/assign-agent | usa `autoAssignContact` |
+| **Ação: Disparar microlearning** | OK | POST /api/brain/actions/dispatch-microlearning | cria `learningDelivery` step 1 pending |
+| **Ação: Enviar mensagem** | OK | Link → /inbox?contact={id} | abre conversa diretamente |
+
+**Critério de aceite**: insight crítico aparece no card, predição on-demand executa em ≤3s, ação 1-clique mostra spinner→✓ "Feito", ownership validada (`contact.userId === req.user.userId`), cache de `/api/brain/insights` e `/api/crm/dashboard` invalidado após mutação.
+
+---
+
+## 12. Lab — Cockpit Técnico
 
 > LAB = engenharia/governança. NÃO é playground de testes de usuário.
 
@@ -184,7 +205,7 @@
 
 ---
 
-## 12. Documentação Técnica
+## 13. Documentação Técnica
 
 | Documento | Caminho | Endpoint |
 |---|---|---|

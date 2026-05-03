@@ -32,6 +32,7 @@
 | 8 | `/api/admin/social/projects` | GET | 200 | estúdio social |
 | 9 | `/api/inbox/conversations` | GET | 200 | inbox |
 | 10 | `/api/branding` | GET | 200 | branding |
+| 11 | `/api/brain/insights` | GET | 200 | IA Brain Insights |
 
 **Regra**: somente **2xx/3xx** contam como OK. 4xx/5xx falham o smoke.
 
@@ -85,7 +86,27 @@
 | Horário fora de allowedHours | delivery aguarda janela permitida |
 | Resposta do contato | métrica replyRate atualizada |
 
-### 3.6 Estúdio Social
+### 3.6 IA Brain (Insights & Ações)
+
+| Cenário | Pré | Ação | Resultado esperado |
+|---|---|---|---|
+| Listar insights | usuário com lead estagnado >48h | GET /api/brain/insights | 200 + array de insights com `suggestedActions` |
+| Predição on-demand | contactId válido | GET /api/brain/insights/:id/prediction | 200 + `{probability, reasoning}` |
+| Scan manual emite socket | conectado em /inbox | POST /api/brain/scan-now | event `brain:scan-complete` recebido |
+| Worker detecta novo crítico | lead acabou de virar quente | aguardar até 5min | event `brain:new-insight` + toast no front |
+| **Mover pipeline (ação)** | lead em "qualificado" | POST /api/brain/actions/move-pipeline `{toStage:"proposta"}` | 200 + `pipelineStage` atualizado |
+| **Mover com toStage inválido** | qualquer | POST com `toStage:"foo"` | 400 |
+| **Mover lead de outro user** | contato não pertence ao usuário | POST | 404 |
+| **Atribuir agente round-robin** | ≥1 agente ativo | POST /api/brain/actions/assign-agent | 200 + `assignedToUserId` definido (menos carregado) |
+| **Atribuir sem agentes ativos** | nenhum agente | POST | 400 |
+| **Disparar microlearning** | trilha ativa cadastrada | POST /api/brain/actions/dispatch-microlearning | 200 + `learningDelivery` criada (step 1, pending) |
+| **Disparar sem trilha** | nenhuma trilha ativa | POST | 400 |
+| **Enviar mensagem (UI)** | qualquer | clique em botão `enviar_mensagem` | navega para `/inbox?contact={id}` |
+| Anti-duplicação de clique | ação já em loading | clique repetido | botão disabled (sem nova request) |
+| Estado "Feito" | ação concluída | inspecionar botão | variant `secondary` + texto "Feito" + ícone ✓ |
+| Cache invalidado | após qualquer ação | observar dashboard | refetch de `/api/brain/insights` e `/api/crm/dashboard` |
+
+### 3.7 Estúdio Social
 
 | Cenário | Resultado |
 |---|---|

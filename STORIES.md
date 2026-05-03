@@ -85,7 +85,18 @@
 - **US-081** | Como **DEV**, quero configurar webhooks outbound (HMAC), para integrar com Zapier/HubSpot.
 - **US-082** | Como **ADM**, quero alternar entre providers WhatsApp (Z-API/Baileys/Meta), para escolher o melhor para o caso.
 
-## Épico 10 — Lab / Engenharia
+## Épico 10 — IA Brain (Insights & Ações)
+
+- **US-100** | Como **GES**, quero ver no Dashboard um card com leads em risco (estagnados, quentes esfriando), para agir antes de perder a oportunidade.
+- **US-101** | Como **GES**, quero pedir uma predição de conversão de um lead específico, para decidir onde investir esforço.
+- **US-102** | Como **OPR**, quero receber notificação em tempo real quando o sistema detectar um insight crítico novo, para não perder janela.
+- **US-103** | Como **OPR**, quero mover o lead pelo pipeline em 1 clique direto do insight, sem ter que abrir o contato.
+- **US-104** | Como **OPR**, quero atribuir o lead a um agente em 1 clique (round-robin), sem precisar escolher quem.
+- **US-105** | Como **MKT**, quero disparar a trilha de microlearning de reengajamento em 1 clique a partir do insight, para reativar leads frios.
+- **US-106** | Como **OPR**, quero ir direto para a conversa do contato a partir do insight, para responder rápido.
+- **US-107** | Como **GES**, quero que o card mostre o estado da ação (loading/feito), para ter feedback visual claro.
+
+## Épico 11 — Lab / Engenharia
 
 - **US-090** | Como **DEV**, quero ver o painel de status de features, para acompanhar progresso.
 - **US-091** | Como **DEV**, quero rodar smoke tests com 1 clique, para validar saúde rápida.
@@ -99,6 +110,6 @@
 
 | Total | Done | In progress | Backlog |
 |---|---|---|---|
-| 50+ stories | ~42 | 5 | 3 |
+| 58+ stories | ~50 | 5 | 3 |
 
 > Atualizado a cada sprint. Use a aba **Progresso** do Lab para acompanhar status detalhado por feature.

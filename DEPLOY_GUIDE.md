@@ -111,6 +111,7 @@ Se o deploy quebrar:
 [ ] OpenAI calls funcionam (testar agente IA)
 [ ] CampaignWorker logado: "Campaign worker started (every 60s)"
 [ ] LearningWorker logado: "LearningWorker: started (5min interval)"
+[ ] BrainWorker logado: "[brain-worker] started (every 300s)"
 ```
 
 ## 10. Domínio Custom

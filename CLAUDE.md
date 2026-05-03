@@ -112,6 +112,7 @@
 | `jobQueue` | 5s | send_message, check_inactivity, check_sla |
 | `learningWorker` | 5min | Entrega de trilhas de microlearning |
 | `campaignWorker` | 60s | Processamento de campanhas/drip sequences |
+| `brainWorker` | 5min | Varredura de insights críticos da IA Brain + Socket.io push |
 
 ---
 

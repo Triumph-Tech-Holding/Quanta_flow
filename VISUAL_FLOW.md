@@ -131,8 +131,44 @@ Cada movimentação dispara:
 JobQueue (5s)              ─► send_message, check_inactivity, check_sla
 LearningWorker (5min)      ─► entrega de microlearning por gatilho
 CampaignWorker (60s)       ─► processa campaign_deliveries pendentes
+BrainWorker (5min)         ─► varredura de insights críticos + Socket.io push
 WebhookDispatcher (async)  ─► dispara webhooks com HMAC + 5s timeout
 SLA Watcher (no JobQueue)  ─► alerta quando SLA estoura
+```
+
+## 6.1 Fluxo IA Brain — Insights & Ação 1-clique
+
+```mermaid
+sequenceDiagram
+  participant BW as BrainWorker (5min)
+  participant SVC as IABrainService
+  participant DB as PostgreSQL
+  participant SCK as Socket.io (/inbox)
+  participant UI as Dashboard (BrainInsightsCard)
+  participant API as Backend
+  participant ST as Storage
+
+  BW->>SVC: generateInsights(userId)
+  SVC->>DB: findStagnantLeads(>48h, hot OR score≥70)
+  SVC->>SVC: buildSuggestedActions(contact)
+  SVC-->>BW: insights[]
+  alt novo insight crítico
+    BW->>SCK: emit("brain:new-insight", payload) → user:{userId}
+    SCK->>UI: toast 10s + invalidate /api/brain/insights
+  end
+
+  Note over UI: Usuário clica em botão de ação 1-clique
+  UI->>API: POST /api/brain/actions/{move-pipeline|assign-agent|dispatch-microlearning}
+  API->>API: authenticateToken + checa contact.userId === req.user.userId
+  alt move-pipeline
+    API->>ST: updateUnifiedContact(id, {pipelineStage})
+  else assign-agent
+    API->>ST: autoAssignContact(userId, contactId) (round-robin)
+  else dispatch-microlearning
+    API->>ST: createLearningDelivery(step 1, pending)
+  end
+  API-->>UI: 200 {ok, message}
+  UI->>UI: toast + estado "Feito" ✓ + invalidate cache
 ```
 
 ## 7. Estrutura de Diretórios
