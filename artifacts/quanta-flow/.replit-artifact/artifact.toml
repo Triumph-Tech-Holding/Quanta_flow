@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Quanta Flow"
+version = "1.0.0"
+id = "artifacts/quanta-flow"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18501
+
+[services.development]
+run = "pnpm --filter @workspace/quanta-flow run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/quanta-flow", "run", "build" ]
+publicDir = "artifacts/quanta-flow/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18501"
+BASE_PATH = "/"
