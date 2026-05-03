@@ -92,7 +92,7 @@ export default function AdminLab() {
     { id: "health", label: "Health Check", endpoint: "/api/health", method: "GET" },
     { id: "auth_me", label: "Auth /me (token válido)", endpoint: "/api/auth/me", method: "GET" },
     { id: "flows", label: "Listar Fluxos", endpoint: "/api/automation-flows", method: "GET" },
-    { id: "contacts", label: "Listar Contatos (CRM)", endpoint: "/api/contacts", method: "GET" },
+    { id: "contacts", label: "Listar Contatos (CRM)", endpoint: "/api/crm/contacts", method: "GET" },
     { id: "agents", label: "Listar Agentes IA", endpoint: "/api/admin/agents", method: "GET" },
     { id: "campaigns", label: "Listar Campanhas", endpoint: "/api/admin/campaigns", method: "GET" },
     { id: "webhooks", label: "Listar Webhooks", endpoint: "/api/webhooks/outbound", method: "GET" },

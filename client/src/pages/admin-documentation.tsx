@@ -891,7 +891,7 @@ export default function AdminDocumentation() {
                 <div className="p-2 rounded-lg bg-muted"><Database className="w-5 h-5" /></div>
                 <div>
                   <CardTitle className="text-base">Dicionário de Dados</CardTitle>
-                  <CardDescription>{DATA_DICT.length} tabelas do banco de dados PostgreSQL — gerado automaticamente do schema</CardDescription>
+                  <CardDescription>{DATA_DICT.length} tabelas do banco de dados PostgreSQL — mapeado do schema Drizzle ORM</CardDescription>
                 </div>
               </div>
             </CardHeader>
