@@ -1,0 +1,152 @@
+Agent, foco em Soberania e Autonomia de Gestão. Não quero configurações hardcoded.
+
+OBJETIVO:
+Criar uma infraestrutura de Configurações Persistentes onde todas as credenciais de APIs (Z-API, Evolution, OpenAI, etc.) sejam gerenciadas via painel admin, sem necessidade de reiniciar o Replit.
+
+STACK MANTIDO:
+- Backend: Node.js + Express.js
+- Frontend: React + Vite
+- Banco de Dados: PostgreSQL
+- ORM: Drizzle
+- Cache: Node.js Memory (ou Redis se disponível)
+
+TAREFAS DE BACKEND:
+
+1. Schema (Drizzle) - Tabela Settings:
+   - Crie a tabela "settings" com:
+     • id (UUID, primary key)
+     • key (VARCHAR, unique) - ex: "z_api_instance_id", "evolution_token", "openai_key"
+     • value (TEXT, encrypted) - valor da credencial
+     • type (ENUM: 'api_key', 'url', 'token', 'id') - tipo de dado
+     • is_active (BOOLEAN, default true) - se está ativo
+     • description (VARCHAR) - descrição legível
+     • last_updated_by (UUID, foreign key → users.id)
+     • created_at (TIMESTAMP)
+     • updated_at (TIMESTAMP)
+   - Gere e execute a migração
+
+2. Serviço de Configurações (Config Service):
+   - Crie arquivo: backend/src/services/configService.js
+   - Funções:
+     • getSetting(key) - busca do cache primeiro, depois banco
+     • getAllSettings() - retorna todas as configurações ativas
+     • updateSetting(key, value, userId) - atualiza e invalida cache
+     • validateSetting(key, value) - valida antes de salvar
+     • refreshCache() - recarrega cache do banco
+   - Implemente cache em memória com TTL de 5 minutos
+   - Se banco falhar, use último valor em cache (fallback)
+
+3. Middleware de Configurações:
+   - Crie arquivo: backend/src/middleware/configMiddleware.js
+   - Função: injetar configurações ativas em req.config
+   - Validar que todas as configurações necessárias existem
+   - Se faltar configuração crítica, retornar erro 503
+
+4. Endpoints de Configurações (Admin):
+   - GET /api/admin/settings - listar todas as configurações
+   - POST /api/admin/settings - criar nova configuração
+   - PUT /api/admin/settings/:key - atualizar configuração
+   - DELETE /api/admin/settings/:key - deletar configuração
+   - POST /api/admin/settings/refresh - forçar refresh do cache
+   - Todos os endpoints requerem role "admin"
+
+5. Alterar Serviços de API:
+   - Modifique evolutionService.js para:
+     • Antes de cada requisição, chamar getSetting()
+     • Usar credenciais do banco, não do .env
+     • Exemplo: const token = await configService.getSetting('evolution_token')
+   - Faça o mesmo para Z-API, OpenAI, etc.
+   - Adicione validação: se credencial inválida, retornar erro claro
+
+6. Segurança de Credenciais:
+   - Criptografe valores sensíveis no banco (use bcryptjs ou crypto)
+   - Nunca retorne credenciais completas no frontend (apenas primeiros 4 caracteres)
+   - Validar que user_id pertence ao usuário autenticado
+   - Adicionar rate limiting: máx 10 requisições/minuto para settings
+   - Log de auditoria: quem mudou qual configuração e quando
+
+TAREFAS DE FRONTEND:
+
+1. Tela de Configurações Admin:
+   - Componente: frontend/src/components/Admin/SettingsPanel.jsx
+   - Protegida: apenas usuários com role "admin"
+   - Layout:
+     • Abas por categoria (WhatsApp, IA, Integrações, etc.)
+     • Tabela com: Key | Valor (mascarado) | Tipo | Ativo | Ações
+     • Botão "Editar" abre modal
+     • Botão "Deletar" com confirmação
+     • Botão "Testar Conexão" valida credencial
+   - Ao salvar, chama PUT /api/admin/settings/:key
+   - Exibe notificação: "Configuração atualizada com sucesso"
+   - Sem necessidade de reiniciar
+
+2. Modal de Edição:
+   - Componente: frontend/src/components/Admin/SettingModal.jsx
+   - Campos:
+     • Key (read-only)
+     • Value (input, mascarado se sensível)
+     • Type (select: api_key, url, token, id)
+     • Description (textarea)
+     • Is Active (toggle)
+   - Botão "Testar" - valida credencial antes de salvar
+   - Botão "Salvar" - POST para backend
+   - Botão "Cancelar"
+
+3. Integração com Serviços:
+   - Quando credencial é atualizada, frontend emite evento Socket.io
+   - Backend recebe e faz refresh do cache
+   - Todos os serviços começam a usar nova credencial instantaneamente
+
+REQUISITOS TÉCNICOS CRÍTICOS:
+
+1. Cache em Memória:
+   - Implementar cache com TTL de 5 minutos
+   - Estrutura: { key: { value, expiresAt } }
+   - Função: invalidateCache(key) - limpa cache de uma chave
+   - Função: refreshCache() - recarrega tudo do banco
+
+2. Fallback e Resiliência:
+   - Se banco falhar, usar último valor em cache
+   - Se cache expirar e banco falhar, usar valor padrão (se existir)
+   - Adicionar log: "Usando valor em cache para {key}"
+   - Adicionar alerta: "Banco de dados indisponível, usando cache"
+
+3. Validação de Credenciais:
+   - Antes de salvar, testar a credencial:
+     • Para Z-API: fazer requisição GET /status
+     • Para Evolution: fazer requisição GET /instance/status
+     • Para OpenAI: fazer requisição GET /models
+   - Se falhar, retornar erro: "Credencial inválida"
+   - Se passar, salvar no banco
+
+4. Auditoria:
+   - Tabela "settings_audit" para registrar mudanças
+   - Campos: id, setting_key, old_value, new_value, changed_by, changed_at
+   - Registrar toda mudança de configuração
+   - Permitir visualizar histórico no painel admin
+
+5. Segurança:
+   - Criptografar valores sensíveis no banco
+   - Nunca logar credenciais completas
+   - Validar permissões em cada endpoint
+   - Rate limiting para endpoints de settings
+   - CORS restrito apenas para seu domínio
+
+IMPORTANTE:
+- Mantenha a estrutura de pastas (não reorganize)
+- Use Drizzle para todas as queries
+- Implemente cache para performance
+- Adicione validação de credenciais antes de salvar
+- Sem reiniciar Replit para mudar configuração
+- Ative App Testing para validar migrações
+- Adicione logs detalhados para debug
+
+ENTREGA:
+- Tabela "settings" criada e migrada
+- Config Service funcionando com cache
+- Endpoints de admin funcionando
+- Tela de Configurações renderizando
+- Mudança de credencial instantânea (sem reiniciar)
+- Validação de credenciais funcionando
+- Auditoria registrando mudanças
+- Pronto para integrar com todos os módulos

@@ -1,0 +1,126 @@
+Aja como um Desenvolvedor Fullstack Sênior. Vamos iniciar o projeto 'Quanta Shop - Máquina de Soberania Digital'.
+
+OBJETIVO DESTA ETAPA:
+Criar a estrutura base do banco de dados PostgreSQL, sistema de autenticação JWT e dashboard inicial.
+
+STACK TECNOLÓGICO (OBRIGATÓRIO):
+- Backend: Node.js + Express.js
+- Frontend: React + Vite
+- Banco de Dados: PostgreSQL
+- Autenticação: JWT (JSON Web Tokens)
+- Styling: Tailwind CSS
+- Variáveis de Ambiente: .env
+
+ESTRUTURA DE PASTAS (EXATA):
+quanta-shop/
+├── backend/
+│   ├── src/
+│   │   ├── config/
+│   │   │   ├── database.js
+│   │   │   └── env.js
+│   │   ├── models/
+│   │   │   ├── User.js
+│   │   │   ├── Lead.js
+│   │   │   └── Config.js
+│   │   ├── routes/
+│   │   │   ├── auth.js
+│   │   │   ├── users.js
+│   │   │   └── leads.js
+│   │   ├── middleware/
+│   │   │   └── auth.js
+│   │   ├── controllers/
+│   │   │   ├── authController.js
+│   │   │   └── userController.js
+│   │   └── server.js
+│   ├── .env.example
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Login.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   └── Sidebar.jsx
+│   │   ├── pages/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── .env.example
+│   └── package.json
+└── README.md
+
+REQUISITOS DO BANCO DE DADOS:
+
+1. Tabela "users":
+   - id (UUID, primary key)
+   - email (VARCHAR, unique)
+   - password (VARCHAR, hashed com bcrypt)
+   - tipo_ator (ENUM: 'consumidor', 'agente_fidelizacao', 'lojista')
+   - nome (VARCHAR)
+   - telefone (VARCHAR)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+
+2. Tabela "leads":
+   - id (UUID, primary key)
+   - dono_id (UUID, foreign key → users.id)
+   - nome (VARCHAR)
+   - email (VARCHAR)
+   - telefone (VARCHAR)
+   - status (ENUM: 'novo', 'contatado', 'qualificado', 'convertido')
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+
+3. Tabela "api_configs":
+   - id (UUID, primary key)
+   - user_id (UUID, foreign key → users.id)
+   - api_name (VARCHAR: 'evolution_api', 'openai', 'meta')
+   - api_key (VARCHAR, encrypted)
+   - created_at (TIMESTAMP)
+
+INTERFACE INICIAL:
+
+1. Tela de Login:
+   - Campo email
+   - Campo password
+   - Botão "Entrar"
+   - Link "Criar conta"
+   - Validação de formulário no frontend
+
+2. Tela de Registro:
+   - Email, Senha, Confirmar Senha
+   - Seletor de tipo_ator (Consumidor / Agente / Lojista)
+   - Nome completo
+   - Telefone
+   - Botão "Registrar"
+
+3. Dashboard (após login):
+   - Barra lateral com links para:
+     • Inbox (Módulo 1)
+     • CRM (Módulo 2)
+     • Automação (Módulo 3)
+     • Social/Ads (Módulo 4)
+     • IA Brain (Módulo 5)
+     • Tribos (Módulo 6)
+   - Área principal com boas-vindas
+   - Botão de logout
+
+SEGURANÇA (OBRIGATÓRIO):
+- Senhas hasheadas com bcrypt
+- JWT com expiração de 24h
+- Validação de email no backend
+- CORS configurado
+- Variáveis sensíveis em .env (nunca no código)
+
+IMPORTANTE:
+- Foque APENAS na estrutura de pastas, banco de dados e autenticação
+- Não crie as funções dos 6 módulos ainda
+- Não integre APIs externas (Evolution, OpenAI, Meta) nesta fase
+- Crie um arquivo .env.example com as variáveis necessárias
+- Adicione um README.md com instruções de setup
+- Teste a autenticação antes de finalizar
+
+ENTREGA:
+- Código estruturado e comentado
+- Banco de dados criado e testado
+- Login/Registro funcionando
+- Dashboard renderizando corretamente
+- Pronto para a Fase 2 (Módulo 1 - Inbox)

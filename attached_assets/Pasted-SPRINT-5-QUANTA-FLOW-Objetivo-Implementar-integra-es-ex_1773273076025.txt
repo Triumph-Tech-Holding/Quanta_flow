@@ -1,0 +1,360 @@
+SPRINT 5 — QUANTA FLOW
+Objetivo: Implementar integrações externas, CI/CD automático
+e canais adicionais (Telegram, Instagram, E-mail).
+
+=== CONTEXTO DO SISTEMA ===
+
+Stack:
+- Backend: Node.js + Express + Drizzle ORM
+- Banco: PostgreSQL (produção) — 49 contatos reais, NÃO pode quebrar
+- Frontend: React + Vite + TypeScript + Shadcn UI + Tailwind CSS
+- API: REST via React Query v5 + WebSocket via Socket.io
+- Deploy: Replit (produção separado do desenvolvimento)
+- ORM: Drizzle — todas as mudanças de schema via migration
+
+=== O QUE FOI ENTREGUE NOS SPRINTS ANTERIORES ===
+
+SPRINT 1 (concluído):
+- findMatchingAutomationFlow() conectada ao webhook
+- detectIntent() chamada automaticamente a cada mensagem recebida
+- sendMessage() disparada automaticamente quando há match de keyword
+
+SPRINT 2 (concluído):
+- Schema atualizado com 9 novos campos em automation_flows
+- Frontend /automation com formulário das 7 seções completas
+
+SPRINT 3 (concluído):
+- JobQueue in-memory em server/jobQueue.ts
+- Delay de resposta e inatividade via jobQueue
+- Fluxos multi-etapa com campo steps (jsonb)
+- 4 templates: Qualificador, Resolutivo, Transacional, Especialista
+
+SPRINT 4 (concluído):
+- Fila de leads com queueStatus (waiting/assigned/resolved)
+- Atribuição de agentes via agent_assignments
+- SLA com slaDeadline, slaBreached e job 'check_sla'
+- Microlearning com tabelas learning_tracks + learning_deliveries
+- Worker em server/learningWorker.ts
+- Saídas condicionais com campo conditionalExits (jsonb)
+- Campo activeFlowId em unified_contacts
+
+=== O QUE ESTÁ FALTANDO (GAPS DO SPRINT 5) ===
+
+GAP 1: Sem integrações externas
+- Não existe conexão com Google Sheets
+- Não existe conexão com Zapier ou webhooks personalizados
+- Não existe conexão com CRM externo (HubSpot, RD Station)
+
+GAP 2: Sem CI/CD automático
+- Deploy é manual via Replit
+- Não existe pipeline de GitHub Actions
+- Não existe processo automatizado de build e deploy
+
+GAP 3: Canais adicionais não implementados
+- Schema prevê multi-canal mas sem handler real
+- Telegram: sem handler de mensagens
+- Instagram: sem handler de mensagens
+- E-mail: sem handler de mensagens
+- Toda a lógica de IA, fluxos e automações foi construída
+  para WhatsApp — precisa ser reaproveitada nos novos canais
+
+=== TAREFAS EXATAS A EXECUTAR ===
+
+--- TAREFA 5.1 — WEBHOOKS PERSONALIZADOS DE SAÍDA ---
+
+Implementar sistema de webhooks de saída para notificar
+sistemas externos sobre eventos do Quanta Flow:
+
+  a) Criar nova tabela outbound_webhooks via migration Drizzle:
+     id              serial primary key
+     userId          integer     (FK → users.id)
+     name            text        (nome amigável do webhook)
+     url             text        (URL de destino)
+     events          jsonb       (lista de eventos: ex:
+                                 ['lead.created', 'lead.qualified',
+                                  'conversation.closed',
+                                  'flow.success', 'flow.interrupt'])
+     isActive        boolean     (default: true)
+     secret          text        (nullable, para validação HMAC)
+     createdAt       timestamp   (default: now())
+
+  b) Criar endpoints no backend:
+     GET    /api/webhooks/outbound         → lista webhooks do usuário
+     POST   /api/webhooks/outbound         → cria novo webhook
+     PUT    /api/webhooks/outbound/:id     → atualiza webhook
+     DELETE /api/webhooks/outbound/:id     → remove webhook
+     POST   /api/webhooks/outbound/:id/test → envia payload de teste
+
+  c) Criar server/webhookDispatcher.ts:
+     - Função dispatchEvent(event, payload, userId)
+     - Busca todos os outbound_webhooks ativos do userId
+       que escutam o evento recebido
+     - Para cada webhook: faz POST HTTP com o payload
+     - Headers: Content-Type: application/json
+     - Se secret configurado: adicionar header
+       X-Quanta-Signature com HMAC-SHA256 do payload
+     - Timeout: 5 segundos por chamada
+     - Em caso de falha: logar erro, não travar o fluxo principal
+     - NÃO usar retry automático neste sprint
+
+  d) Injetar dispatchEvent() nos pontos de evento:
+     - Após lead criado: dispatchEvent('lead.created', contact, userId)
+     - Após stage mudar para 'qualificado':
+       dispatchEvent('lead.qualified', contact, userId)
+     - Após successCondition atingida:
+       dispatchEvent('flow.success', { contact, flow }, userId)
+     - Após interruptCondition atingida:
+       dispatchEvent('flow.interrupt', { contact, flow }, userId)
+     - Após conversa encerrada:
+       dispatchEvent('conversation.closed', conversation, userId)
+
+  e) Criar página /settings/webhooks no frontend:
+     - Lista de webhooks configurados com status ativo/inativo
+     - Formulário: nome, URL, eventos (checkboxes), secret (opcional)
+     - Botão "Testar webhook" que chama POST /api/webhooks/outbound/:id/test
+     - Exibir último status de envio (sucesso/falha) por webhook
+
+--- TAREFA 5.2 — INTEGRAÇÃO COM GOOGLE SHEETS ---
+
+  a) Criar nova tabela sheet_integrations via migration Drizzle:
+     id              serial primary key
+     userId          integer     (FK → users.id)
+     name            text        (nome amigável)
+     spreadsheetId   text        (ID da planilha Google)
+     sheetName       text        (nome da aba, default: 'Leads')
+     triggerEvent    text        (evento que dispara: 'lead.created'
+                                 | 'lead.qualified' | 'flow.success')
+     columnMapping   jsonb       (mapeamento campo → coluna:
+                                 ex: { "name": "A", "phone": "B",
+                                       "stage": "C", "score": "D" })
+     isActive        boolean     (default: true)
+     googleToken     text        (nullable, token OAuth2 criptografado)
+
+  b) Criar server/googleSheetsService.ts:
+     - Usar biblioteca googleapis (já disponível no Node.js)
+     - Função appendRow(spreadsheetId, sheetName, rowData, token)
+       que adiciona linha na planilha
+     - Função getAuthUrl(userId) que gera URL de autorização OAuth2
+     - Função handleOAuthCallback(code, userId) que troca code
+       por token e salva criptografado em googleToken
+
+  c) Criar endpoints no backend:
+     GET  /api/integrations/sheets              → lista integrações
+     POST /api/integrations/sheets              → cria integração
+     PUT  /api/integrations/sheets/:id          → atualiza integração
+     DELETE /api/integrations/sheets/:id        → remove integração
+     GET  /api/integrations/sheets/auth         → retorna URL OAuth2
+     GET  /api/integrations/sheets/callback     → handler OAuth2 callback
+
+  d) Integrar com webhookDispatcher:
+     - Quando dispatchEvent() for chamado, verificar se há
+       sheet_integration ativa para o evento
+     - Se sim: chamar appendRow() com os dados mapeados em columnMapping
+     - Executar de forma assíncrona (não bloquear o fluxo principal)
+
+  e) Criar página /settings/integrations no frontend:
+     - Card "Google Sheets" com botão "Conectar conta Google"
+     - Após autenticação: formulário para configurar a integração
+     - Campos: nome, ID da planilha, nome da aba, evento gatilho,
+       mapeamento de colunas (interface visual simples)
+     - Status de conexão (conectado/desconectado)
+     - Botão "Desconectar" que revoga o token
+
+--- TAREFA 5.3 — HANDLER TELEGRAM ---
+
+Implementar recebimento e envio de mensagens via Telegram,
+reaproveitando toda a lógica já construída para WhatsApp:
+
+  a) Criar endpoint no backend:
+     POST /api/webhooks/telegram
+     - Receber updates do Telegram Bot API
+     - Extrair: chat.id, from.id, from.first_name, text
+     - Normalizar para o mesmo formato interno do WhatsApp:
+       { phone: chat.id, name: from.first_name, message: text,
+         channel: 'telegram' }
+     - Chamar processIncomingMessage() com os dados normalizados
+       (refatorar processIncomingWhatsAppMessage() para aceitar
+        qualquer canal — ver item 5.3c)
+
+  b) Criar server/telegramService.ts:
+     - Função sendTelegramMessage(chatId, message, botToken)
+       que faz POST para https://api.telegram.org/bot{token}/sendMessage
+     - Função registerWebhook(botToken, webhookUrl)
+       que registra a URL do webhook no Telegram
+
+  c) Refatorar processIncomingWhatsAppMessage():
+     IMPORTANTE: NÃO reescrever a função — apenas generalizar:
+     - Renomear para processIncomingMessage(data, channel)
+     - Parâmetro channel: 'whatsapp' | 'telegram' | 'instagram' | 'email'
+     - Toda a lógica interna permanece igual
+     - Apenas o sendMessage() final deve usar o canal correto:
+       se channel = 'whatsapp' → Z-API/Baileys
+       se channel = 'telegram' → telegramService.sendTelegramMessage()
+
+  d) Adicionar campo channel à tabela conversations via migration:
+     channel   text   (nullable, default: 'whatsapp')
+
+  e) Criar página /settings/channels no frontend:
+     - Card "Telegram" com campo para inserir Bot Token
+     - Botão "Conectar" que chama registerWebhook()
+     - Status de conexão (conectado/desconectado)
+     - Instruções de como criar um bot no BotFather
+
+--- TAREFA 5.4 — HANDLER INSTAGRAM ---
+
+  a) Criar endpoint no backend:
+     POST /api/webhooks/instagram
+     - Receber webhooks da Meta (Instagram Messaging API)
+     - Verificação do webhook: GET /api/webhooks/instagram
+       com hub.challenge para validação Meta
+     - Extrair: sender.id, recipient.id, message.text
+     - Normalizar para formato interno e chamar
+       processIncomingMessage() com channel: 'instagram'
+
+  b) Criar server/instagramService.ts:
+     - Função sendInstagramMessage(recipientId, message, accessToken)
+       que faz POST para Graph API do Instagram
+     - Função verifyWebhook(token) para validação Meta
+
+  c) Atualizar página /settings/channels no frontend:
+     - Card "Instagram" com campo para Page Access Token
+     - Botão "Conectar" que salva o token e ativa o webhook
+     - Status de conexão
+     - Instruções de configuração no Meta for Developers
+
+--- TAREFA 5.5 — HANDLER E-MAIL (SMTP/IMAP) ---
+
+  a) Criar servidor SMTP de entrada usando biblioteca
+     smtp-server ou mailparser no Node.js:
+     - Receber e-mails de entrada
+     - Extrair: from, subject, body (text/html)
+     - Normalizar para formato interno e chamar
+       processIncomingMessage() com channel: 'email'
+
+  b) Criar server/emailService.ts:
+     - Usar nodemailer para envio de e-mails
+     - Função sendEmail(to, subject, body, config)
+     - Config: host SMTP, porta, usuário, senha
+
+  c) Criar nova tabela email_configs via migration Drizzle:
+     id          serial primary key
+     userId      integer    (FK → users.id)
+     smtpHost    text
+     smtpPort    integer    (default: 587)
+     smtpUser    text
+     smtpPass    text       (criptografado)
+     imapHost    text       (nullable)
+     imapPort    integer    (nullable)
+     isActive    boolean    (default: false)
+
+  d) Criar endpoints no backend:
+     GET  /api/settings/email    → retorna config de e-mail do usuário
+     POST /api/settings/email    → salva/atualiza config de e-mail
+     POST /api/settings/email/test → envia e-mail de teste
+
+  e) Atualizar página /settings/channels no frontend:
+     - Card "E-mail" com formulário SMTP (host, porta, usuário, senha)
+     - Botão "Testar conexão"
+     - Status de conexão
+
+--- TAREFA 5.6 — CI/CD COM GITHUB ACTIONS ---
+
+  a) Criar arquivo .github/workflows/deploy.yml:
+     - Trigger: push na branch main
+     - Steps:
+       1. Checkout do código
+       2. Instalar dependências (npm install)
+       3. Rodar testes (npm test) — se existirem
+       4. Build do frontend (npm run build)
+       5. Deploy via Replit CLI ou API do Replit
+     - Usar secrets do GitHub para credenciais do Replit
+
+  b) Criar arquivo .github/workflows/pr-check.yml:
+     - Trigger: pull_request para branch main
+     - Steps:
+       1. Checkout
+       2. npm install
+       3. TypeScript check (tsc --noEmit)
+       4. Lint (se eslint configurado)
+
+  c) Adicionar script de health check no backend:
+     GET /api/health
+     - Retorna: { status: 'ok', version, uptime, dbConnected }
+     - Usado pelo CI/CD para verificar se o deploy foi bem-sucedido
+
+=== ORDEM DE EXECUÇÃO ===
+
+1. Migration: criar tabela outbound_webhooks
+2. Migration: criar tabela sheet_integrations
+3. Migration: criar tabela email_configs
+4. Migration: adicionar campo channel em conversations
+5. Confirmar integridade dos 49 contatos após migrations
+6. Criar server/webhookDispatcher.ts (tarefa 5.1c)
+7. Injetar dispatchEvent() nos pontos de evento (tarefa 5.1d)
+8. Criar endpoints /api/webhooks/outbound (tarefa 5.1b)
+9. Criar página /settings/webhooks no frontend (tarefa 5.1e)
+10. Criar server/googleSheetsService.ts (tarefa 5.2b)
+11. Criar endpoints /api/integrations/sheets (tarefa 5.2c)
+12. Criar página /settings/integrations no frontend (tarefa 5.2e)
+13. Refatorar processIncomingWhatsAppMessage() →
+    processIncomingMessage(data, channel) (tarefa 5.3c)
+14. Criar server/telegramService.ts (tarefa 5.3b)
+15. Criar endpoint POST /api/webhooks/telegram (tarefa 5.3a)
+16. Criar server/instagramService.ts (tarefa 5.4b)
+17. Criar endpoint POST /api/webhooks/instagram (tarefa 5.4a)
+18. Criar server/emailService.ts (tarefa 5.5b)
+19. Criar endpoint POST /api/settings/email (tarefa 5.5d)
+20. Criar página /settings/channels no frontend com os 3 canais
+    (tarefa 5.3e + 5.4c + 5.5e)
+21. Criar .github/workflows/deploy.yml (tarefa 5.6a)
+22. Criar .github/workflows/pr-check.yml (tarefa 5.6b)
+23. Criar endpoint GET /api/health (tarefa 5.6c)
+24. Testar webhook de saída: criar lead → verificar POST externo
+25. Testar Google Sheets: lead qualificado → linha adicionada
+26. Testar Telegram: mensagem recebida → resposta automática enviada
+27. Testar e-mail: e-mail recebido → processado como conversa
+
+=== RESTRIÇÕES IMPORTANTES ===
+
+- NÃO deletar ou renomear campos existentes no banco
+- NÃO alterar tabelas de contatos, conversas ou mensagens existentes
+- NÃO quebrar os 49 contatos em produção
+- NÃO alterar o que foi implementado nos Sprints 1, 2, 3 e 4
+- Todos os novos campos devem ser NULLABLE ou ter DEFAULT seguro
+- webhookDispatcher deve ser tolerante a falhas: erro em 1 webhook
+  NÃO pode travar o fluxo principal (try/catch por webhook)
+- googleSheetsService deve ser tolerante a falhas: erro na planilha
+  NÃO pode travar o fluxo principal
+- Telegram e Instagram: implementar apenas recebimento e envio
+  de texto neste sprint (mídia fica para sprint futuro)
+- E-mail: implementar apenas texto simples neste sprint
+  (templates HTML ficam para sprint futuro)
+- CI/CD: usar apenas GitHub Actions + Replit (NÃO usar Vercel,
+  Railway ou outros serviços externos)
+- NÃO implementar Redis, Bull ou BullMQ
+  (jobQueue in-memory do Sprint 3 continua sendo usada)
+
+=== ENTREGA ESPERADA ===
+
+1. Mostrar todas as migrations geradas e aplicadas
+2. Confirmar integridade dos 49 contatos após migrations
+3. Mostrar server/webhookDispatcher.ts criado
+4. Mostrar server/telegramService.ts criado
+5. Mostrar server/instagramService.ts criado
+6. Mostrar server/emailService.ts criado
+7. Mostrar server/googleSheetsService.ts criado
+8. Mostrar processIncomingMessage() refatorado
+9. Mostrar página /settings/channels com os 3 canais
+10. Mostrar página /settings/webhooks implementada
+11. Mostrar página /settings/integrations com Google Sheets
+12. Mostrar arquivos .github/workflows/ criados
+13. Mostrar endpoint GET /api/health
+14. Testar: criar lead → webhook de saída disparado → POST recebido
+15. Testar: mensagem Telegram → resposta automática enviada
+16. Testar: e-mail recebido → aparece como conversa no Inbox
+
+Não faça mais nada além do que está descrito acima.
+Este é o Sprint 5 — último sprint do roadmap atual.
+Após a conclusão deste sprint, o Quanta Flow estará com
+todos os canais ativos, integrações externas funcionando
+e CI/CD automatizado.

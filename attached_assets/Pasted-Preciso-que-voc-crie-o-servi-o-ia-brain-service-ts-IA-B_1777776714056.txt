@@ -1,0 +1,26 @@
+Preciso que você crie o serviço `ia-brain.service.ts` (IA Brain — Inteligência Central). Este serviço não responderá a clientes, mas atuará como um "co-piloto" para o gestor de vendas no Dashboard do Quanta Flow. Ele deve varrer a base de dados periodicamente, analisar o estado dos leads e gerar Insights, Predições e Recomendações Automáticas.
+
+[REQUISITOS TÉCNICOS E COMPORTAMENTO ESPERADO]
+1. Criação do Serviço: Crie uma classe/módulo `IABrainService` em TypeScript.
+2. Análise de Leads Estagnados (Insights): Crie um método que busque em `unified_contacts` leads que possuem `temperature = quente` ou `score >= 70`, mas cujo `lastContactAt` seja maior que 48 horas.
+3. Predição de Conversão (Predições): Crie um método que utilize a integração atual da OpenAI para analisar o histórico de `conversations` de um lead específico e retorne uma probabilidade de conversão (Alta, Média, Baixa) com uma justificativa de 1 linha.
+4. Motor de Recomendações (Ações): Para cada insight gerado, o sistema deve sugerir uma ação prática baseada nos recursos do Quanta Flow. Exemplo de retorno: 
+   - Ação Sugerida: "Disparar trilha de Microlearning de reengajamento" [5]
+   - Ação Sugerida: "Mover lead manualmente para o pipeline 'Proposta'".
+5. Novo Endpoint: Crie uma rota `GET /api/brain/insights` (no Express/Fastify) que retorne um array de objetos JSON contendo as recomendações geradas para alimentar o Dashboard [6].
+
+[RESTRIÇÕES]
+- Como ainda não implementamos Redis/Bull para filas em background [4], utilize uma abordagem simplificada (ex: `node-cron` ou varredura sob demanda via requisição HTTP) para o processamento em lote.
+- Mantenha o código limpo, tipado com interfaces (ex: `IInsightResponse`) e com tratamento de erros (try/catch) para falhas na API da OpenAI.
+
+Escreva o código completo para o `ia-brain.service.ts`, as interfaces necessárias e a rota do controlador.
+
+--------------------------------------------------------------------------------
+💡 Por que este prompt é "Premium"?
+Contexto Exato: Ele diz ao Replit exatamente quais dados você já tem (score, temperature, lastIntent, etc.) para que a IA não invente um banco de dados do zero
+.
+Consciência de Limitações: Ele orienta a IA a não usar ferramentas de fila complexas (como Redis/Bull), pois nosso relatório de status indica que elas ainda não estão implementadas
+.
+Foco no Produto: Ele vincula as recomendações da inteligência às funcionalidades core do Quanta Flow (como enviar trilhas de Microlearning
+ ou atualizar estágios do Pipeline
+).

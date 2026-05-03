@@ -1,0 +1,552 @@
+Agent, vamos consolidar a infraestrutura completa do Quanta FLOW em uma única implementação. Este prompt inclui: Configurações Persistentes, Anti-Cache Completo e RBAC Enterprise.
+
+OBJETIVO GERAL:
+Criar uma infraestrutura profissional, segura e escalável com gerenciamento de credenciais, cache inteligente e controle de acesso baseado em roles.
+
+STACK MANTIDO:
+- Backend: Node.js + Express.js
+- Frontend: React + Vite
+- Banco de Dados: PostgreSQL
+- ORM: Drizzle
+- Autenticação: JWT com roles
+- WebSocket: Socket.io
+- Cache: Node.js Memory com TTL
+
+═══════════════════════════════════════════════════════════════
+PARTE 1: CONFIGURAÇÕES PERSISTENTES (Settings Table)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS DE BACKEND - PARTE 1:
+
+1. Schema (Drizzle) - Tabela Settings:
+   - Crie a tabela "settings" com:
+     • id (UUID, primary key)
+     • key (VARCHAR, unique) - ex: "z_api_instance_id", "evolution_token", "openai_key"
+     • value (TEXT, encrypted) - valor da credencial
+     • type (ENUM: 'api_key', 'url', 'token', 'id') - tipo de dado
+     • is_active (BOOLEAN, default true) - se está ativo
+     • description (VARCHAR) - descrição legível
+     • last_updated_by (UUID, foreign key → users.id)
+     • created_at (TIMESTAMP)
+     • updated_at (TIMESTAMP)
+   - Gere e execute a migração
+
+2. Serviço de Configurações (Config Service):
+   - Crie arquivo: backend/src/services/configService.js
+   - Funções:
+     • getSetting(key) - busca do cache primeiro, depois banco
+     • getAllSettings() - retorna todas as configurações ativas
+     • updateSetting(key, value, userId) - atualiza e invalida cache
+     • validateSetting(key, value) - valida antes de salvar
+     • refreshCache() - recarrega cache do banco
+   - Implemente cache em memória com TTL de 5 minutos
+   - Se banco falhar, use último valor em cache (fallback)
+
+3. Middleware de Configurações:
+   - Crie arquivo: backend/src/middleware/configMiddleware.js
+   - Função: injetar configurações ativas em req.config
+   - Validar que todas as configurações necessárias existem
+   - Se faltar configuração crítica, retornar erro 503
+
+4. Endpoints de Configurações (Admin):
+   - GET /api/v1/admin/settings - listar todas as configurações
+   - POST /api/v1/admin/settings - criar nova configuração
+   - PUT /api/v1/admin/settings/:key - atualizar configuração
+   - DELETE /api/v1/admin/settings/:key - deletar configuração
+   - POST /api/v1/admin/settings/refresh - forçar refresh do cache
+   - Todos os endpoints requerem role "super_admin"
+
+5. Alterar Serviços de API:
+   - Modifique evolutionService.js para:
+     • Antes de cada requisição, chamar getSetting()
+     • Usar credenciais do banco, não do .env
+     • Exemplo: const token = await configService.getSetting('evolution_token')
+   - Faça o mesmo para Z-API, OpenAI, etc.
+   - Adicione validação: se credencial inválida, retornar erro claro
+
+6. Segurança de Credenciais:
+   - Criptografe valores sensíveis no banco (use bcryptjs ou crypto)
+   - Nunca retorne credenciais completas no frontend (apenas primeiros 4 caracteres)
+   - Validar que user_id pertence ao usuário autenticado
+   - Adicionar rate limiting: máx 10 requisições/minuto para settings
+   - Log de auditoria: quem mudou qual configuração e quando
+
+═══════════════════════════════════════════════════════════════
+PARTE 2: ANTI-CACHE COMPLETO (Headers + Socket.io + Versionamento)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS DE BACKEND - PARTE 2:
+
+7. Middleware Anti-Cache para APIs:
+   - Crie arquivo: backend/src/middleware/antiCacheMiddleware.js
+   - Função: antiCacheMiddleware(req, res, next)
+   - Headers a adicionar em TODAS as respostas de API:
+     
+     res.set({
+       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+       'Pragma': 'no-cache',
+       'Expires': '0',
+       'Surrogate-Control': 'no-store',
+       'ETag': 'W/"' + Date.now() + '"'
+     });
+     
+     const timestamp = new Date().toISOString();
+     const method = req.method;
+     const path = req.path;
+     
+     console.log(`[${timestamp}] ${method} ${path}`);
+     console.log(`  Cache-Control: ${res.get('Cache-Control')}`);
+     console.log(`  ETag: ${res.get('ETag')}`);
+     
+     next();
+
+8. Middleware de Cache para Assets:
+   - Adicione middleware para servir assets com cache:
+     
+     app.use('/public', express.static('public', {
+       maxAge: '1d',
+       etag: false
+     }));
+     
+     app.use('/static', express.static('static', {
+       maxAge: '30d',
+       etag: false
+     }));
+
+9. Posicionamento de Middlewares (OBRIGATÓRIO):
+   - Ordem correta no app.js:
+     
+     1. app.use(cors(corsOptions));
+     2. app.use(express.json());
+     3. app.use('/public', express.static('public', { maxAge: '1d' }));
+     4. app.use('/api/v1', antiCacheMiddleware);
+     5. app.use('/api/v1', routes);
+     6. app.use(errorHandler);
+
+10. Versionamento de API (/api/v1):
+    - Atualize TODAS as rotas para usar /api/v1:
+      
+      ANTES:
+      app.use('/api/inbox', inboxRoutes);
+      app.use('/api/users', userRoutes);
+      
+      DEPOIS:
+      app.use('/api/v1/inbox', inboxRoutes);
+      app.use('/api/v1/users', userRoutes);
+      app.use('/api/v1/settings', settingsRoutes);
+      app.use('/api/v1/admin', adminRoutes);
+
+11. Socket.io - Desabilitar Cache:
+    - Localize o arquivo de configuração do Socket.io
+    - Atualize para:
+      
+      const io = require('socket.io')(server, {
+        cors: {
+          origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+          credentials: true,
+          methods: ['GET', 'POST']
+        },
+        transports: ['websocket', 'polling'],
+        pingInterval: 25000,
+        pingTimeout: 60000,
+        allowEIO3: true
+      });
+
+12. Endpoint de Teste Anti-Cache:
+    - Crie/atualize endpoint: GET /api/v1/test-cache
+    - Retorne:
+      
+      app.get('/api/v1/test-cache', (req, res) => {
+        const timestamp = new Date().toISOString();
+        
+        res.json({
+          status: 'ok',
+          timestamp: timestamp,
+          message: 'Se o timestamp muda a cada requisição, cache está desabilitado',
+          headers: {
+            'Cache-Control': res.get('Cache-Control'),
+            'Pragma': res.get('Pragma'),
+            'Expires': res.get('Expires'),
+            'ETag': res.get('ETag')
+          }
+        });
+      });
+
+═══════════════════════════════════════════════════════════════
+PARTE 3: RBAC ENTERPRISE (Role-Based Access Control)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS DE BACKEND - PARTE 3:
+
+13. Schema (Drizzle) - Tabelas de RBAC:
+    
+    a) Tabela "roles":
+       - id (UUID, primary key)
+       - name (VARCHAR, unique) - 'super_admin', 'admin', 'user'
+       - description (VARCHAR)
+       - created_at (TIMESTAMP)
+    
+    b) Tabela "permissions":
+       - id (UUID, primary key)
+       - name (VARCHAR, unique) - ex: 'view_settings', 'edit_settings', 'delete_users'
+       - description (VARCHAR)
+       - resource (VARCHAR) - ex: 'settings', 'users', 'inbox'
+       - action (VARCHAR) - ex: 'view', 'create', 'update', 'delete'
+       - created_at (TIMESTAMP)
+    
+    c) Tabela "role_permissions" (junction):
+       - id (UUID, primary key)
+       - role_id (UUID, foreign key → roles.id)
+       - permission_id (UUID, foreign key → permissions.id)
+       - created_at (TIMESTAMP)
+    
+    d) Tabela "user_roles" (junction):
+       - id (UUID, primary key)
+       - user_id (UUID, foreign key → users.id)
+       - role_id (UUID, foreign key → roles.id)
+       - assigned_by (UUID, foreign key → users.id)
+       - created_at (TIMESTAMP)
+    
+    e) Tabela "audit_logs":
+       - id (UUID, primary key)
+       - user_id (UUID, foreign key → users.id)
+       - action (VARCHAR) - ex: 'changed_role', 'accessed_settings', 'deleted_user'
+       - resource (VARCHAR) - ex: 'user', 'settings', 'configuration'
+       - resource_id (UUID)
+       - old_value (TEXT)
+       - new_value (TEXT)
+       - ip_address (VARCHAR)
+       - user_agent (VARCHAR)
+       - created_at (TIMESTAMP)
+    
+    Gere e execute as migrações.
+
+14. Definição de Roles e Permissões (Seed Data):
+    
+    SUPER_ADMIN (Dono):
+    ├─ view_settings, edit_settings, delete_settings
+    ├─ view_users, create_users, edit_users, delete_users
+    ├─ view_audit_logs, export_audit_logs
+    ├─ view_inbox, edit_inbox
+    ├─ view_api_configs, edit_api_configs
+    └─ manage_roles, assign_roles
+    
+    ADMIN (Gerente):
+    ├─ view_inbox, edit_inbox
+    ├─ view_users, create_users, edit_users (não pode deletar super_admin)
+    ├─ view_audit_logs (apenas de usuários que gerencia)
+    └─ NÃO tem: view_settings, edit_settings, view_api_configs
+    
+    USER (Atendente):
+    ├─ view_inbox, edit_inbox
+    ├─ view_leads, create_leads, edit_leads
+    └─ NÃO tem: view_users, view_settings, view_audit_logs
+
+15. Middleware de Autenticação e Autorização:
+    - Crie arquivo: backend/src/middleware/authMiddleware.js
+    - Função: verifyToken(req, res, next)
+      • Valida JWT
+      • Extrai user_id e roles do token
+      • Injeta em req.user
+    
+    - Crie arquivo: backend/src/middleware/rbacMiddleware.js
+    - Função: checkPermission(requiredPermission)
+      • Valida se usuário tem permissão
+      • Retorna 403 se não autorizado
+      • Registra tentativa de acesso não autorizado em audit_logs
+    
+    - Função: checkRole(requiredRole)
+      • Valida se usuário tem role específico
+      • Retorna 403 se não autorizado
+
+16. Endpoints de RBAC (Admin):
+    - GET /api/v1/admin/roles - listar roles
+    - GET /api/v1/admin/permissions - listar permissões
+    - POST /api/v1/admin/users/:userId/roles - atribuir role a usuário
+    - DELETE /api/v1/admin/users/:userId/roles/:roleId - remover role
+    - GET /api/v1/admin/audit-logs - listar logs de auditoria
+    - Todos requerem: checkPermission('manage_roles')
+
+17. Proteção de Endpoints Críticos:
+    - /api/v1/admin/settings/* → checkPermission('edit_settings')
+    - /api/v1/admin/users/* → checkPermission('manage_users')
+    - /api/v1/admin/audit-logs/* → checkPermission('view_audit_logs')
+    - /api/v1/inbox/* → checkPermission('view_inbox')
+    - /api/v1/leads/* → checkPermission('view_leads')
+
+18. JWT com Roles:
+    - Ao fazer login, incluir no JWT:
+      
+      {
+        "userId": "uuid",
+        "email": "user@example.com",
+        "roles": ["user"],
+        "permissions": ["view_inbox", "edit_inbox", "view_leads"]
+      }
+    
+    - Expiração: 24h
+    - Refresh token: 7 dias
+
+19. Seed Script (Usuário Mestre):
+    - Crie arquivo: backend/scripts/seedAdmin.js
+    - Criar usuário:
+      • Email: admin@quantashop.com.br
+      • Senha: Quanta@2026 (hashed com bcrypt)
+      • Role: super_admin
+    - Executar com: npm run seed:admin
+    - Adicionar ao package.json: "seed:admin": "node scripts/seedAdmin.js"
+
+20. Auditoria Completa:
+    - Registrar em audit_logs:
+      • Mudança de role de usuário
+      • Acesso a endpoints sensíveis
+      • Falhas de autenticação
+      • Mudanças em configurações
+      • Deletions de usuários
+    - Incluir: user_id, action, resource, old_value, new_value, ip_address, timestamp
+
+═══════════════════════════════════════════════════════════════
+TAREFAS DE FRONTEND - TODAS AS PARTES
+═══════════════════════════════════════════════════════════════
+
+21. Atualizar URLs para /api/v1:
+    - Localize o arquivo de configuração de API (apiRequest.ts ou api.ts)
+    - Atualize TODAS as URLs:
+      
+      ANTES:
+      const API_BASE_URL = 'http://localhost:3000/api';
+      
+      DEPOIS:
+      const API_BASE_URL = 'http://localhost:3000/api/v1';
+
+22. Adicionar Timestamp em Requisições:
+    - Atualize o interceptor de requisições:
+      
+      api.interceptors.request.use(config => {
+        config.params = {
+          ...config.params,
+          t: Date.now()
+        };
+        
+        config.headers['Cache-Control'] = 'no-cache';
+        config.headers['Pragma'] = 'no-cache';
+        
+        return config;
+      });
+
+23. Validar Status de Resposta:
+    - Atualize o interceptor de resposta:
+      
+      api.interceptors.response.use(
+        response => {
+          console.log(`[${new Date().toISOString()}] ${response.status} ${response.config.url}`);
+          
+          if (response.status === 304) {
+            console.warn('⚠️ Recebeu 304 Not Modified - cache ainda está ativo!');
+          }
+          
+          return response;
+        },
+        error => {
+          console.error(`[${new Date().toISOString()}] Erro: ${error.message}`);
+          return Promise.reject(error);
+        }
+      );
+
+24. Tela de Configurações Admin (Settings):
+    - Componente: frontend/src/components/Admin/SettingsPanel.jsx
+    - Protegida: apenas usuários com role "super_admin"
+    - Layout:
+      • Abas por categoria (WhatsApp, IA, Integrações, etc.)
+      • Tabela com: Key | Valor (mascarado) | Tipo | Ativo | Ações
+      • Botão "Editar" abre modal
+      • Botão "Deletar" com confirmação
+      • Botão "Testar Conexão" valida credencial
+    - Ao salvar, chama PUT /api/v1/admin/settings/:key
+    - Exibe notificação: "Configuração atualizada com sucesso"
+
+25. Modal de Edição de Settings:
+    - Componente: frontend/src/components/Admin/SettingModal.jsx
+    - Campos:
+      • Key (read-only)
+      • Value (input, mascarado se sensível)
+      • Type (select: api_key, url, token, id)
+      • Description (textarea)
+      • Is Active (toggle)
+    - Botão "Testar" - valida credencial antes de salvar
+    - Botão "Salvar" - PUT para backend
+
+26. Menu Dinâmico (Sidebar):
+    - Componente: frontend/src/components/Sidebar.jsx
+    - Esconder abas baseado em permissões do usuário:
+      • SUPER_ADMIN: vê todas as abas
+      • ADMIN: vê Inbox, Usuários, Logs de Auditoria (não vê Configurações)
+      • USER: vê apenas Inbox e Leads
+    - Usar: req.user.permissions (vem do JWT)
+
+27. Tela de Gestão de Usuários (Admin):
+    - Componente: frontend/src/components/Admin/UserManagement.jsx
+    - Protegida: checkPermission('manage_users')
+    - Tabela com colunas:
+      • Email
+      • Nome
+      • Nível de Acesso (dropdown com roles)
+      • Data de Criação
+      • Ações (Editar, Deletar)
+    - Dropdown de roles:
+      • USER
+      • ADMIN
+      • SUPER_ADMIN (apenas SUPER_ADMIN pode atribuir)
+    - Ao mudar role, chamar: PUT /api/v1/admin/users/:userId/roles
+
+28. Tela de Logs de Auditoria:
+    - Componente: frontend/src/components/Admin/AuditLogs.jsx
+    - Protegida: checkPermission('view_audit_logs')
+    - Tabela com:
+      • Usuário que fez a ação
+      • Ação realizada
+      • Recurso afetado
+      • Valor anterior
+      • Valor novo
+      • Data/Hora
+      • IP Address
+    - Filtros: por usuário, por ação, por data
+    - Botão "Exportar CSV"
+
+29. Proteção de Rotas (Frontend):
+    - Componente: frontend/src/components/ProtectedRoute.jsx
+    - Valida se usuário tem permissão antes de renderizar
+    - Se não autorizado, redireciona para /unauthorized
+
+30. Limpeza de Cache (Desenvolvimento):
+    - Adicione ao App.jsx:
+      
+      useEffect(() => {
+        if (process.env.NODE_ENV === 'development') {
+          if ('caches' in window) {
+            caches.keys().then(names => {
+              names.forEach(name => {
+                caches.delete(name);
+                console.log(`Cache '${name}' limpo`);
+              });
+            });
+          }
+        }
+      }, []);
+
+31. Socket.io Client:
+    - Localize o arquivo de conexão Socket.io
+    - Atualize para:
+      
+      import io from 'socket.io-client';
+      
+      const socket = io(process.env.REACT_APP_API_URL || 'http://localhost:3000', {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+        transports: ['websocket', 'polling']
+      });
+      
+      socket.on('connect', () => {
+        console.log('✅ Socket.io conectado');
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('❌ Socket.io desconectado');
+      });
+
+═══════════════════════════════════════════════════════════════
+REQUISITOS TÉCNICOS CRÍTICOS
+═══════════════════════════════════════════════════════════════
+
+SEGURANÇA:
+- Criptografe valores sensíveis no banco
+- Nunca confiar em roles do frontend (sempre validar no backend)
+- Validar permissões em CADA endpoint
+- Não permitir que USER mude sua própria role
+- Não permitir que ADMIN delete SUPER_ADMIN
+- Rate limiting em endpoints de autenticação
+
+PERFORMANCE:
+- Cache em memória com TTL de 5 minutos
+- Fallback para cache se banco cair
+- Assets cacheados por 1-30 dias
+- Índices no banco para user_id, conversation_id, lead_id
+
+RESILIÊNCIA:
+- Se banco falhar, usar último valor em cache
+- Se cache expirar e banco falhar, usar valor padrão
+- Adicionar log: "Usando valor em cache para {key}"
+- Adicionar alerta: "Banco de dados indisponível, usando cache"
+
+VALIDAÇÃO:
+- Validar credenciais antes de salvar
+- Testar conexão com APIs externas
+- Validar que user_id pertence ao usuário autenticado
+- Validar que todas as configurações necessárias existem
+
+═══════════════════════════════════════════════════════════════
+IMPORTANTE
+═══════════════════════════════════════════════════════════════
+
+- Mantenha a estrutura de pastas (não reorganize)
+- Use Drizzle para todas as queries
+- Implemente RBAC em TODOS os endpoints
+- Implemente cache para performance
+- Adicione validação de credenciais antes de salvar
+- Sem reiniciar Replit para mudar configuração
+- Ative App Testing para validar migrações
+- Adicione logs detalhados para debug
+- Teste cada role com diferentes endpoints
+- Teste em DevTools que Status é 200 (não 304)
+- Teste Socket.io conectando e recebendo mensagens
+
+═══════════════════════════════════════════════════════════════
+ENTREGA FINAL
+═══════════════════════════════════════════════════════════════
+
+PARTE 1 - CONFIGURAÇÕES PERSISTENTES:
+✅ Tabela "settings" criada e migrada
+✅ Config Service funcionando com cache
+✅ Endpoints de admin funcionando
+✅ Tela de Configurações renderizando
+✅ Mudança de credencial instantânea (sem reiniciar)
+✅ Validação de credenciais funcionando
+✅ Auditoria registrando mudanças
+
+PARTE 2 - ANTI-CACHE COMPLETO:
+✅ Middleware anti-cache criado
+✅ Posicionado ANTES das rotas
+✅ Headers corretos em todas as respostas de API
+✅ CORS não conflitando
+✅ Socket.io configurado
+✅ Versionamento /api/v1 implementado
+✅ Cache para assets funcionando
+✅ Logs detalhados com timestamp
+✅ Endpoint /api/v1/test-cache retornando headers corretos
+✅ Status 200 em todas as requisições (não 304)
+✅ Timestamp em todas as requisições
+✅ Socket.io conectando e recebendo mensagens em tempo real
+
+PARTE 3 - RBAC ENTERPRISE:
+✅ Tabelas de RBAC criadas e migradas
+✅ Roles e permissões definidas
+✅ Middleware de autenticação funcionando
+✅ Middleware de autorização funcionando
+✅ Endpoints protegidos com checkPermission
+✅ JWT incluindo roles e permissions
+✅ Seed script criando usuário mestre
+✅ Menu dinâmico no frontend
+✅ Tela de gestão de usuários funcionando
+✅ Tela de logs de auditoria funcionando
+✅ Proteção de rotas no frontend
+✅ Pronto para produção com segurança enterprise
+
+RESULTADO FINAL:
+🚀 Infraestrutura completa, profissional e pronta para produção
+🔒 Segurança enterprise com RBAC e auditoria
+⚡ Performance otimizada com cache inteligente
+🔧 Gerenciamento de credenciais sem downtime
+📊 Logs detalhados para troubleshooting
+✅ Pronto para escalar para 3.905 agentes

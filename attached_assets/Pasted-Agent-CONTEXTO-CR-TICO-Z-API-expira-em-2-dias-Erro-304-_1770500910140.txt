@@ -1,0 +1,477 @@
+Agent, CONTEXTO CRÍTICO: Z-API expira em 2 dias. Erro 304 está bloqueando o sistema. Você tem 24 horas para implementar tudo. Siga RIGOROSAMENTE a ordem de prioridade.
+
+OBJETIVO GERAL:
+Resolver erro 304, implementar CMS de Branding, expandir schema para omnichannel, e preparar Inbox & Pipeline para escala ManyChat/Kommo.
+
+STACK MANTIDO:
+- Backend: Node.js + Express.js
+- Frontend: React + Vite
+- Banco de Dados: PostgreSQL
+- ORM: Drizzle
+- WebSocket: Socket.io
+- Upload: Multer + Sharp
+
+═══════════════════════════════════════════════════════════════
+🔴 PARTE 0: ANTI-CACHE MIDDLEWARE (PRIORIDADE MÁXIMA)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS CRÍTICAS - PARTE 0:
+
+1. Middleware Global Anti-Cache (BLOQUEADOR):
+   - Crie arquivo: backend/src/middleware/globalAntiCacheMiddleware.js
+   - Código:
+     
+     const globalAntiCacheMiddleware = (req, res, next) => {
+       // Aplicar headers anti-cache em TODAS as respostas
+       res.set({
+         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+         'Pragma': 'no-cache',
+         'Expires': '0',
+         'Surrogate-Control': 'no-store',
+         'ETag': 'W/"' + Date.now() + '"'
+       });
+       
+       // Log detalhado
+       const timestamp = new Date().toISOString();
+       console.log(`[${timestamp}] ${req.method} ${req.path} - Anti-Cache Applied`);
+       
+       next();
+     };
+     
+     module.exports = globalAntiCacheMiddleware;
+
+2. Aplicar Middleware ANTES de TODAS as rotas:
+   - No arquivo app.js ou server.ts:
+     
+     // ORDEM CRÍTICA:
+     1. app.use(cors(corsOptions));
+     2. app.use(express.json());
+     3. app.use(globalAntiCacheMiddleware); // ← AQUI, ANTES DE TUDO
+     4. app.use('/api/v1', routes);
+     5. app.use(errorHandler);
+
+3. Validação Imediata:
+   - Abra DevTools → Network
+   - Recarregue página
+   - Verifique TODAS as requisições:
+     ✅ Status: 200 OK (não 304)
+     ✅ Cache-Control: no-store, no-cache, must-revalidate
+     ✅ Pragma: no-cache
+     ✅ Expires: 0
+   - Se ainda houver 304, PARE e debug antes de continuar
+
+4. Teste de Timestamp:
+   - Endpoint: GET /api/v1/test-cache
+   - Faça 3 requisições seguidas
+   - Timestamps devem ser DIFERENTES
+   - Se forem iguais, cache ainda está ativo
+
+⚠️ CRÍTICO: Não prossiga para PARTE 1 até resolver 100% o erro 304.
+
+═══════════════════════════════════════════════════════════════
+📊 PARTE 1: SCHEMA OMNICHANNEL 2.0 (Drizzle ORM)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS - PARTE 1:
+
+5. Atualizar Tabela "branding_config":
+   - Adicione campos:
+     
+     a) Tabela "branding_config" (NOVA):
+        - id (UUID, primary key)
+        - user_id (UUID, foreign key → users.id)
+        - company_name (VARCHAR)
+        - primary_color (VARCHAR) - ex: #FF5733
+        - secondary_color (VARCHAR) - ex: #33FF57
+        - logo_url (VARCHAR)
+        - favicon_url (VARCHAR)
+        - created_at (TIMESTAMP)
+        - updated_at (TIMESTAMP)
+
+6. Expandir Tabela "leads":
+   - Adicione campos:
+     
+     ALTER TABLE leads ADD COLUMN (
+       lead_score INTEGER DEFAULT 0, -- 0-100
+       current_stage VARCHAR DEFAULT 'novo', -- novo, qualificado, proposta, fechado
+       origin_platform ENUM('whatsapp', 'instagram', 'facebook', 'youtube', 'tiktok', 'x', 'linkedin') DEFAULT 'whatsapp',
+       temperature ENUM('frio', 'morno', 'quente') DEFAULT 'frio',
+       last_interaction_at TIMESTAMP,
+       next_followup_at TIMESTAMP
+     );
+
+7. Criar Tabela "automation_flows":
+   - Estrutura:
+     
+     CREATE TABLE automation_flows (
+       id UUID PRIMARY KEY,
+       user_id UUID FOREIGN KEY → users.id,
+       name VARCHAR, -- ex: "Resposta Automática Compra"
+       trigger_keywords TEXT[], -- ex: ["quero comprar", "quanto custa"]
+       response_template TEXT, -- resposta automática
+       is_active BOOLEAN DEFAULT true,
+       created_at TIMESTAMP,
+       updated_at TIMESTAMP
+     );
+
+8. Criar Tabela "quick_replies":
+   - Estrutura:
+     
+     CREATE TABLE quick_replies (
+       id UUID PRIMARY KEY,
+       user_id UUID FOREIGN KEY → users.id,
+       shortcut VARCHAR UNIQUE, -- ex: "/ola"
+       response TEXT, -- resposta completa
+       category VARCHAR, -- ex: "saudação", "produto", "suporte"
+       is_active BOOLEAN DEFAULT true,
+       created_at TIMESTAMP
+     );
+
+9. Criar Tabela "pipeline_stages":
+   - Estrutura:
+     
+     CREATE TABLE pipeline_stages (
+       id UUID PRIMARY KEY,
+       user_id UUID FOREIGN KEY → users.id,
+       name VARCHAR, -- ex: "Novo", "Qualificado", "Proposta"
+       order INTEGER,
+       color VARCHAR, -- ex: #FF5733
+       created_at TIMESTAMP
+     );
+
+10. Gerar e Executar Migrações:
+    - npm run migrate
+    - Validar que todas as tabelas foram criadas
+    - Validar que todos os campos foram adicionados
+
+═══════════════════════════════════════════════════════════════
+🎨 PARTE 2: CMS DE BRANDING (Autonomia Total)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS - PARTE 2:
+
+11. Configuração de Upload (Multer):
+    - Crie arquivo: backend/src/config/uploadConfig.js
+    - Configuração:
+      
+      const multer = require('multer');
+      const path = require('path');
+      
+      const storage = multer.diskStorage({
+        destination: (req, file, cb) => {
+          const uploadDir = path.join(__dirname, '../../uploads/branding');
+          cb(null, uploadDir);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+          cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        }
+      });
+      
+      const fileFilter = (req, file, cb) => {
+        const allowedMimes = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon'];
+        if (allowedMimes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Tipo de arquivo não permitido'));
+        }
+      };
+      
+      const upload = multer({
+        storage: storage,
+        fileFilter: fileFilter,
+        limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+      });
+      
+      module.exports = upload;
+
+12. Processamento de Imagens (Sharp):
+    - Crie arquivo: backend/src/services/imageProcessingService.js
+    - Funções:
+      
+      const sharp = require('sharp');
+      
+      async function processLogo(filePath) {
+        await sharp(filePath)
+          .resize(500, 500, {
+            fit: 'contain',
+            background: { r: 255, g: 255, b: 255, alpha: 0 }
+          })
+          .png()
+          .toFile(filePath);
+      }
+      
+      async function processFavicon(filePath) {
+        await sharp(filePath)
+          .resize(128, 128, { fit: 'cover' })
+          .png()
+          .toFile(filePath);
+      }
+      
+      module.exports = { processLogo, processFavicon };
+
+13. Endpoints de Upload:
+    - POST /api/v1/admin/branding/logo
+      • Receber arquivo
+      • Validar tipo e tamanho
+      • Processar com Sharp
+      • Salvar no disco
+      • Salvar URL no banco
+      • Emitir Socket.io: "branding:logo_updated"
+      • Retornar URL
+    
+    - POST /api/v1/admin/branding/favicon
+      • Mesmo fluxo do logo
+    
+    - DELETE /api/v1/admin/branding/logo
+      • Deletar arquivo
+      • Limpar URL no banco
+      • Emitir Socket.io: "branding:logo_deleted"
+
+14. Endpoints de SEO:
+    - GET /api/v1/admin/branding/seo
+      • Retornar config SEO
+    
+    - PUT /api/v1/admin/branding/seo
+      • Atualizar config SEO
+      • Validar caracteres (title max 60, description max 160)
+      • Salvar no banco
+      • Emitir Socket.io: "branding:seo_updated"
+
+15. Endpoints de Analytics:
+    - GET /api/v1/admin/branding/analytics
+      • Retornar scripts
+    
+    - POST /api/v1/admin/branding/analytics
+      • Adicionar novo script
+      • Validar código
+      • Salvar no banco
+      • Emitir Socket.io: "branding:analytics_updated"
+    
+    - PUT /api/v1/admin/branding/analytics/:id
+      • Atualizar script
+    
+    - DELETE /api/v1/admin/branding/analytics/:id
+      • Deletar script
+
+16. Serviço de Injeção de Meta Tags:
+    - Crie arquivo: backend/src/services/seoService.js
+    - Função: generateMetaTags(userId)
+    - Retorna HTML com meta tags:
+      
+      <title>Quanta Shop</title>
+      <meta name="description" content="...">
+      <meta name="keywords" content="...">
+      <meta property="og:title" content="...">
+      <meta property="og:description" content="...">
+
+17. Serviço de Injeção de Scripts:
+    - Crie arquivo: backend/src/services/analyticsService.js
+    - Função: generateAnalyticsScripts(userId)
+    - Retorna array de scripts para injetar no <head>
+
+═══════════════════════════════════════════════════════════════
+💬 PARTE 3: INBOX & PIPELINE (A Defesa e o Ataque)
+═══════════════════════════════════════════════════════════════
+
+TAREFAS - PARTE 3:
+
+18. Expandir Componente Inbox:
+    - Componente: frontend/src/components/Inbox/InboxPage.jsx
+    - Layout:
+      
+      ┌─────────────────────────────────────────┐
+      │ Conversas (Esquerda)  │ Chat (Direita)  │
+      │                       │                 │
+      │ Lead Card:            │ Mensagens       │
+      │ ├─ Nome              │                 │
+      │ ├─ Temperatura 🔴    │ Lead Info:      │
+      │ ├─ Ícone Rede 📱    │ ├─ Nome         │
+      │ ├─ Última msg        │ ├─ Temperatura  │
+      │ └─ Unread count      │ ├─ Rede         │
+      │                       │ ├─ Score        │
+      │                       │ ├─ Estágio      │
+      │                       │ └─ Histórico    │
+      │                       │                 │
+      │                       │ Input + Enviar  │
+      └─────────────────────────────────────────┘
+
+19. Componente Lead Card Lateral:
+    - Componente: frontend/src/components/Inbox/LeadCard.jsx
+    - Exibir:
+      • Nome do lead
+      • Temperatura (🔵 Frio, 🟡 Morno, 🔴 Quente)
+      • Ícone da rede (📱 WhatsApp, 📷 Instagram, 🎬 YouTube, 🎵 TikTok, 𝕏 X)
+      • Última mensagem
+      • Contador de não lidas
+      • Lead score (0-100)
+
+20. Componente Pipeline Selector:
+    - Componente: frontend/src/components/Inbox/PipelineSelector.jsx
+    - Dentro do chat, adicionar:
+      • Dropdown com estágios do funil
+      • Ao selecionar, chamar: PUT /api/v1/inbox/:conversationId/stage
+      • Atualizar visualmente
+      • Registrar em audit_logs
+    
+    - Exemplo:
+      
+      [Novo] → [Qualificado] → [Proposta] → [Fechado]
+       (atual)
+
+21. Componente Lead Info Sidebar:
+    - Componente: frontend/src/components/Inbox/LeadInfoSidebar.jsx
+    - Exibir:
+      • Nome
+      • Email
+      • Telefone
+      • Redes conectadas (WhatsApp, Instagram, YouTube, TikTok, X)
+      • Temperatura
+      • Lead Score
+      • Estágio atual
+      • Histórico de estágios
+      • Última intenção detectada
+      • Próximo follow-up
+
+22. Biblioteca de Templates (Quick Replies):
+    - Componente: frontend/src/components/Inbox/QuickReplies.jsx
+    - Funcionalidades:
+      • Listar templates
+      • Digitar "/" para ativar autocomplete
+      • Exemplo: "/ola" → "Olá! Como posso ajudar?"
+      • Ao clicar, inserir no input
+      • Gerenciar templates (criar, editar, deletar)
+    
+    - Endpoints:
+      • GET /api/v1/quick-replies
+      • POST /api/v1/quick-replies
+      • PUT /api/v1/quick-replies/:id
+      • DELETE /api/v1/quick-replies/:id
+
+23. Integração com CRM:
+    - Quando atendente muda estágio:
+      • Chamar: PUT /api/v1/inbox/:conversationId/stage
+      • Atualizar lead.current_stage no banco
+      • Registrar em lead_status_history
+      • Emitir Socket.io: "lead:stage_changed"
+      • Atualizar visualmente no Inbox
+
+24. Logs Detalhados:
+    - Adicionar logs para cada webhook:
+      
+      console.log(`[${timestamp}] Webhook recebido`);
+      console.log(`  Origin Platform: ${origin_platform}`);
+      console.log(`  From: ${from}`);
+      console.log(`  Message: ${message}`);
+      console.log(`  Detected Intent: ${detected_intent}`);
+
+25. Atualização em Tempo Real:
+    - Socket.io eventos:
+      • "message:received" - nova mensagem
+      • "lead:stage_changed" - estágio mudou
+      • "lead:temperature_updated" - temperatura mudou
+      • "branding:logo_updated" - logo mudou
+      • "branding:seo_updated" - SEO mudou
+      • "branding:analytics_updated" - analytics mudou
+
+═══════════════════════════════════════════════════════════════
+🔒 SEGURANÇA E VALIDAÇÃO
+═══════════════════════════════════════════════════════════════
+
+26. Validação de Upload:
+    - Validar extensão: .png, .jpg, .gif, .ico
+    - Validar MIME type
+    - Validar tamanho: máx 5MB
+    - Sanitizar nome do arquivo
+    - Não permitir path traversal (../)
+
+27. Validação de Scripts:
+    - Não permitir: <script> com src externo não confiável
+    - Permitir: Google Analytics, Meta Pixel, Hotjar, etc.
+    - Sanitizar código (remover tags perigosas)
+    - Registrar em audit_logs
+
+28. Rate Limiting:
+    - Máx 10 uploads/hora por usuário
+    - Máx 100 requisições/minuto por usuário
+    - Máx 5 mudanças de estágio/minuto por conversa
+
+═══════════════════════════════════════════════════════════════
+✅ CHECKLIST DE ENTREGA
+═══════════════════════════════════════════════════════════════
+
+PARTE 0 - ANTI-CACHE:
+✅ Middleware global implementado
+✅ Headers corretos em todas as respostas
+✅ Status 200 OK (não 304)
+✅ Timestamps diferentes a cada requisição
+✅ Logs detalhados no console
+
+PARTE 1 - SCHEMA:
+✅ Tabela branding_config criada
+✅ Tabela leads expandida
+✅ Tabela automation_flows criada
+✅ Tabela quick_replies criada
+✅ Tabela pipeline_stages criada
+✅ Migrações executadas
+
+PARTE 2 - CMS DE BRANDING:
+✅ Upload de logo funcionando
+✅ Upload de favicon funcionando
+✅ Endpoints de SEO funcionando
+✅ Endpoints de analytics funcionando
+✅ Meta tags sendo injetadas
+✅ Scripts sendo injetados
+✅ Socket.io atualizando em tempo real
+
+PARTE 3 - INBOX & PIPELINE:
+✅ Lead card lateral exibindo temperatura e rede
+✅ Pipeline selector dentro do chat
+✅ Lead info sidebar completo
+✅ Quick replies funcionando
+✅ Integração com CRM funcionando
+✅ Logs detalhados para cada webhook
+✅ Atualização em tempo real via Socket.io
+
+═══════════════════════════════════════════════════════════════
+🚀 IMPORTANTE
+═══════════════════════════════════════════════════════════════
+
+ORDEM CRÍTICA:
+1. Implementar PARTE 0 PRIMEIRO (anti-cache)
+2. Validar que erro 304 foi resolvido
+3. Depois implementar PARTE 1 (schema)
+4. Depois implementar PARTE 2 (branding)
+5. Depois implementar PARTE 3 (inbox)
+
+NÃO PROSSIGA para próxima parte sem validar a anterior.
+
+URGÊNCIA:
+- Z-API expira em 2 dias
+- Erro 304 está bloqueando
+- Você tem 24 horas
+- Trabalhe rápido mas com qualidade
+
+TESTES:
+- Teste cada parte isoladamente
+- Teste integração entre partes
+- Teste em DevTools (Status 200)
+- Teste Socket.io em tempo real
+- Teste upload com arquivos reais
+- Teste validação de arquivo
+- Teste injeção de meta tags
+- Teste injeção de scripts
+
+═══════════════════════════════════════════════════════════════
+ENTREGA FINAL
+═══════════════════════════════════════════════════════════════
+
+✅ Erro 304 resolvido (Status 200 OK)
+✅ Schema omnichannel 2.0 implementado
+✅ CMS de Branding funcionando
+✅ Inbox & Pipeline integrados
+✅ Logs detalhados
+✅ Segurança validada
+✅ Pronto para escala ManyChat/Kommo
+✅ Pronto para renovar Z-API
+✅ Pronto para produção

@@ -1,0 +1,30 @@
+Atue como um Engenheiro de Software Sênior especialista em Node.js, TypeScript e Segurança de Aplicações Web. Estamos desenvolvendo o "Quanta Flow", um CRM omnichannel com níveis hierárquicos de acesso (RBAC).
+
+[CONTEXTO DA ARQUITETURA ATUAL]
+- O sistema é construído em Node.js com TypeScript.
+- Manipulamos o banco de dados centralizando as operações no arquivo `storage.ts`.
+- Já possuímos o conceito de `users` com diferentes níveis de permissão (Super Admin, Admin, Usuário), conforme a documentação do sistema.
+
+[OBJETIVO DA FEATURE]
+Preciso que você implemente um sistema de Autenticação JWT (JSON Web Tokens) robusto, utilizando a estratégia de `tokenVersion`. O objetivo do `tokenVersion` é permitir a revogação imediata de tokens (logout global ou invalidação de sessão por segurança) sem precisar de uma "blacklist" no banco de dados ou Redis.
+
+[REQUISITOS TÉCNICOS E COMPORTAMENTO ESPERADO]
+1. Atualização do Schema/Storage: 
+   - Atualize a interface e a lógica do modelo de usuário no `storage.ts` para incluir os campos `passwordHash` (string) e `tokenVersion` (inteiro, padrão `0`).
+2. Serviço de Autenticação (`auth.service.ts`):
+   - Crie métodos para `register` e `login`. Use a biblioteca `bcrypt` ou `bcryptjs` para o hash seguro de senhas.
+   - O login deve gerar dois tokens: um `AccessToken` (curta duração, ex: 15m) e um `RefreshToken` (longa duração, ex: 7d).
+   - IMPORTANTE: O `RefreshToken` DEVE conter o campo `tokenVersion` no seu payload JWT, referenciando o valor atual do banco de dados para aquele usuário.
+3. Rota de Refresh (`POST /api/auth/refresh`):
+   - Deve receber o Refresh Token, verificar sua validade e buscar o usuário no banco (via `storage.ts`).
+   - Verifique se o `tokenVersion` dentro do payload do JWT é IGUAL ao `tokenVersion` gravado no banco de dados. Se for diferente, rejeite (token revogado). Se for igual, emita novos Access e Refresh tokens.
+4. Rota de Revogação (`POST /api/auth/revoke`):
+   - Crie uma rota protegida (disponível apenas para Super Admin ou para o próprio usuário) que, ao ser chamada, incrementa (+1) o `tokenVersion` do usuário no banco de dados. Isso invalidará automaticamente todos os Refresh Tokens anteriores dele.
+5. Middleware de Proteção (`auth.middleware.ts`):
+   - Crie o middleware que intercepta requisições `req.headers.authorization`, valida o Access Token e injeta o `req.user` (com o id e a role/nível de acesso do usuário) para uso nos controllers.
+
+[RESTRIÇÕES]
+- Mantenha o código limpo, utilize interfaces TypeScript estritas (ex: `IJwtPayload`) e adicione tratamento de erros com blocos try/catch.
+- Não utilize Redis para esta funcionalidade; a lógica de validação do `tokenVersion` deve consultar a base principal via `storage.ts`.
+
+Escreva o código completo para o `auth.service.ts`, `auth.middleware.ts`, as atualizações necessárias nas interfaces e as rotas correspondentes no controller.

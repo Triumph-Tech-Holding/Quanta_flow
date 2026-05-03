@@ -1,0 +1,52 @@
+Essa é a visão final de um **Ecossistema de Conteúdo Infinito**, Mauro. O que você está descrevendo é a transformação de uma **centelha criativa** em uma **metralhadora de autoridade omnichannel**. Com os seus 30 anos de experiência, o seu papel é dar a direção, e o **Quanta Flow** faz a "multiplicação de pães" do conhecimento.
+
+Aqui está o **Prompt de Engenharia** atualizado para o seu agente no **Replit**, configurado para produzir todos esses formatos de forma autônoma e integrada:
+
+---
+
+# 🤖 System Prompt: Arquiteto do Motor de Multiplicação Quanta Flow
+
+**Objetivo:** Desenvolver uma engine SaaS multi-tenant que receba uma única **Ideia/Contexto** e gere um pacote completo de ativos de marketing e autoridade, pesquisando fontes e áreas de conhecimento automaticamente.
+
+---
+
+## 🧠 1. Engine de Pesquisa e Enriquecimento (Autônomo)
+O sistema deve processar o input do usuário e preencher:
+* **Área de Conhecimento**: Identificar se é Filosofia, Neurociência, Física, Administração, etc.
+* **Fontes de Validação**: Pesquisar autores e teses que validem a ideia (Ex: Se a ideia for "Resiliência", citar Nietzsche ou o Estoicismo).
+
+## ✍️ 2. Módulo de Produção Multiformato (1 Ideia → N Ativos)
+A partir da ideia enriquecida, a IA deve gerar:
+* **Headlines Virais**: 5 variações de títulos magnéticos (estilo **Alex Hormozi**) para atrair cliques imediatos.
+* [cite_start]**Artigos de Autoridade**: Textos longos e estruturados para Blog e LinkedIn, focados em SEO e autoridade B2B[cite: 85, 113].
+* [cite_start]**Roteiros de Podcast**: Estrutura de episódios curtos (15-30 min) com introdução, desenvolvimento e "call to action" (CTA)[cite: 81, 82].
+* [cite_start]**Roteiros de Live**: Um guia (roadmap) com os pontos principais, ganchos de retenção e momentos de interação com a audiência[cite: 93].
+* [cite_start]**Scripts de Reels/TikTok/Shorts**: Roteiros de 15 a 60 segundos com ganchos fortes e edição dinâmica (estilo **GaryVee**)[cite: 77, 114, 115].
+
+## 👥 3. Integração de Clonagem (Avatar e Voz)
+* **Configuração no Admin**: Campos para API Keys e IDs de voz/avatar do **HeyGen** (Vídeo) e **ElevenLabs** (Voz).
+* **Processamento**: O roteiro de Podcast e Reels é enviado automaticamente para as plataformas de clone, gerando o arquivo final de mídia.
+
+## 🛠️ 4. Transparência e Controle Manual
+* **Show Prompt**: Cada peça gerada deve ter um botão para exibir o prompt mestre utilizado, permitindo cópia para uso externo ou ajuste fino.
+* **Dashboard de Ativos**: Galeria organizada por **ID** e **Data de Criação**, com botões de download para postagem manual.
+
+## 🗓️ 5. Agendamento e Cronograma SaaS
+* [cite_start]**Calendário Editorial**: Interface para arrastar os IDs aprovados para slots de tempo configurados no Admin (Instagram, Facebook, TikTok, YouTube, LinkedIn, Blog)[cite: 109, 110, 111].
+* [cite_start]**Dashboard de Relatórios**: Visualização de KPIs (Alcance, Engajamento, Conversão) integrando os resultados das postagens[cite: 129, 131].
+
+---
+
+### 📊 Log de Inteligência Gerado (Exemplo)
+
+| ID | Data | Ideia Central | Área / Fonte | Formatos Gerados | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **023** | 23/03/2026 | **Potência de Agir** | Filosofia (Espinosa) | Blog, Live, Reels, Headlines | ✅ Pronto |
+| **024** | 23/03/2026 | **Neuroplasticidade** | Neurociência (Huberman) | Podcast, Artigo, Reels, Headlines | ⏳ Clonando Voz |
+
+---
+
+### 🚀 O Impacto para Mauro Triumph
+[cite_start]Como hoje é **23 de março de 2026** [cite: 4, 161][cite_start], essa automação permite que você mantenha a relevância da sua marca pessoal aos **53 anos**, agindo como um estrategista global que utiliza a tecnologia para escalar seu impacto social e a prosperidade equitativa[cite: 9, 11].
+
+**Mauro, para o desenvolvedor do Replit, você quer que eu detalhe o "Prompt de Headlines" (focado em cliques) ou o "Prompt de Roteiro de Live" (focado em retenção) primeiro?**
