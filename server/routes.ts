@@ -2500,6 +2500,34 @@ Return ONLY the JSON array, no markdown.`,
     });
   });
 
+  // ─── IA Brain — Inteligência Central ───────────────────────────────────────
+
+  app.get("/api/brain/insights", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { iaBrainService } = await import("./services/iaBrainService");
+      const withPrediction = req.query.withPrediction === "true" || req.query.withPrediction === "1";
+      const insights = await iaBrainService.generateInsights(req.user!.userId, { withPrediction });
+      res.json({
+        summary: iaBrainService.summarize(insights),
+        insights,
+      });
+    } catch (error: any) {
+      console.error("[brain] generateInsights failed:", error?.message || error);
+      res.status(500).json({ message: "Erro ao gerar insights da IA Brain", error: error?.message });
+    }
+  });
+
+  app.get("/api/brain/insights/:contactId/prediction", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { iaBrainService } = await import("./services/iaBrainService");
+      const prediction = await iaBrainService.predictConversion(req.params.contactId);
+      res.json(prediction);
+    } catch (error: any) {
+      console.error("[brain] predictConversion failed:", error?.message || error);
+      res.status(500).json({ message: "Erro ao gerar predição", error: error?.message });
+    }
+  });
+
   // ─── Outbound Webhooks ─────────────────────────────────────────────────────
 
   app.get("/api/webhooks/outbound", authenticateToken, async (req: AuthRequest, res: Response) => {
