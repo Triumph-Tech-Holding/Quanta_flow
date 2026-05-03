@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "Quanta Flow Mobile"
+version = "1.0.0"
+id = "artifacts/quanta-flow-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 24584
+
+[services.development]
+run = "pnpm --filter @workspace/quanta-flow-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/quanta-flow-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/quanta-flow-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "24584"
+BASE_PATH = "/mobile/"

@@ -23,6 +23,7 @@ pnpm workspace monorepo using TypeScript. Contains the Quanta Flow WhatsApp/omni
 
 - `artifacts/api-server/` — Express backend (`@workspace/api-server`), served at `/api`
 - `artifacts/quanta-flow/` — React frontend (`@workspace/quanta-flow`), served at `/`
+- `artifacts/quanta-flow-mobile/` — Expo React Native mobile app (`@workspace/quanta-flow-mobile`), served at `/mobile/`
 - `artifacts/mockup-sandbox/` — Design sandbox (internal use)
 
 ## Shared Libraries
