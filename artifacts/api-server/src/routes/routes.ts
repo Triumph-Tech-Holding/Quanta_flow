@@ -3524,6 +3524,21 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       return;
   });
 
+  app.get("/api/documentation/guide-md", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(DATA_DIR, "docs", "GUIDE.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Guia não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      req.log.error({ err }, "[GET /api/documentation/guide-md]");
+      res.status(500).json({ message: "Erro ao carregar guia" });
+    }
+      return;
+  });
+
   app.get("/api/documentation/claude-md", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -3879,6 +3894,46 @@ Retorne APENAS JSON válido neste formato exato:
     } catch (err) {
       console.error("[GET /api/documentation/manual-pdf]", err);
       res.status(500).json({ message: "Erro ao gerar PDF" });
+    }
+      return;
+  });
+
+  app.get("/api/documentation/guide-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(DATA_DIR, "docs", "GUIDE.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Guia não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", 'attachment; filename="QUANTA_FLOW_Guia_de_Uso.pdf"');
+      doc.pipe(res);
+      doc.fontSize(18).font("Courier-Bold").text("QUANTA FLOW — Guia de Uso", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font("Courier").text("Guia prático por módulo e persona", { align: "center" });
+      doc.moveDown(1.5);
+      for (const line of content.split("\n")) {
+        if (doc.y > 760) doc.addPage();
+        if (line.startsWith("# ")) {
+          doc.fontSize(15).font("Courier-Bold").text(line.slice(2));
+          doc.moveDown(0.4);
+        } else if (line.startsWith("## ")) {
+          doc.fontSize(12).font("Courier-Bold").text(line.slice(3));
+          doc.moveDown(0.3);
+        } else if (line.startsWith("### ")) {
+          doc.fontSize(11).font("Courier-Bold").text(line.slice(4));
+          doc.moveDown(0.2);
+        } else if (line.trim() === "") {
+          doc.moveDown(0.2);
+        } else {
+          doc.fontSize(9).font("Courier").text(line, { width: 490 });
+        }
+      }
+      doc.end();
+    } catch (err) {
+      req.log.error({ err }, "[GET /api/documentation/guide-pdf]");
+      res.status(500).json({ message: "Erro ao gerar PDF do guia" });
     }
       return;
   });

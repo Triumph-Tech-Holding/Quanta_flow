@@ -288,7 +288,9 @@ export default function AdminDocumentation() {
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentationVersion | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [showUserGuide, setShowUserGuide] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingGuidePdf, setDownloadingGuidePdf] = useState(false);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
@@ -315,6 +317,15 @@ export default function AdminDocumentation() {
     enabled: showGuide,
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/documentation/manual-md");
+      return res.text();
+    },
+  });
+
+  const { data: userGuideContent, isLoading: loadingUserGuide } = useQuery<string>({
+    queryKey: ["/api/documentation/guide-md"],
+    enabled: showUserGuide,
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/documentation/guide-md");
       return res.text();
     },
   });
@@ -361,6 +372,30 @@ export default function AdminDocumentation() {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+  };
+
+  const handleDownloadGuidePdf = async () => {
+    try {
+      setDownloadingGuidePdf(true);
+      const response = await apiRequest("GET", "/api/documentation/guide-pdf");
+      if (!response.ok) throw new Error("Erro ao gerar PDF");
+      const blob = await response.blob();
+      const element = document.createElement("a");
+      element.href = URL.createObjectURL(blob);
+      element.download = "QUANTA_FLOW_Guia_de_Uso.pdf";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast({ title: "Guia de Uso baixado com sucesso!" });
+    } catch (err) {
+      toast({
+        title: "Erro ao baixar PDF",
+        description: err instanceof Error ? err.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingGuidePdf(false);
+    }
   };
 
   const handleDownloadUserManualPdf = async () => {
@@ -588,6 +623,102 @@ export default function AdminDocumentation() {
                 ) : (
                   <p className="text-center text-muted-foreground py-12">
                     Não foi possível carregar o manual. Tente novamente.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Guia de Uso — novo card */}
+      <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 dark:from-emerald-500/10 dark:to-emerald-500/5">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <BookOpen className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Guia de Uso — Por Módulo e Persona</CardTitle>
+                <CardDescription className="mt-1 text-justify">
+                  Guia prático com histórias reais de uso para cada persona (gestor, atendente, estrategista, admin técnico e lead). Cobre os 12 módulos principais com fluxos fim-a-fim e tabela completa de funcionalidades.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowUserGuide((v) => !v)}
+                data-testid="button-toggle-user-guide"
+              >
+                {showUserGuide ? (
+                  <>
+                    <EyeOff className="w-4 h-4" />
+                    Fechar
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    Visualizar
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleDownloadGuidePdf}
+                disabled={downloadingGuidePdf}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                data-testid="button-download-guide-pdf"
+              >
+                {downloadingGuidePdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Baixar PDF
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        {showUserGuide && (
+          <CardContent>
+            <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+              <div className="flex items-center justify-between px-4 py-2 bg-muted/70 border-b border-border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <span>GUIDE.md</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowUserGuide(false)}
+                  data-testid="button-close-user-guide"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                  Fechar leitor
+                </Button>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto px-6 py-5" data-testid="user-guide-reader-content">
+                {loadingUserGuide ? (
+                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Carregando guia...</span>
+                  </div>
+                ) : userGuideContent ? (
+                  <div className="prose-sm max-w-none">
+                    {renderMarkdown(userGuideContent)}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-12">
+                    Não foi possível carregar o guia. Tente novamente.
                   </p>
                 )}
               </div>
