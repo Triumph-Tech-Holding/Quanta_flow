@@ -255,7 +255,7 @@ async function backfillWorkspaces() {
   }
 }
 
-(async () => {
+if (process.env.NODE_ENV !== "test") (async () => {
   const rawPort = process.env["PORT"];
   if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
   const port = Number(rawPort);
