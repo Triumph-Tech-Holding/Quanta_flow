@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { storage } from "./storage";
+import { storage, workspaceStorage } from "./storage";
 import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, unifiedContacts } from "@shared/schema";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -38,10 +38,12 @@ interface JwtPayload {
   userId: string;
   email: string;
   tokenVersion: number;
+  workspaceId?: string;
 }
 
 interface AuthRequest extends Request {
   user?: JwtPayload;
+  workspaceId?: string;
 }
 
 async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
@@ -69,6 +71,20 @@ async function authenticateToken(req: AuthRequest, res: Response, next: NextFunc
     }
     
     req.user = decoded;
+    // F39 — Multi-tenant: resolve workspaceId via header > JWT > user.currentWorkspaceId
+    // SEGURANÇA: header `x-workspace-id` SEMPRE validado contra workspace_members
+    const headerWs = (req.headers["x-workspace-id"] as string | undefined)?.trim();
+    let resolvedWs: string | undefined;
+    if (headerWs) {
+      const membership = await workspaceStorage.isWorkspaceMember(headerWs, user.id);
+      if (!membership.isMember) {
+        return res.status(403).json({ message: "Você não é membro do workspace solicitado" });
+      }
+      resolvedWs = headerWs;
+    } else {
+      resolvedWs = decoded.workspaceId || user.currentWorkspaceId || undefined;
+    }
+    req.workspaceId = resolvedWs;
     next();
   } catch (error) {
     return res.status(403).json({ message: "Token inválido ou expirado" });
@@ -318,7 +334,7 @@ export async function registerRoutes(
       });
 
       const token = jwt.sign(
-        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion },
+        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion, workspaceId: user.currentWorkspaceId || undefined },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRATION }
       );
@@ -359,7 +375,7 @@ export async function registerRoutes(
       const rbac = await getUserRolesAndPermissions(user.id);
 
       const token = jwt.sign(
-        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion },
+        { userId: user.id, email: user.email, tokenVersion: user.tokenVersion, workspaceId: user.currentWorkspaceId || undefined },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRATION }
       );
@@ -1537,7 +1553,7 @@ export async function registerRoutes(
       if (existing) {
         return res.status(409).json({ message: "Contato com este telefone ou email já existe", existing });
       }
-      const contact = await storage.createUnifiedContact(data);
+      const contact = await storage.createUnifiedContact({ ...data, workspaceId: req.workspaceId } as any);
       res.status(201).json(contact);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1964,7 +1980,7 @@ Return ONLY the JSON array, no markdown.`,
         userId: req.user.userId,
         ...rest,
       });
-      const flow = await storage.createAutomationFlow(data);
+      const flow = await storage.createAutomationFlow({ ...data, workspaceId: req.workspaceId } as any);
       res.status(201).json(flow);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -2009,7 +2025,7 @@ Return ONLY the JSON array, no markdown.`,
           (data as Record<string, unknown>).thumbnail = generateFlowThumbnail(blockArr);
         }
       }
-      const flow = await storage.createAutomationFlow(data);
+      const flow = await storage.createAutomationFlow({ ...data, workspaceId: req.workspaceId } as any);
       res.status(201).json(flow);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -3165,7 +3181,7 @@ Return ONLY the JSON array, no markdown.`,
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const parsed = insertCampaignSchema.parse({ ...req.body, userId: req.user.userId });
-      const campaign = await storage.createCampaign(parsed);
+      const campaign = await storage.createCampaign({ ...parsed, workspaceId: req.workspaceId } as any);
       res.status(201).json(campaign);
     } catch (err) {
       console.error("[POST /api/admin/campaigns]", err);
@@ -4846,6 +4862,85 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
     } catch (err) {
       console.error("[DELETE /api/admin/social/schedules/:id]", err);
       res.status(500).json({ message: "Erro ao excluir agendamento" });
+    }
+  });
+
+  // === F39 — Workspaces (Multi-tenant MVP) ===
+  app.get("/api/workspaces", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const list = await workspaceStorage.getWorkspacesByUser(req.user!.userId);
+      res.json({ workspaces: list, currentWorkspaceId: req.workspaceId || null });
+    } catch (err) {
+      console.error("[GET /api/workspaces]", err);
+      res.status(500).json({ message: "Erro ao listar workspaces" });
+    }
+  });
+
+  app.get("/api/workspaces/current", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.workspaceId) return res.status(404).json({ message: "Nenhum workspace ativo" });
+      const ws = await workspaceStorage.getWorkspace(req.workspaceId);
+      if (!ws) return res.status(404).json({ message: "Workspace não encontrado" });
+      const membership = await workspaceStorage.isWorkspaceMember(req.workspaceId, req.user!.userId);
+      if (!membership.isMember) return res.status(403).json({ message: "Você não é membro deste workspace" });
+      res.json({ ...ws, role: membership.role });
+    } catch (err) {
+      console.error("[GET /api/workspaces/current]", err);
+      res.status(500).json({ message: "Erro ao carregar workspace atual" });
+    }
+  });
+
+  app.post("/api/workspaces", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const { insertWorkspaceSchema } = await import("@shared/schema");
+      const parsed = insertWorkspaceSchema.omit({ ownerUserId: true } as any).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message || "Dados inválidos" });
+      const existing = await workspaceStorage.getWorkspaceBySlug(parsed.data.slug);
+      if (existing) return res.status(409).json({ message: "Já existe um workspace com este slug" });
+      const ws = await workspaceStorage.createWorkspace(parsed.data as any, req.user!.userId);
+      // Se for o primeiro workspace, define como atual
+      const user = await storage.getUser(req.user!.userId);
+      if (user && !user.currentWorkspaceId) {
+        await workspaceStorage.setUserCurrentWorkspace(req.user!.userId, ws.id);
+      }
+      res.status(201).json(ws);
+    } catch (err) {
+      console.error("[POST /api/workspaces]", err);
+      res.status(500).json({ message: "Erro ao criar workspace" });
+    }
+  });
+
+  app.post("/api/workspaces/:id/switch", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const membership = await workspaceStorage.isWorkspaceMember(req.params.id, req.user!.userId);
+      if (!membership.isMember) return res.status(403).json({ message: "Você não é membro deste workspace" });
+      const updated = await workspaceStorage.setUserCurrentWorkspace(req.user!.userId, req.params.id);
+      if (!updated) return res.status(404).json({ message: "Workspace não encontrado" });
+      // Reemite token com novo workspaceId
+      const token = jwt.sign(
+        { userId: updated.id, email: updated.email, tokenVersion: updated.tokenVersion, workspaceId: req.params.id },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRATION }
+      );
+      res.json({ token, workspaceId: req.params.id, role: membership.role });
+    } catch (err) {
+      console.error("[POST /api/workspaces/:id/switch]", err);
+      res.status(500).json({ message: "Erro ao trocar de workspace" });
+    }
+  });
+
+  app.patch("/api/workspaces/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const membership = await workspaceStorage.isWorkspaceMember(req.params.id, req.user!.userId);
+      if (!membership.isMember || (membership.role !== "owner" && membership.role !== "admin")) {
+        return res.status(403).json({ message: "Apenas owner/admin pode editar o workspace" });
+      }
+      const ws = await workspaceStorage.updateWorkspace(req.params.id, req.body);
+      if (!ws) return res.status(404).json({ message: "Workspace não encontrado" });
+      res.json(ws);
+    } catch (err) {
+      console.error("[PATCH /api/workspaces/:id]", err);
+      res.status(500).json({ message: "Erro ao atualizar workspace" });
     }
   });
 

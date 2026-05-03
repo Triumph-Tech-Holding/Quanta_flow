@@ -14,6 +14,7 @@ interface AuthContextType {
   isLoading: boolean;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
+  setToken: (token: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -85,8 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const updateToken = (newToken: string) => {
+    localStorage.setItem("token", newToken);
+    setToken(newToken);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, hasPermission, hasRole, setToken: updateToken }}>
       {children}
     </AuthContext.Provider>
   );

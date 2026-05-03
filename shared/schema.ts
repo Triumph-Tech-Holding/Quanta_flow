@@ -22,9 +22,45 @@ export const users = pgTable("users", {
   status: userStatusEnum("status").notNull().default("active"),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   tokenVersion: integer("token_version").notNull().default(0),
+  currentWorkspaceId: varchar("current_workspace_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const workspacePlanEnum = pgEnum("workspace_plan", ["free", "pro", "business", "enterprise"]);
+
+export const workspaces = pgTable("workspaces", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 80 }).notNull().unique(),
+  ownerUserId: varchar("owner_user_id", { length: 36 }).notNull().references(() => users.id),
+  plan: workspacePlanEnum("plan").notNull().default("free"),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const workspaceMemberRoleEnum = pgEnum("workspace_member_role", ["owner", "admin", "member"]);
+
+export const workspaceMembers = pgTable("workspace_members", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: workspaceMemberRoleEnum("role").notNull().default("member"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(2, "Nome do workspace precisa ter pelo menos 2 caracteres"),
+  slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/, "Slug deve conter apenas letras minúsculas, números e hífens"),
+});
+export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
+export type Workspace = typeof workspaces.$inferSelect;
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 
 export const leads = pgTable("leads", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -298,6 +334,7 @@ export const channels = pgTable("channels", {
 export const unifiedContacts = pgTable("unified_contacts", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  workspaceId: varchar("workspace_id", { length: 36 }),
   nome: varchar("nome", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
   telefone: varchar("telefone", { length: 50 }),
@@ -441,6 +478,7 @@ export interface FlowBlock {
 export const automationFlows = pgTable("automation_flows", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  workspaceId: varchar("workspace_id", { length: 36 }),
   name: varchar("name", { length: 255 }).notNull(),
   triggerKeywords: text("trigger_keywords").notNull(),
   responseTemplate: text("response_template").notNull(),
@@ -881,6 +919,7 @@ export const deliveryStatusEnum = pgEnum("delivery_status", ["pending", "sent", 
 export const campaigns = pgTable("campaigns", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  workspaceId: varchar("workspace_id", { length: 36 }),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   status: campaignStatusEnum("status").notNull().default("draft"),

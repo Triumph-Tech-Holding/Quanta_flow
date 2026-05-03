@@ -43,6 +43,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -258,7 +259,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4">
+      <SidebarHeader className="p-4 space-y-3">
         <div className="flex items-center justify-center">
           {branding?.logoUrl ? (
             <img
@@ -276,6 +277,7 @@ export function AppSidebar() {
             </div>
           )}
         </div>
+        <WorkspaceSwitcher />
       </SidebarHeader>
 
       <SidebarContent>

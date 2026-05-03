@@ -7,6 +7,8 @@ import {
   agentAssignments, learningTracks, learningDeliveries,
   outboundWebhooks, sheetIntegrations, emailConfigs, documentationVersions,
   projectStatusItems,
+  workspaces, workspaceMembers,
+  type Workspace, type InsertWorkspace, type WorkspaceMember,
   type User, type Lead, type ApiConfig, type InsertUser, type InsertLead, type InsertApiConfig,
   type EvolutionConfig, type InsertEvolutionConfig, type Conversation, type InsertConversation,
   type Message, type InsertMessage,
@@ -1248,5 +1250,102 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 }
+
+// === Workspaces (F39 — Multi-tenant MVP) ===
+export interface IWorkspaceStorage {
+  getWorkspace(id: string): Promise<Workspace | undefined>;
+  getWorkspaceBySlug(slug: string): Promise<Workspace | undefined>;
+  getWorkspacesByUser(userId: string): Promise<Array<Workspace & { role: string }>>;
+  createWorkspace(data: InsertWorkspace, ownerUserId: string): Promise<Workspace>;
+  updateWorkspace(id: string, data: Partial<InsertWorkspace>): Promise<Workspace | undefined>;
+  deleteWorkspace(id: string): Promise<boolean>;
+  addWorkspaceMember(workspaceId: string, userId: string, role: "owner" | "admin" | "member"): Promise<WorkspaceMember>;
+  removeWorkspaceMember(workspaceId: string, userId: string): Promise<boolean>;
+  isWorkspaceMember(workspaceId: string, userId: string): Promise<{ isMember: boolean; role?: string }>;
+  setUserCurrentWorkspace(userId: string, workspaceId: string): Promise<User | undefined>;
+}
+
+export class WorkspaceStorage implements IWorkspaceStorage {
+  async getWorkspace(id: string): Promise<Workspace | undefined> {
+    const [w] = await db.select().from(workspaces).where(eq(workspaces.id, id)).limit(1);
+    return w;
+  }
+
+  async getWorkspaceBySlug(slug: string): Promise<Workspace | undefined> {
+    const [w] = await db.select().from(workspaces).where(eq(workspaces.slug, slug)).limit(1);
+    return w;
+  }
+
+  async getWorkspacesByUser(userId: string): Promise<Array<Workspace & { role: string }>> {
+    const rows = await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        ownerUserId: workspaces.ownerUserId,
+        plan: workspaces.plan,
+        logoUrl: workspaces.logoUrl,
+        createdAt: workspaces.createdAt,
+        updatedAt: workspaces.updatedAt,
+        role: workspaceMembers.role,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, userId));
+    return rows as Array<Workspace & { role: string }>;
+  }
+
+  async createWorkspace(data: InsertWorkspace, ownerUserId: string): Promise<Workspace> {
+    const [w] = await db.insert(workspaces).values({ ...data, ownerUserId } as any).returning();
+    await db.insert(workspaceMembers).values({
+      workspaceId: w.id,
+      userId: ownerUserId,
+      role: "owner",
+    });
+    return w;
+  }
+
+  async updateWorkspace(id: string, data: Partial<InsertWorkspace>): Promise<Workspace | undefined> {
+    const [w] = await db.update(workspaces)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(workspaces.id, id))
+      .returning();
+    return w;
+  }
+
+  async deleteWorkspace(id: string): Promise<boolean> {
+    const result = await db.delete(workspaces).where(eq(workspaces.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async addWorkspaceMember(workspaceId: string, userId: string, role: "owner" | "admin" | "member"): Promise<WorkspaceMember> {
+    const [m] = await db.insert(workspaceMembers).values({ workspaceId, userId, role }).returning();
+    return m;
+  }
+
+  async removeWorkspaceMember(workspaceId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async isWorkspaceMember(workspaceId: string, userId: string): Promise<{ isMember: boolean; role?: string }> {
+    const [m] = await db.select().from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+      .limit(1);
+    return m ? { isMember: true, role: m.role } : { isMember: false };
+  }
+
+  async setUserCurrentWorkspace(userId: string, workspaceId: string): Promise<User | undefined> {
+    const [u] = await db.update(users)
+      .set({ currentWorkspaceId: workspaceId, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return u;
+  }
+}
+
+export const workspaceStorage = new WorkspaceStorage();
 
 export const storage = new DatabaseStorage();

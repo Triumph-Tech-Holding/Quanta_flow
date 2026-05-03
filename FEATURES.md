@@ -31,8 +31,10 @@
 | Roles (super_admin, admin, user) | OK | seed automático no startup | RBAC seed |
 | 18 permissions × 7 resources | OK | middleware checkRole/checkPermission | — |
 | Audit log de alterações admin | OK | tabela `audit_logs` | — |
+| **Multi-tenant (Workspaces) — F39** | **OK (MVP)** | GET/POST /api/workspaces | tabelas `workspaces`, `workspace_members` |
+| **Workspace switcher (UI)** | **OK** | sidebar superior | reemite JWT no switch |
 
-**Critério de aceite**: token expira em 24h, logout invalida imediatamente, role faltante na produção é re-seedada no boot.
+**Critério de aceite**: token expira em 24h, logout invalida imediatamente, role faltante na produção é re-seedada no boot. JWT carrega `workspaceId` (resolvido na ordem header `x-workspace-id` > JWT > `users.currentWorkspaceId`); `req.workspaceId` disponível em todas as rotas autenticadas. Slice 2 (filtragem efetiva de queries por `workspaceId`) é evolução futura.
 
 ---
 

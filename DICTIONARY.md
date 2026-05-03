@@ -17,7 +17,24 @@
 Usuários do sistema.
 - `id` UUID PK · `name` · `email` UNIQUE · `password` (bcrypt) · `status` (active/inactive/suspended)
 - `mustChangePassword` BOOLEAN · `tokenVersion` INT (invalidação de sessão)
+- `currentWorkspaceId` VARCHAR(36) NULLABLE — workspace ativo do usuário (F39)
 - `createdAt`
+
+### workspaces (F39 — Multi-tenant MVP)
+Tenants/empresas/times isolados.
+- `id` UUID PK · `name` · `slug` UNIQUE (URL-safe, max 80) · `ownerUserId` FK→users
+- `plan` ENUM `workspace_plan` (free/pro/business/enterprise) DEFAULT 'free'
+- `logoUrl` TEXT NULLABLE · `createdAt` · `updatedAt`
+
+### workspace_members (F39)
+Junção N:N user↔workspace com role por workspace.
+- `id` UUID PK · `workspaceId` FK→workspaces (CASCADE) · `userId` FK→users (CASCADE)
+- `role` ENUM `workspace_member_role` (owner/admin/member) DEFAULT 'member'
+- UNIQUE(`workspaceId`, `userId`) · `createdAt`
+
+### Colunas `workspaceId` (nullable, F39)
+Adicionadas em `unified_contacts`, `automation_flows`, `campaigns` para scoping futuro
+(slice 2). Backfill automático no boot popula com o workspace default do dono.
 
 ### roles
 - `id` · `name` UNIQUE (super_admin, admin, user) · `description`

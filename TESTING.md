@@ -28,10 +28,12 @@
 | 4 | `/api/admin/agents` | GET | 200 | agentes IA |
 | 5 | `/api/admin/campaigns` | GET | 200 | campanhas |
 | 6 | `/api/admin/project-status` | GET | 200 | painel status |
-| 7 | `/api/documentation/claude-md` | GET | 200 | docs técnicas |
-| 8 | `/api/admin/social/projects` | GET | 200 | estúdio social |
-| 9 | `/api/inbox/conversations` | GET | 200 | inbox |
-| 10 | `/api/branding` | GET | 200 | branding |
+| 7 | `/api/workspaces` | GET | 200 (lista + currentWorkspaceId) | F39 multi-tenant |
+| 8 | `/api/workspaces/current` | GET | 200 | workspace ativo do usuário |
+| 9 | `/api/documentation/claude-md` | GET | 200 | docs técnicas |
+| 10 | `/api/admin/social/projects` | GET | 200 | estúdio social |
+| 11 | `/api/inbox/conversations` | GET | 200 | inbox |
+| 12 | `/api/branding` | GET | 200 | branding |
 | 11 | `/api/brain/insights` | GET | 200 | IA Brain Insights |
 
 **Regra**: somente **2xx/3xx** contam como OK. 4xx/5xx falham o smoke.

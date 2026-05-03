@@ -3,6 +3,42 @@
 
 ---
 
+## [7.2.0] — 2026-05-03
+
+### Adicionado — F39 Multi-tenant MVP (Workspaces)
+- **Modelo de dados**: tabelas `workspaces` (id, name, slug UNIQUE, ownerUserId, plan, logoUrl)
+  e `workspace_members` (workspaceId, userId, role: owner/admin/member). Enums
+  `workspace_plan` (free/pro/business/enterprise) e `workspace_member_role`.
+- Coluna `currentWorkspaceId` em `users`; coluna `workspaceId` (nullable) em
+  `unified_contacts`, `automation_flows`, `campaigns` para scoping futuro.
+- **Migração aditiva** em `server/index.ts`:
+  - `migrateWorkspaces()` — `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN IF NOT EXISTS`
+    + índices. Rodada no boot, idempotente.
+  - `backfillWorkspaces()` — provisiona 1 workspace default por usuário existente,
+    popula `current_workspace_id` e `workspace_id` em contatos/fluxos/campanhas.
+- **JWT estendido**: payload agora inclui `workspaceId?`. `authenticateToken` resolve
+  `req.workspaceId` na ordem **header `x-workspace-id` > JWT > `user.currentWorkspaceId`**.
+- **Endpoints `/api/workspaces`**:
+  - `GET /api/workspaces` — lista workspaces do usuário com `role` e `currentWorkspaceId`
+  - `GET /api/workspaces/current` — workspace ativo + role
+  - `POST /api/workspaces` — cria workspace (criador vira owner) com checagem de slug único
+  - `POST /api/workspaces/:id/switch` — troca de workspace e **reemite JWT** com novo `workspaceId`
+  - `PATCH /api/workspaces/:id` — atualizar (apenas owner/admin)
+- **UI WorkspaceSwitcher** (`client/src/components/workspace-switcher.tsx`): dropdown no
+  topo do sidebar com lista de workspaces, indicador do ativo, ação "Novo workspace"
+  (dialog com slug auto-gerado), troca instantânea com invalidação global de cache.
+- **`auth.tsx`** expõe `setToken(newToken)` para permitir reemissão do JWT no switch
+  sem forçar re-login.
+- F39 marcado como **concluído** em Lab → Progresso (slice 1: data model + middleware
+  injetando workspaceId. Slice 2 — query scoping enforcement — fica para próxima onda).
+
+### Migração & compatibilidade
+- 6 usuários existentes receberam workspace default no boot (`Workspaces backfill OK`).
+- Endpoints existentes continuam funcionando: `req.workspaceId` está disponível mas
+  ainda não é exigido (queries não filtram por workspace nesta fatia).
+
+---
+
 ## [7.1.1] — 2026-05-03
 
 ### Corrigido

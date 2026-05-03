@@ -387,6 +387,110 @@ publication_schedules (UUID PK)
   }
 }
 
+async function migrateWorkspaces() {
+  try {
+    await db.execute(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workspace_plan') THEN
+          CREATE TYPE workspace_plan AS ENUM ('free', 'pro', 'business', 'enterprise');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workspace_member_role') THEN
+          CREATE TYPE workspace_member_role AS ENUM ('owner', 'admin', 'member');
+        END IF;
+      END $$;
+
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(80) NOT NULL UNIQUE,
+        owner_user_id VARCHAR(36) NOT NULL REFERENCES users(id),
+        plan workspace_plan NOT NULL DEFAULT 'free',
+        logo_url TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS workspace_members (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id VARCHAR(36) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role workspace_member_role NOT NULL DEFAULT 'member',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(workspace_id, user_id)
+      );
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS current_workspace_id VARCHAR(36);
+      ALTER TABLE unified_contacts ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36);
+      ALTER TABLE automation_flows ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36);
+      ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36);
+
+      CREATE INDEX IF NOT EXISTS idx_unified_contacts_workspace ON unified_contacts(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_automation_flows_workspace ON automation_flows(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_campaigns_workspace ON campaigns(workspace_id);
+    `);
+    log("Workspaces migration OK", "seed");
+  } catch (err) {
+    console.error("Error migrating workspaces:", err);
+  }
+}
+
+async function backfillWorkspaces() {
+  try {
+    const usersWithoutWorkspace = await db.execute<{ id: string; nome: string; email: string }>(
+      `SELECT id, nome, email FROM users WHERE current_workspace_id IS NULL`
+    );
+
+    const rows: any[] = (usersWithoutWorkspace as any).rows || (usersWithoutWorkspace as any) || [];
+    if (!rows.length) {
+      log("Workspaces backfill OK (nothing to backfill)", "seed");
+      return;
+    }
+
+    for (const u of rows) {
+      const baseSlug = (u.email || u.nome || "user")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || "workspace";
+      const slug = `${baseSlug}-${u.id.slice(0, 6)}`;
+      const wsName = `${u.nome || "Meu"} Workspace`;
+
+      const { sql } = await import("drizzle-orm");
+      const existing = await db.execute<{ id: string }>(
+        sql`SELECT id FROM workspaces WHERE owner_user_id = ${u.id} LIMIT 1`
+      );
+      const existingRows: any[] = (existing as any).rows || (existing as any) || [];
+      let workspaceId: string;
+
+      if (existingRows.length > 0) {
+        workspaceId = existingRows[0].id;
+      } else {
+        const created = await db.execute<{ id: string }>(
+          sql`INSERT INTO workspaces (name, slug, owner_user_id, plan)
+              VALUES (${wsName}, ${slug}, ${u.id}, 'free')
+              RETURNING id`
+        );
+        const createdRows: any[] = (created as any).rows || (created as any) || [];
+        workspaceId = createdRows[0].id;
+      }
+
+      await db.execute(
+        sql`INSERT INTO workspace_members (workspace_id, user_id, role)
+            VALUES (${workspaceId}, ${u.id}, 'owner')
+            ON CONFLICT (workspace_id, user_id) DO NOTHING`
+      );
+
+      await db.execute(sql`UPDATE users SET current_workspace_id = ${workspaceId} WHERE id = ${u.id}`);
+      await db.execute(sql`UPDATE unified_contacts SET workspace_id = ${workspaceId} WHERE user_id = ${u.id} AND workspace_id IS NULL`);
+      await db.execute(sql`UPDATE automation_flows SET workspace_id = ${workspaceId} WHERE user_id = ${u.id} AND workspace_id IS NULL`);
+      await db.execute(sql`UPDATE campaigns SET workspace_id = ${workspaceId} WHERE user_id = ${u.id} AND workspace_id IS NULL`);
+    }
+    log(`Workspaces backfill OK (${rows.length} users provisionados)`, "seed");
+  } catch (err) {
+    console.error("Error backfilling workspaces:", err);
+  }
+}
+
 async function migrateProjectStatusItems() {
   try {
     await db.execute(`
@@ -454,6 +558,7 @@ async function seedProjectStatusItems() {
       { featureId: "F23", featureName: "Apresentação Comercial (.pptx)", category: "Documentação", priority: "baixa" as const, status: "concluido" as const, progress: 100, sortOrder: 23 },
       { featureId: "F24", featureName: "FLOW Standard: CLAUDE.md, CHANGELOG, Dicionário, Status", category: "Dev/Testes", priority: "alta" as const, status: "concluido" as const, progress: 100, sortOrder: 24 },
       { featureId: "F25", featureName: "Lab → Aba Protocolos (Smoke Tests + DoD)", category: "Dev/Testes", priority: "media" as const, status: "concluido" as const, progress: 100, sortOrder: 25 },
+      { featureId: "F39", featureName: "Multi-workspace (Multi-tenant MVP)", category: "Arquitetura", priority: "alta" as const, status: "em_curso" as const, progress: 60, sortOrder: 39 },
     ];
 
     for (const item of items) {
@@ -534,6 +639,8 @@ app.use((req, res, next) => {
   await seedFlowTemplates();
   await seedDocumentationVersions();
   await migrateProjectStatusItems();
+  await migrateWorkspaces();
+  await backfillWorkspaces();
   await seedProjectStatusItems();
   jobQueue.start();
   startLearningWorker();

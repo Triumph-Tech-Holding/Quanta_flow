@@ -16,7 +16,8 @@ Not specified.
 - **Frontend**: React, Vite, TypeScript.
 - **Backend**: Node.js with Express.js.
 - **Database**: PostgreSQL with Drizzle ORM.
-- **Authentication**: JWT with bcrypt, 24-hour expiration, token versioning, user status management (active, inactive, suspended), and mandatory password change flags.
+- **Authentication**: JWT with bcrypt, 24-hour expiration, token versioning, user status management (active, inactive, suspended), and mandatory password change flags. JWT payload includes `workspaceId?` for multi-tenant routing; `req.workspaceId` resolved as header `x-workspace-id` > JWT > `users.currentWorkspaceId`.
+- **Multi-tenant (F39 — MVP)**: `workspaces` + `workspace_members` tables with role-per-workspace (owner/admin/member). Workspace switcher in sidebar reissues JWT on switch. Columns `workspaceId` (nullable) added to `unified_contacts`, `automation_flows`, `campaigns` for future query scoping.
 - **Real-time Communication**: Socket.io for immediate updates in Inbox and instance status changes.
 - **Configuration Management**: Dynamic settings system with AES-256-CBC encryption, in-memory caching, and audit logging.
 - **Role-Based Access Control (RBAC)**: Granular permissions (super_admin, admin, user) with 18 distinct permissions across 7 resources.
@@ -46,7 +47,7 @@ Not specified.
 
 ### System Design Choices
 - **Modular Structure**: Separation of client, server, and shared code.
-- **Database Schema**: Dedicated tables for users, leads, configurations, conversations, messages, settings, roles, permissions, audit logs, unified contacts, agent assignments, learning tracks, webhooks, sheet integrations, email configs, AI agents, documentation, campaigns, templates, social projects, content assets, publication schedules, and project status items. `automation_flows` and social tables use UUID primary keys.
+- **Database Schema**: Dedicated tables for users, leads, configurations, conversations, messages, settings, roles, permissions, audit logs, unified contacts, agent assignments, learning tracks, webhooks, sheet integrations, email configs, AI agents, documentation, campaigns, templates, social projects, content assets, publication schedules, project status items, workspaces and workspace members. `automation_flows` and social tables use UUID primary keys.
 - **API Endpoints**: Structured API for all functionalities.
 - **WhatsApp Provider Management**: Flexible system to switch between Z-API, Baileys, and Meta Oficial (Cloud API).
 - **Agent Assignment**: Manual and automated round-robin assignment.
