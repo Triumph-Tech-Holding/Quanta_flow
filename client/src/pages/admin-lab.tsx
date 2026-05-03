@@ -15,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader2, PlayCircle, Volume2, Zap, CheckCircle2, XCircle,
   Webhook, Smartphone, Image as ImageIcon, ShieldCheck, RefreshCw,
-  BarChart3, Pencil, Plus, Check, X, Trash2,
+  BarChart3, Pencil, Plus, Check, X, Trash2, FileText, Download, Eye,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { queryClient } from "@/lib/queryClient";
@@ -380,9 +380,10 @@ export default function AdminLab() {
 
         <main className="flex-1 p-6">
           <Tabs defaultValue="progresso" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="progresso" data-testid="tab-progresso">Progresso</TabsTrigger>
               <TabsTrigger value="protocolos" data-testid="tab-protocolos">Protocolos</TabsTrigger>
+              <TabsTrigger value="docs" data-testid="tab-docs">Docs</TabsTrigger>
               <TabsTrigger value="flow" data-testid="tab-flow">Flow Sim</TabsTrigger>
               <TabsTrigger value="tts" data-testid="tab-tts">TTS</TabsTrigger>
               <TabsTrigger value="image" data-testid="tab-image">Imagem IA</TabsTrigger>
@@ -1072,9 +1073,227 @@ export default function AdminLab() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* === DOCS TÉCNICAS === */}
+            <TabsContent value="docs" className="space-y-4">
+              <TechDocsViewer />
+            </TabsContent>
           </Tabs>
         </main>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+// =====================================================================
+// Documentação Técnica do LAB — viewer + download de PDF
+// =====================================================================
+
+interface TechDoc {
+  key: string;
+  file: string;
+  title: string;
+  exists: boolean;
+}
+
+function renderMarkdownInline(content: string): JSX.Element[] {
+  const lines = content.split("\n");
+  const elements: JSX.Element[] = [];
+  let codeBlock: string[] | null = null;
+  let codeLang = "";
+  let listBuf: string[] = [];
+
+  const flushList = (key: number) => {
+    if (listBuf.length === 0) return;
+    elements.push(
+      <ul key={`ul-${key}`} className="list-disc pl-6 space-y-1 text-sm">
+        {listBuf.map((li, i) => <li key={i}>{li.replace(/^[-*]\s+/, "")}</li>)}
+      </ul>
+    );
+    listBuf = [];
+  };
+
+  lines.forEach((raw, i) => {
+    const line = raw;
+    if (line.startsWith("```")) {
+      if (codeBlock === null) {
+        codeBlock = [];
+        codeLang = line.replace(/```/, "").trim();
+      } else {
+        flushList(i);
+        elements.push(
+          <pre key={`code-${i}`} className="bg-muted text-xs p-3 rounded overflow-x-auto border">
+            <code>{codeBlock.join("\n")}</code>
+          </pre>
+        );
+        codeBlock = null;
+        codeLang = "";
+      }
+      return;
+    }
+    if (codeBlock !== null) { codeBlock.push(line); return; }
+
+    if (line.startsWith("# ")) {
+      flushList(i);
+      elements.push(<h1 key={i} className="text-2xl font-bold mt-4 mb-2">{line.slice(2)}</h1>);
+    } else if (line.startsWith("## ")) {
+      flushList(i);
+      elements.push(<h2 key={i} className="text-xl font-semibold mt-4 mb-2 border-b pb-1">{line.slice(3)}</h2>);
+    } else if (line.startsWith("### ")) {
+      flushList(i);
+      elements.push(<h3 key={i} className="text-lg font-semibold mt-3 mb-1">{line.slice(4)}</h3>);
+    } else if (line.startsWith("> ")) {
+      flushList(i);
+      elements.push(<blockquote key={i} className="border-l-4 border-primary pl-3 italic text-sm text-muted-foreground my-2">{line.slice(2)}</blockquote>);
+    } else if (/^[-*]\s+/.test(line)) {
+      listBuf.push(line);
+    } else if (line.trim() === "") {
+      flushList(i);
+    } else {
+      flushList(i);
+      elements.push(<p key={i} className="text-sm my-1 leading-relaxed">{line}</p>);
+    }
+  });
+  flushList(lines.length);
+  return elements;
+}
+
+function TechDocsViewer() {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string>("features");
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const { data: docs = [], isLoading: loadingList } = useQuery<TechDoc[]>({
+    queryKey: ["/api/documentation/tech"],
+  });
+
+  const { data: content, isLoading: loadingContent } = useQuery<string>({
+    queryKey: ["/api/documentation/tech", selected],
+    enabled: !!selected,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/documentation/tech/${selected}`);
+      return res.text();
+    },
+  });
+
+  const handleDownloadPdf = async (key: string, title: string) => {
+    try {
+      setDownloading(key);
+      const res = await apiRequest("GET", `/api/documentation/tech/${key}/pdf`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `QuantaFlow_${key}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "PDF baixado!", description: title });
+    } catch (e) {
+      toast({ title: "Erro ao baixar PDF", variant: "destructive" });
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const selectedMeta = docs.find(d => d.key === selected);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      {/* Lista de documentos */}
+      <Card className="lg:col-span-1">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            <CardTitle className="text-base">Documentos Técnicos</CardTitle>
+          </div>
+          <CardDescription className="text-xs">
+            Toda documentação do projeto. Visualize inline ou baixe como PDF.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {loadingList ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground gap-2 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando…
+            </div>
+          ) : (
+            docs.map(doc => (
+              <div
+                key={doc.key}
+                className={`flex items-center justify-between p-2 rounded-md hover:bg-muted cursor-pointer text-sm transition-colors ${selected === doc.key ? "bg-muted border border-primary/40" : ""}`}
+                onClick={() => setSelected(doc.key)}
+                data-testid={`doc-item-${doc.key}`}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Eye className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate">{doc.title}</span>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 flex-shrink-0"
+                  onClick={(e) => { e.stopPropagation(); handleDownloadPdf(doc.key, doc.title); }}
+                  disabled={!doc.exists || downloading === doc.key}
+                  data-testid={`button-download-${doc.key}`}
+                  title="Baixar PDF"
+                >
+                  {downloading === doc.key
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Download className="w-3.5 h-3.5" />}
+                </Button>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Viewer */}
+      <Card className="lg:col-span-3">
+        <CardHeader className="pb-3 border-b">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-base truncate" data-testid="text-doc-title">
+                {selectedMeta?.title ?? "Selecione um documento"}
+              </CardTitle>
+              {selectedMeta && (
+                <CardDescription className="text-xs font-mono">{selectedMeta.file}</CardDescription>
+              )}
+            </div>
+            {selectedMeta && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDownloadPdf(selectedMeta.key, selectedMeta.title)}
+                disabled={downloading === selectedMeta.key}
+                data-testid="button-download-current"
+              >
+                {downloading === selectedMeta.key
+                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  : <Download className="w-4 h-4 mr-2" />}
+                Baixar PDF
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ScrollArea className="h-[70vh]">
+            <div className="p-6">
+              {loadingContent ? (
+                <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando conteúdo…
+                </div>
+              ) : content ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none" data-testid="doc-content">
+                  {renderMarkdownInline(content)}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">Nenhum conteúdo carregado.</p>
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

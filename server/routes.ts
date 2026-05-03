@@ -3310,6 +3310,98 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
     }
   });
 
+  // === Documentação Técnica do LAB (genérica, com whitelist) ===
+  const TECH_DOCS: Record<string, { file: string; title: string }> = {
+    "claude":       { file: "CLAUDE.md",       title: "CLAUDE.md — Diretrizes do Agente" },
+    "changelog":    { file: "CHANGELOG.md",    title: "CHANGELOG — Histórico de Versões" },
+    "features":     { file: "FEATURES.md",     title: "Catálogo de Features" },
+    "stories":      { file: "STORIES.md",      title: "Histórias de Usuário" },
+    "dictionary":   { file: "DICTIONARY.md",   title: "Dicionário de Dados" },
+    "visual-flow":  { file: "VISUAL_FLOW.md",  title: "Fluxo Visual da Arquitetura" },
+    "testing":      { file: "TESTING.md",      title: "Estratégia de Testes" },
+    "deploy-guide": { file: "DEPLOY_GUIDE.md", title: "Guia de Deploy" },
+  };
+
+  app.get("/api/documentation/tech", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const list = Object.entries(TECH_DOCS).map(([key, meta]) => {
+        const exists = fs.existsSync(path.join(process.cwd(), meta.file));
+        return { key, file: meta.file, title: meta.title, exists };
+      });
+      res.json(list);
+    } catch (err) {
+      console.error("[GET /api/documentation/tech]", err);
+      res.status(500).json({ message: "Erro ao listar documentos" });
+    }
+  });
+
+  app.get("/api/documentation/tech/:name", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const meta = TECH_DOCS[req.params.name];
+      if (!meta) return res.status(404).json({ message: "Documento não encontrado" });
+      const filePath = path.join(process.cwd(), meta.file);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado no disco" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      console.error("[GET /api/documentation/tech/:name]", err);
+      res.status(500).json({ message: "Erro ao carregar documento" });
+    }
+  });
+
+  app.get("/api/documentation/tech/:name/pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const meta = TECH_DOCS[req.params.name];
+      if (!meta) return res.status(404).json({ message: "Documento não encontrado" });
+      const filePath = path.join(process.cwd(), meta.file);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado no disco" });
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "A4", margin: 50, font: "Courier" });
+
+      const safeName = meta.file.replace(/\.md$/i, "");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="QuantaFlow_${safeName}.pdf"`);
+      doc.pipe(res);
+
+      doc.font("Courier", 16).text("QUANTA FLOW", { align: "center" });
+      doc.moveDown(0.3);
+      doc.font("Courier", 12).text(meta.title, { align: "center" });
+      doc.moveDown(0.3);
+      doc.font("Courier", 9).text(new Date().toISOString().slice(0, 10), { align: "center" });
+      doc.moveDown(1);
+
+      const lines = content.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("# ")) {
+          doc.font("Courier-Bold", 14).text(line.replace(/^#\s+/, ""));
+          doc.moveDown(0.3);
+        } else if (line.startsWith("## ")) {
+          doc.font("Courier-Bold", 12).text(line.replace(/^##\s+/, ""));
+          doc.moveDown(0.2);
+        } else if (line.startsWith("### ")) {
+          doc.font("Courier-Bold", 11).text(line.replace(/^###\s+/, ""));
+          doc.moveDown(0.2);
+        } else if (line.trim() === "") {
+          doc.moveDown(0.2);
+        } else {
+          doc.font("Courier", 9).text(line, { align: "left", width: 500 });
+        }
+        if (doc.y > 750) doc.addPage();
+      }
+
+      doc.end();
+    } catch (err) {
+      console.error("[GET /api/documentation/tech/:name/pdf]", err);
+      res.status(500).json({ message: "Erro ao gerar PDF" });
+    }
+  });
+
   // Project Status Items CRUD
   app.get("/api/admin/project-status", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
     try {
