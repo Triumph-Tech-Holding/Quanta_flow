@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1462,65 +1462,126 @@ interface TechDoc {
   exists: boolean;
 }
 
+function renderInline(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIndex) parts.push(text.slice(lastIndex, m.index));
+    const tok = m[0];
+    if (tok.startsWith("**")) parts.push(<strong key={key++}>{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith("`")) parts.push(<code key={key++} className="bg-muted px-1 py-0.5 rounded text-[0.85em] font-mono">{tok.slice(1, -1)}</code>);
+    else parts.push(<em key={key++}>{tok.slice(1, -1)}</em>);
+    lastIndex = m.index + tok.length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function splitRow(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map(c => c.trim());
+}
+
 function renderMarkdownInline(content: string): JSX.Element[] {
   const lines = content.split("\n");
   const elements: JSX.Element[] = [];
   let codeBlock: string[] | null = null;
-  let codeLang = "";
   let listBuf: string[] = [];
+  let tableBuf: string[] | null = null;
 
   const flushList = (key: number) => {
     if (listBuf.length === 0) return;
     elements.push(
-      <ul key={`ul-${key}`} className="list-disc pl-6 space-y-1 text-sm">
-        {listBuf.map((li, i) => <li key={i}>{li.replace(/^[-*]\s+/, "")}</li>)}
+      <ul key={`ul-${key}`} className="list-disc pl-6 space-y-1 text-sm my-2">
+        {listBuf.map((li, i) => <li key={i}>{renderInline(li.replace(/^[-*]\s+/, ""))}</li>)}
       </ul>
     );
     listBuf = [];
   };
 
+  const flushTable = (key: number) => {
+    if (!tableBuf || tableBuf.length === 0) { tableBuf = null; return; }
+    const rows = tableBuf;
+    tableBuf = null;
+    if (rows.length < 2) return;
+    const header = splitRow(rows[0]);
+    const sepIdx = rows[1] && /^\s*\|?\s*:?-{2,}/.test(rows[1]) ? 1 : -1;
+    const bodyRows = rows.slice(sepIdx >= 0 ? 2 : 1).map(splitRow);
+    elements.push(
+      <div key={`tbl-${key}`} className="overflow-x-auto my-3 rounded-md border">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/60">
+            <tr>{header.map((h, i) => <th key={i} className="px-3 py-2 text-left font-semibold border-b">{renderInline(h)}</th>)}</tr>
+          </thead>
+          <tbody>
+            {bodyRows.map((row, ri) => (
+              <tr key={ri} className="border-b last:border-0 hover:bg-muted/30">
+                {row.map((cell, ci) => <td key={ci} className="px-3 py-2 align-top">{renderInline(cell)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const flushAll = (key: number) => { flushList(key); flushTable(key); };
+
   lines.forEach((raw, i) => {
     const line = raw;
     if (line.startsWith("```")) {
       if (codeBlock === null) {
+        flushAll(i);
         codeBlock = [];
-        codeLang = line.replace(/```/, "").trim();
       } else {
-        flushList(i);
         elements.push(
-          <pre key={`code-${i}`} className="bg-muted text-xs p-3 rounded overflow-x-auto border">
+          <pre key={`code-${i}`} className="bg-muted text-xs p-3 rounded overflow-x-auto border my-2">
             <code>{codeBlock.join("\n")}</code>
           </pre>
         );
         codeBlock = null;
-        codeLang = "";
       }
       return;
     }
     if (codeBlock !== null) { codeBlock.push(line); return; }
 
+    // Tabela: linha começa com | e contém pelo menos 1 outro |
+    if (/^\s*\|.*\|/.test(line)) {
+      flushList(i);
+      if (tableBuf === null) tableBuf = [];
+      tableBuf.push(line);
+      return;
+    }
+
     if (line.startsWith("# ")) {
-      flushList(i);
-      elements.push(<h1 key={i} className="text-2xl font-bold mt-4 mb-2">{line.slice(2)}</h1>);
+      flushAll(i);
+      elements.push(<h1 key={i} className="text-2xl font-bold mt-4 mb-2">{renderInline(line.slice(2))}</h1>);
     } else if (line.startsWith("## ")) {
-      flushList(i);
-      elements.push(<h2 key={i} className="text-xl font-semibold mt-4 mb-2 border-b pb-1">{line.slice(3)}</h2>);
+      flushAll(i);
+      elements.push(<h2 key={i} className="text-xl font-semibold mt-4 mb-2 border-b pb-1">{renderInline(line.slice(3))}</h2>);
     } else if (line.startsWith("### ")) {
-      flushList(i);
-      elements.push(<h3 key={i} className="text-lg font-semibold mt-3 mb-1">{line.slice(4)}</h3>);
+      flushAll(i);
+      elements.push(<h3 key={i} className="text-lg font-semibold mt-3 mb-1">{renderInline(line.slice(4))}</h3>);
     } else if (line.startsWith("> ")) {
-      flushList(i);
-      elements.push(<blockquote key={i} className="border-l-4 border-primary pl-3 italic text-sm text-muted-foreground my-2">{line.slice(2)}</blockquote>);
+      flushAll(i);
+      elements.push(<blockquote key={i} className="border-l-4 border-primary pl-3 italic text-sm text-muted-foreground my-2">{renderInline(line.slice(2))}</blockquote>);
+    } else if (/^---+\s*$/.test(line)) {
+      flushAll(i);
+      elements.push(<hr key={i} className="my-4 border-border" />);
     } else if (/^[-*]\s+/.test(line)) {
+      flushTable(i);
       listBuf.push(line);
     } else if (line.trim() === "") {
-      flushList(i);
+      flushAll(i);
     } else {
-      flushList(i);
-      elements.push(<p key={i} className="text-sm my-1 leading-relaxed">{line}</p>);
+      flushAll(i);
+      elements.push(<p key={i} className="text-sm my-1 leading-relaxed">{renderInline(line)}</p>);
     }
   });
-  flushList(lines.length);
+  flushAll(lines.length);
   return elements;
 }
 
