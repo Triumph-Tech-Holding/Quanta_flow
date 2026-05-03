@@ -3,6 +3,24 @@
 
 ---
 
+## [7.1.0] — 2026-05-03
+
+### Adicionado
+- **IA Brain — Ações Executáveis 1-clique no Dashboard**
+- Card "IA Brain — Insights" agora renderiza botões clicáveis (não mais bullets)
+- Endpoint `POST /api/brain/actions/move-pipeline` (valida enum pipeline_stage)
+- Endpoint `POST /api/brain/actions/assign-agent` (round-robin)
+- Endpoint `POST /api/brain/actions/dispatch-microlearning` (cria learningDelivery)
+- Ação `enviar_mensagem` navega para `/inbox?contact={id}`
+- UI com estados loading/done, toast de sucesso/erro e invalidação automática de cache
+- Todos endpoints com `authenticateToken` + checagem de ownership por `userId`
+
+### Corrigido
+- `STAGE_NEXT` em `iaBrainService.ts` agora usa valores reais do enum
+  (`novo→qualificado→proposta→negociacao→fechado_ganho`) separando key (DB) e label (UI)
+
+---
+
 ## [7.0.0] — 2026-04-30
 
 ### Adicionado
