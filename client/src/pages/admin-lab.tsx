@@ -139,7 +139,7 @@ export default function AdminLab() {
         method,
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      setSmokeResults(prev => ({ ...prev, [id]: res.status < 500 ? "ok" : "fail" }));
+      setSmokeResults(prev => ({ ...prev, [id]: res.status >= 200 && res.status < 400 ? "ok" : "fail" }));
     } catch {
       setSmokeResults(prev => ({ ...prev, [id]: "fail" }));
     }

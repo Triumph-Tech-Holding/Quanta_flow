@@ -386,6 +386,37 @@ publication_schedules (UUID PK)
   }
 }
 
+async function migrateProjectStatusItems() {
+  try {
+    await db.execute(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status_priority') THEN
+          CREATE TYPE project_status_priority AS ENUM ('alta', 'media', 'baixa');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status_status') THEN
+          CREATE TYPE project_status_status AS ENUM ('concluido', 'em_curso', 'pendente', 'pausado');
+        END IF;
+      END $$;
+      CREATE TABLE IF NOT EXISTS project_status_items (
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+        feature_id VARCHAR(20) NOT NULL,
+        feature_name VARCHAR(200) NOT NULL,
+        category VARCHAR(100) NOT NULL DEFAULT 'geral',
+        priority project_status_priority NOT NULL DEFAULT 'media',
+        status project_status_status NOT NULL DEFAULT 'pendente',
+        progress INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    log("Project status items migration OK", "seed");
+  } catch (err) {
+    console.error("Error migrating project status items:", err);
+  }
+}
+
 async function seedProjectStatusItems() {
   try {
     const existing = await db.select({ id: projectStatusItems.id }).from(projectStatusItems).limit(1);
@@ -499,6 +530,7 @@ app.use((req, res, next) => {
   await ensureAdminUser();
   await seedFlowTemplates();
   await seedDocumentationVersions();
+  await migrateProjectStatusItems();
   await seedProjectStatusItems();
   jobQueue.start();
   startLearningWorker();

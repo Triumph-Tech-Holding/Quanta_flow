@@ -310,7 +310,14 @@ export default function AdminDocumentation() {
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
   const [editStatusValues, setEditStatusValues] = useState<Partial<ProjectStatusItem>>({});
   const [addingStatus, setAddingStatus] = useState(false);
-  const [newStatusValues, setNewStatusValues] = useState({ featureId: "", featureName: "", category: "geral", priority: "media" as const, status: "pendente" as const, progress: 0 });
+  const [newStatusValues, setNewStatusValues] = useState<{
+    featureId: string;
+    featureName: string;
+    category: string;
+    priority: "alta" | "media" | "baixa";
+    status: "concluido" | "em_curso" | "pendente" | "pausado";
+    progress: number;
+  }>({ featureId: "", featureName: "", category: "geral", priority: "media", status: "pendente", progress: 0 });
 
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
