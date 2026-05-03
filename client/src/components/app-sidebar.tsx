@@ -184,15 +184,18 @@ const automationSubItems = [
     icon: Megaphone,
     permission: "edit_settings",
   },
+];
+
+const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns"];
+
+const engenhariaMenuItems = [
   {
-    title: "Laboratório",
+    title: "LAB — Cockpit Técnico",
     url: "/admin/lab",
     icon: FlaskConical,
     permission: "edit_settings",
   },
 ];
-
-const AUTOMATION_URLS = ["/admin/agents", "/admin/flows", "/admin/campaigns", "/admin/lab"];
 
 function getInitials(name: string) {
   return name
@@ -247,6 +250,9 @@ export function AppSidebar() {
     (item) => hasPermission(item.permission) || isAdmin
   );
   const visibleAutomationItems = automationSubItems.filter(
+    (item) => hasPermission(item.permission) || isAdmin
+  );
+  const visibleEngenhariaItems = engenhariaMenuItems.filter(
     (item) => hasPermission(item.permission) || isAdmin
   );
 
@@ -338,6 +344,34 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {visibleEngenhariaItems.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>Engenharia</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleEngenhariaItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-engenharia-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                        className="font-semibold"
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
 
         {(visibleAdminItems.length > 0 || visibleAutomationItems.length > 0) && (
           <>
