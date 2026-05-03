@@ -225,6 +225,10 @@ export default function AdminLab() {
     },
   });
 
+  // --- Filtros do Painel de Status ---
+  const [statusFilter, setStatusFilter] = useState<"todos" | "pendente" | "em_curso" | "pausado" | "concluido">("todos");
+  const [priorityFilter, setPriorityFilter] = useState<"todas" | "alta" | "media" | "baixa">("todas");
+
   // --- Gerador de Backlog com IA ---
   const [aiOpen, setAiOpen] = useState(false);
   const [aiIdea, setAiIdea] = useState("");
@@ -463,6 +467,55 @@ export default function AdminLab() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Filtros */}
+                  <div className="flex flex-wrap items-center gap-3 pb-2 border-b border-border">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">Status:</span>
+                      {([
+                        { v: "todos",    l: "Todos",     cls: "bg-muted hover:bg-muted/80" },
+                        { v: "pendente", l: "Pendentes", cls: "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300" },
+                        { v: "em_curso", l: "Em curso",  cls: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300" },
+                        { v: "pausado",  l: "Pausados",  cls: "bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900 dark:text-orange-300" },
+                        { v: "concluido",l: "Concluídos",cls: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300" },
+                      ] as const).map((opt) => {
+                        const active = statusFilter === opt.v;
+                        const count = opt.v === "todos" ? statusItems.length : statusItems.filter(i => i.status === opt.v).length;
+                        return (
+                          <button
+                            key={opt.v}
+                            onClick={() => setStatusFilter(opt.v)}
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition ${active ? "ring-2 ring-primary/60 " + opt.cls : opt.cls + " opacity-70 hover:opacity-100"}`}
+                            data-testid={`filter-status-${opt.v}`}
+                          >
+                            {opt.l} <span className="ml-1 opacity-70">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="text-xs font-medium text-muted-foreground">Prioridade:</span>
+                      {([
+                        { v: "todas", l: "Todas" },
+                        { v: "alta",  l: "Alta"  },
+                        { v: "media", l: "Média" },
+                        { v: "baixa", l: "Baixa" },
+                      ] as const).map((opt) => {
+                        const active = priorityFilter === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            onClick={() => setPriorityFilter(opt.v)}
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium border transition ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border text-muted-foreground"}`}
+                            data-testid={`filter-priority-${opt.v}`}
+                          >
+                            {opt.l}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {loadingStatus ? (
                     <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" /><span>Carregando...</span>
@@ -518,7 +571,10 @@ export default function AdminLab() {
                               </td>
                             </tr>
                           )}
-                          {statusItems.map((item, i) => {
+                          {statusItems
+                            .filter(it => statusFilter === "todos" ? true : it.status === statusFilter)
+                            .filter(it => priorityFilter === "todas" ? true : it.priority === priorityFilter)
+                            .map((item, i) => {
                             const isEditing = editingStatusId === item.id;
                             const priorityColor = item.priority === "alta" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" : item.priority === "media" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
                             const statusColor = item.status === "concluido" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" : item.status === "em_curso" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : item.status === "pausado" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" : "bg-muted text-muted-foreground";
