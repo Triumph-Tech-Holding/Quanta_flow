@@ -154,6 +154,32 @@ const value = await configService.getSetting("minha_chave");
 
 ---
 
+## Workflow de Documentação (Obrigatório)
+
+> **Regra inviolável** definida pelo PO: "Não faça nada sem checar documentação e após terminar qualquer funcionalidade ou alteração atualize docs."
+
+### Antes de qualquer alteração
+1. Ler `replit.md` (já carregado na memória) para arquitetura atual
+2. Ler `CLAUDE.md` para diretrizes/padrões inegociáveis
+3. Ler `FEATURES.md` para entender estado da feature alvo
+4. Ler `DICTIONARY.md` se for mexer no schema
+5. Ler `TESTING.md` para entender contratos esperados
+
+### Após qualquer alteração relevante
+Atualizar **na mesma tarefa** (não delegar pra depois):
+| Mudança | Docs a atualizar |
+|---|---|
+| Nova feature | `replit.md`, `FEATURES.md`, `STORIES.md`, `CHANGELOG.md`, `TESTING.md` (cenários E2E) |
+| Novo endpoint | `FEATURES.md` (tabela de endpoints), `TESTING.md` (smoke se crítico) |
+| Mudança de schema | `DICTIONARY.md`, `CHANGELOG.md`, `DEPLOY_GUIDE.md` (se precisar migration) |
+| Novo worker | `CLAUDE.md` (tabela de workers), `VISUAL_FLOW.md`, `DEPLOY_GUIDE.md` (checklist) |
+| Bugfix UX/UI | `CHANGELOG.md` |
+| Refactor estrutural | `replit.md` + doc específica afetada |
+
+Mudanças cosméticas/triviais podem ser logadas só no `CHANGELOG.md` ou agrupadas.
+
+---
+
 ## Padrões de Erro
 
 | Padrão | Causa Comum | Solução |

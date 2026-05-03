@@ -3,6 +3,18 @@
 
 ---
 
+## [7.1.1] — 2026-05-03
+
+### Corrigido
+- **Viewer de docs do Lab** não renderizava tabelas Markdown — TESTING.md, FEATURES.md,
+  DICTIONARY.md e DEPLOY_GUIDE.md apareciam praticamente vazias por serem majoritariamente
+  tabelas. `renderMarkdownInline` em `client/src/pages/admin-lab.tsx` agora suporta:
+  - Tabelas Markdown (`|...|`) renderizadas como `<table>` com header, hover e scroll horizontal
+  - Inline formatting: `**negrito**`, `*itálico*`, `` `código` ``
+  - Separador horizontal `---` como `<hr>`
+
+---
+
 ## [7.1.0] — 2026-05-03
 
 ### Adicionado

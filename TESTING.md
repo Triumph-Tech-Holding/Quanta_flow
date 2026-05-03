@@ -164,6 +164,24 @@
 | Staging | (futuro) | snapshot | testes de aceitação |
 | Produção | *.replit.app | prod managed | deploy via skill `deployment` |
 
+## 7.1 Renderer de Documentação (Lab → Docs)
+
+O viewer inline em `client/src/pages/admin-lab.tsx` (`renderMarkdownInline`) suporta:
+
+| Sintaxe Markdown | Renderização |
+|---|---|
+| `# H1` / `## H2` / `### H3` | `<h1>`/`<h2>`/`<h3>` com hierarquia visual |
+| `> quote` | `<blockquote>` com borda primary |
+| `- item` / `* item` | `<ul>` com `list-disc` |
+| `\| col \| col \|` (tabela com `\|---\|`) | `<table>` com header, hover, scroll horizontal |
+| ` ```lang ` / ` ``` ` | `<pre><code>` com fundo muted |
+| `**negrito**` | `<strong>` |
+| `*itálico*` | `<em>` |
+| `` `código` `` | `<code>` inline com fundo muted |
+| `---` | `<hr>` |
+
+**Não suportado** (cair como texto puro): listas ordenadas (`1.`), links `[text](url)`, imagens, HTML embutido, tabelas sem linha separadora.
+
 ## 8. Checklist de release
 
 ```
