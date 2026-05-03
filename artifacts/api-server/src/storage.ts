@@ -106,8 +106,8 @@ export interface IStorage {
   deleteAutomationFlow(id: string): Promise<boolean>;
   findMatchingAutomationFlow(userId: string, message: string): Promise<AutomationFlow | undefined>;
   // Branding
-  getBrandingConfig(userId: string): Promise<BrandingConfig | undefined>;
-  upsertBrandingConfig(userId: string, data: UpdateBrandingConfig): Promise<BrandingConfig>;
+  getBrandingConfig(userId: string, workspaceId?: string | null): Promise<BrandingConfig | undefined>;
+  upsertBrandingConfig(userId: string, data: UpdateBrandingConfig, workspaceId?: string | null): Promise<BrandingConfig>;
   // Agent Assignment
   getActiveAgents(): Promise<User[]>;
   assignContactToUser(contactId: string, assignedToUserId: string | null): Promise<UnifiedContact | undefined>;
@@ -567,14 +567,30 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== Branding Config ====================
 
-  async getBrandingConfig(userId: string): Promise<BrandingConfig | undefined> {
+  async getBrandingConfig(userId: string, workspaceId?: string | null): Promise<BrandingConfig | undefined> {
+    if (workspaceId) {
+      const [byWs] = await db.select().from(brandingConfig)
+        .where(eq(brandingConfig.workspaceId, workspaceId)).limit(1);
+      if (byWs) return byWs;
+    }
     const [config] = await db.select().from(brandingConfig)
       .where(eq(brandingConfig.userId, userId)).limit(1);
     return config;
   }
 
-  async upsertBrandingConfig(userId: string, data: UpdateBrandingConfig): Promise<BrandingConfig> {
-    const existing = await this.getBrandingConfig(userId);
+  async upsertBrandingConfig(userId: string, data: UpdateBrandingConfig, workspaceId?: string | null): Promise<BrandingConfig> {
+    // Quando há workspaceId, só atualizamos a linha já vinculada a esse workspace.
+    // Caso contrário criamos uma nova linha para o workspace (não tocamos a do usuário).
+    let existing: BrandingConfig | undefined;
+    if (workspaceId) {
+      const [byWs] = await db.select().from(brandingConfig)
+        .where(eq(brandingConfig.workspaceId, workspaceId)).limit(1);
+      existing = byWs;
+    } else {
+      const [byUser] = await db.select().from(brandingConfig)
+        .where(eq(brandingConfig.userId, userId)).limit(1);
+      existing = byUser;
+    }
     if (existing) {
       const [updated] = await db.update(brandingConfig)
         .set({ ...data, updatedAt: new Date() })
@@ -583,7 +599,7 @@ export class DatabaseStorage implements IStorage {
       return updated;
     } else {
       const [created] = await db.insert(brandingConfig)
-        .values({ userId, ...data })
+        .values({ userId, workspaceId: workspaceId ?? null, ...data })
         .returning();
       return created;
     }
@@ -1263,6 +1279,8 @@ export interface IWorkspaceStorage {
   removeWorkspaceMember(workspaceId: string, userId: string): Promise<boolean>;
   isWorkspaceMember(workspaceId: string, userId: string): Promise<{ isMember: boolean; role?: string }>;
   setUserCurrentWorkspace(userId: string, workspaceId: string): Promise<User | undefined>;
+  listWorkspaceMembers(workspaceId: string): Promise<Array<{ userId: string; role: string; nome: string; email: string; status: string; createdAt: Date }>>;
+  updateMemberRole(workspaceId: string, userId: string, role: "owner" | "admin" | "member"): Promise<WorkspaceMember | undefined>;
 }
 
 export class WorkspaceStorage implements IWorkspaceStorage {
@@ -1285,6 +1303,13 @@ export class WorkspaceStorage implements IWorkspaceStorage {
         ownerUserId: workspaces.ownerUserId,
         plan: workspaces.plan,
         logoUrl: workspaces.logoUrl,
+        faviconUrl: workspaces.faviconUrl,
+        companyName: workspaces.companyName,
+        primaryColor: workspaces.primaryColor,
+        secondaryColor: workspaces.secondaryColor,
+        timezone: workspaces.timezone,
+        locale: workspaces.locale,
+        defaultSlaMinutes: workspaces.defaultSlaMinutes,
         createdAt: workspaces.createdAt,
         updatedAt: workspaces.updatedAt,
         role: workspaceMembers.role,
@@ -1293,6 +1318,22 @@ export class WorkspaceStorage implements IWorkspaceStorage {
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId));
     return rows as Array<Workspace & { role: string }>;
+  }
+
+  async listWorkspaceMembers(workspaceId: string): Promise<Array<{ userId: string; role: string; nome: string; email: string; status: string; createdAt: Date }>> {
+    const rows = await db
+      .select({
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        nome: users.nome,
+        email: users.email,
+        status: users.status,
+        createdAt: workspaceMembers.createdAt,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
+    return rows;
   }
 
   async createWorkspace(data: InsertWorkspace, ownerUserId: string): Promise<Workspace> {
@@ -1328,6 +1369,14 @@ export class WorkspaceStorage implements IWorkspaceStorage {
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
       .returning();
     return result.length > 0;
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: "owner" | "admin" | "member"): Promise<WorkspaceMember | undefined> {
+    const [m] = await db.update(workspaceMembers)
+      .set({ role })
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+      .returning();
+    return m;
   }
 
   async isWorkspaceMember(workspaceId: string, userId: string): Promise<{ isMember: boolean; role?: string }> {

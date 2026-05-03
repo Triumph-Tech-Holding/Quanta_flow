@@ -23,6 +23,7 @@ import {
   Megaphone,
   FlaskConical,
   Cpu,
+  Building2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -121,6 +122,12 @@ const adminMenuItems = [
     url: "/settings",
     icon: Settings,
     permission: "view_settings",
+  },
+  {
+    title: "Empresa",
+    url: "/settings/company",
+    icon: Building2,
+    permission: "edit_settings",
   },
   {
     title: "Branding",

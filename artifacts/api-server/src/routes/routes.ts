@@ -10,7 +10,7 @@ import fs from "fs";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 import { storage, workspaceStorage } from "../storage";
-import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, insertDocumentationVersionSchema, unifiedContacts } from "@workspace/db";
+import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, insertApiConfigSchema, connectEvolutionSchema, connectZApiSchema, insertSettingSchema, updateSettingSchema, insertUnifiedContactSchema, updateUnifiedContactSchema, insertContactIdentifierSchema, insertQuickReplySchema, updateQuickReplySchema, insertAutomationFlowSchema, updateAutomationFlowSchema, updateBrandingConfigSchema, insertLearningTrackSchema, updateLearningTrackSchema, insertOutboundWebhookSchema, updateOutboundWebhookSchema, insertSheetIntegrationSchema, updateSheetIntegrationSchema, insertEmailConfigSchema, insertAiAgentSchema, updateAiAgentSchema, insertCampaignSchema, updateCampaignSchema, insertMessageTemplateSchema, updateMessageTemplateSchema, insertDocumentationVersionSchema, unifiedContacts, type InsertWorkspace } from "@workspace/db";
 import OpenAI from "openai";
 import { z } from "zod/v4";
 import { createEvolutionService } from "../services/evolutionService";
@@ -2149,18 +2149,32 @@ Return ONLY the JSON array, no markdown.`,
 
   app.get("/api/branding", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
-      const config = await storage.getBrandingConfig(req.user!.userId);
+      // Prioriza branding do workspace ativo; cai no do usuário e por fim no workspace.*
+      if (req.workspaceId) {
+        const ws = await workspaceStorage.getWorkspace(req.workspaceId);
+        if (ws && (ws.companyName || ws.logoUrl || ws.primaryColor)) {
+          return res.json({
+            companyName: ws.companyName ?? ws.name,
+            primaryColor: ws.primaryColor ?? "#00A86B",
+            secondaryColor: ws.secondaryColor ?? "#1B3A57",
+            logoUrl: ws.logoUrl ?? null,
+            faviconUrl: ws.faviconUrl ?? null,
+          });
+        }
+      }
+      const config = await storage.getBrandingConfig(req.user!.userId, req.workspaceId ?? null);
       res.json(config || { companyName: null, primaryColor: "#00A86B", secondaryColor: "#1B3A57", logoUrl: null, faviconUrl: null });
     } catch (error) {
       console.error("Error fetching branding config:", error);
       res.status(500).json({ message: "Erro ao buscar configuração de branding" });
     }
+      return;
   });
 
   app.put("/api/branding", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const data = updateBrandingConfigSchema.parse(req.body);
-      const config = await storage.upsertBrandingConfig(req.user!.userId, data);
+      const config = await storage.upsertBrandingConfig(req.user!.userId, data, req.workspaceId ?? null);
       res.json(config);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -5079,12 +5093,83 @@ Gere um pacote completo de conteúdo em JSON com exatamente esta estrutura:
       if (!membership.isMember || (membership.role !== "owner" && membership.role !== "admin")) {
         return res.status(403).json({ message: "Apenas owner/admin pode editar o workspace" });
       }
-      const ws = await workspaceStorage.updateWorkspace(String(req.params.id), req.body);
+      const allowed: Record<string, unknown> = {};
+      const fields = ["name", "slug", "logoUrl", "faviconUrl", "companyName", "primaryColor", "secondaryColor", "timezone", "locale", "defaultSlaMinutes"] as const;
+      for (const f of fields) if (f in req.body) allowed[f] = req.body[f];
+      if (typeof allowed.slug === "string") {
+        const slugStr = allowed.slug;
+        if (!/^[a-z0-9-]{2,80}$/.test(slugStr)) {
+          return res.status(400).json({ message: "Slug inválido (use letras minúsculas, números e hífens)" });
+        }
+        const existing = await workspaceStorage.getWorkspaceBySlug(slugStr);
+        if (existing && existing.id !== String(req.params.id)) {
+          return res.status(409).json({ message: "Já existe um workspace com este slug" });
+        }
+      }
+      const ws = await workspaceStorage.updateWorkspace(String(req.params.id), allowed as Partial<InsertWorkspace>);
       if (!ws) return res.status(404).json({ message: "Workspace não encontrado" });
       res.json(ws);
     } catch (err) {
       console.error("[PATCH /api/workspaces/:id]", err);
       res.status(500).json({ message: "Erro ao atualizar workspace" });
+    }
+      return;
+  });
+
+  app.get("/api/workspaces/:id/members", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const wsId = String(req.params.id);
+      const membership = await workspaceStorage.isWorkspaceMember(wsId, req.user!.userId);
+      if (!membership.isMember) return res.status(403).json({ message: "Você não é membro deste workspace" });
+      const members = await workspaceStorage.listWorkspaceMembers(wsId);
+      res.json({ members, currentRole: membership.role });
+    } catch (err) {
+      console.error("[GET /api/workspaces/:id/members]", err);
+      res.status(500).json({ message: "Erro ao listar membros" });
+    }
+      return;
+  });
+
+  app.patch("/api/workspaces/:id/members/:userId", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const wsId = String(req.params.id);
+      const targetUserId = String(req.params.userId);
+      const membership = await workspaceStorage.isWorkspaceMember(wsId, req.user!.userId);
+      if (!membership.isMember || membership.role !== "owner") {
+        return res.status(403).json({ message: "Apenas o owner pode alterar papéis" });
+      }
+      const role = req.body?.role as "owner" | "admin" | "member";
+      if (!["owner", "admin", "member"].includes(role)) {
+        return res.status(400).json({ message: "Role inválida" });
+      }
+      const updated = await workspaceStorage.updateMemberRole(wsId, targetUserId, role);
+      if (!updated) return res.status(404).json({ message: "Membro não encontrado" });
+      res.json(updated);
+    } catch (err) {
+      console.error("[PATCH /api/workspaces/:id/members/:userId]", err);
+      res.status(500).json({ message: "Erro ao atualizar papel" });
+    }
+      return;
+  });
+
+  app.delete("/api/workspaces/:id/members/:userId", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const wsId = String(req.params.id);
+      const targetUserId = String(req.params.userId);
+      const membership = await workspaceStorage.isWorkspaceMember(wsId, req.user!.userId);
+      if (!membership.isMember || (membership.role !== "owner" && membership.role !== "admin")) {
+        return res.status(403).json({ message: "Apenas owner/admin pode remover membros" });
+      }
+      const ws = await workspaceStorage.getWorkspace(wsId);
+      if (ws && ws.ownerUserId === targetUserId) {
+        return res.status(400).json({ message: "Não é possível remover o owner. Transfira a posse antes." });
+      }
+      const ok = await workspaceStorage.removeWorkspaceMember(wsId, targetUserId);
+      if (!ok) return res.status(404).json({ message: "Membro não encontrado" });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[DELETE /api/workspaces/:id/members/:userId]", err);
+      res.status(500).json({ message: "Erro ao remover membro" });
     }
       return;
   });

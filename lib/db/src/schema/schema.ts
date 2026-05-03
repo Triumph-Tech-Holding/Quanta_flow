@@ -36,6 +36,13 @@ export const workspaces = pgTable("workspaces", {
   ownerUserId: varchar("owner_user_id", { length: 36 }).notNull().references(() => users.id),
   plan: workspacePlanEnum("plan").notNull().default("free"),
   logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  companyName: varchar("company_name", { length: 255 }),
+  primaryColor: varchar("primary_color", { length: 20 }).default("#00A86B"),
+  secondaryColor: varchar("secondary_color", { length: 20 }).default("#1B3A57"),
+  timezone: varchar("timezone", { length: 64 }).default("America/Sao_Paulo"),
+  locale: varchar("locale", { length: 10 }).default("pt-BR"),
+  defaultSlaMinutes: integer("default_sla_minutes").default(60),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -514,6 +521,7 @@ export const flowTemplates = pgTable("flow_templates", {
 export const brandingConfig = pgTable("branding_config", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  workspaceId: varchar("workspace_id", { length: 36 }).references(() => workspaces.id, { onDelete: "cascade" }),
   companyName: varchar("company_name", { length: 255 }),
   primaryColor: varchar("primary_color", { length: 20 }).default("#00A86B"),
   secondaryColor: varchar("secondary_color", { length: 20 }).default("#1B3A57"),

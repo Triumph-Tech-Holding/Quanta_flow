@@ -17,6 +17,7 @@ import CrmPage from "@/pages/crm";
 import ContactProfile from "@/pages/contact-profile";
 import AutomationPage from "@/pages/automation";
 import AdminBranding from "@/pages/admin-branding";
+import SettingsCompany from "@/pages/settings-company";
 import UserSettings from "@/pages/user-settings";
 import ForgotPassword from "@/pages/forgot-password";
 import LearningTracksPage from "@/pages/learning-tracks";
@@ -102,6 +103,9 @@ function Router() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
+      </Route>
+      <Route path="/settings/company">
+        <ProtectedRoute component={SettingsCompany} />
       </Route>
       <Route path="/change-password">
         <ProtectedRoute component={ChangePassword} allowPasswordChange />

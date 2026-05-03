@@ -60,5 +60,6 @@ pnpm workspace monorepo using TypeScript. Contains the Quanta Flow WhatsApp/omni
 - SESSION_SECRET env var is required for JWT
 - Frontend imports from `@shared/schema` resolve via Vite alias to `lib/db/src/schema`
 - `attached_assets/` is accessible from the frontend via `@assets/` alias (fs.strict: false)
+- Workspace traz campos completos de empresa: `companyName, primaryColor, secondaryColor, logoUrl, faviconUrl, timezone, locale, defaultSlaMinutes` (table `workspaces`). Branding por workspace: `GET/PUT /api/branding` priorizam `req.workspaceId`. Página `/settings/company` (Geral / Branding / Plano / Membros) gerencia tudo. Endpoints de membros: `GET/PATCH/DELETE /api/workspaces/:id/members[/:userId]` (PATCH role: owner-only; DELETE: owner/admin, owner protegido). PATCH `/api/workspaces/:id` valida slug único e formato.
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
