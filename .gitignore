@@ -51,6 +51,7 @@ Thumbs.db
 # WhatsApp Baileys session credentials (sensitive, runtime-generated)
 .baileys_auth/
 **/.baileys_auth/
+.migration-backup/.baileys_auth/
 
 # User-uploaded media files (runtime data, not source)
 uploads/
