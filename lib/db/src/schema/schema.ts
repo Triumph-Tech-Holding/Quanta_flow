@@ -626,7 +626,7 @@ export const updateAutomationFlowSchema = z.object({
     id: z.string(),
     type: z.enum(["text", "audio_tts", "image_ai", "delay", "condition", "ai_agent", "webhook", "queue_entry", "resolve", "update_lead"]),
     label: z.string().optional(),
-    config: z.record(z.unknown()),
+    config: z.record(z.string(), z.unknown()),
     position: z.object({ x: z.number(), y: z.number() }).optional(),
     nextBlockId: z.string().optional().nullable(),
     conditionTrueId: z.string().optional().nullable(),
@@ -721,7 +721,7 @@ export const updateSheetIntegrationSchema = z.object({
   spreadsheetId: z.string().optional(),
   sheetName: z.string().optional(),
   triggerEvent: z.string().optional(),
-  columnMapping: z.record(z.string()).optional(),
+  columnMapping: z.record(z.string(), z.string()).optional(),
   isActive: z.boolean().optional(),
 });
 
