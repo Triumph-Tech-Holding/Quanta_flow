@@ -12,10 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, PlayCircle, Volume2, Zap, CheckCircle2, XCircle,
   Webhook, Smartphone, Image as ImageIcon, ShieldCheck, RefreshCw,
-  BarChart3, Pencil, Plus, Check, X, Trash2, FileText, Download, Eye,
+  BarChart3, Pencil, Plus, Check, X, Trash2, FileText, Download, Eye, Sparkles,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { queryClient } from "@/lib/queryClient";
@@ -215,6 +216,45 @@ export default function AdminLab() {
     },
   });
 
+  // --- Gerador de Backlog com IA ---
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiIdea, setAiIdea] = useState("");
+  const [aiCategory, setAiCategory] = useState("Novo Módulo");
+  const [aiSprintCount, setAiSprintCount] = useState(2);
+  const [aiFeaturesPerSprint, setAiFeaturesPerSprint] = useState(3);
+  const [aiPreview, setAiPreview] = useState<any[] | null>(null);
+
+  const aiPreviewMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/backlog/generate", {
+        idea: aiIdea, category: aiCategory, sprintCount: aiSprintCount, featuresPerSprint: aiFeaturesPerSprint, dryRun: true,
+      });
+      return res.json() as Promise<{ features: any[]; sprintCount: number }>;
+    },
+    onSuccess: (data) => {
+      setAiPreview(data.features);
+      toast({ title: `Pré-visualização: ${data.features.length} features em ${data.sprintCount} sprints` });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao gerar", description: err.message, variant: "destructive" }),
+  });
+
+  const aiCommitMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/backlog/generate", {
+        idea: aiIdea, category: aiCategory, sprintCount: aiSprintCount, featuresPerSprint: aiFeaturesPerSprint,
+      });
+      return res.json() as Promise<{ created: any[]; totalFeatures: number; sprintCount: number }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-status"] });
+      toast({ title: `${data.totalFeatures} features adicionadas em ${data.sprintCount} sprints!` });
+      setAiOpen(false);
+      setAiIdea("");
+      setAiPreview(null);
+    },
+    onError: (err: Error) => toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" }),
+  });
+
   const { data: allFlows = [] } = useQuery<AutomationFlow[]>({
     queryKey: ["/api/automation-flows"],
   });
@@ -403,9 +443,14 @@ export default function AdminLab() {
                         <CardDescription>Cockpit técnico interno: matriz editável de features com prioridade, status e progresso</CardDescription>
                       </div>
                     </div>
-                    <Button size="sm" className="gap-2" onClick={() => setAddingStatus(true)} data-testid="button-add-feature">
-                      <Plus className="w-4 h-4" />Nova Feature
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-2" onClick={() => setAiOpen(true)} data-testid="button-ai-backlog">
+                        <Sparkles className="w-4 h-4 text-primary" />Gerar Backlog com IA
+                      </Button>
+                      <Button size="sm" className="gap-2" onClick={() => setAddingStatus(true)} data-testid="button-add-feature">
+                        <Plus className="w-4 h-4" />Nova Feature
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -527,6 +572,122 @@ export default function AdminLab() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Dialog: Gerador de Backlog com IA */}
+              <Dialog open={aiOpen} onOpenChange={(o) => { setAiOpen(o); if (!o) { setAiPreview(null); } }}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      Gerar Backlog com IA
+                    </DialogTitle>
+                    <DialogDescription>
+                      Descreva uma ideia ou objetivo. A IA gera Features, User Stories e organiza em Sprints — tudo já entra no Painel de Status.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Ideia / Objetivo</label>
+                      <Textarea
+                        rows={4}
+                        placeholder="Ex.: Quero um módulo de gestão financeira com cobrança recorrente, conciliação bancária e DRE automático para os lojistas."
+                        value={aiIdea}
+                        onChange={(e) => setAiIdea(e.target.value)}
+                        data-testid="textarea-ai-idea"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Categoria</label>
+                        <Input value={aiCategory} onChange={(e) => setAiCategory(e.target.value)} className="text-sm" data-testid="input-ai-category" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Sprints</label>
+                        <Input type="number" min={1} max={6} value={aiSprintCount} onChange={(e) => setAiSprintCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))} className="text-sm" data-testid="input-ai-sprints" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Features / sprint</label>
+                        <Input type="number" min={1} max={6} value={aiFeaturesPerSprint} onChange={(e) => setAiFeaturesPerSprint(Math.max(1, Math.min(6, Number(e.target.value) || 1)))} className="text-sm" data-testid="input-ai-features-per-sprint" />
+                      </div>
+                    </div>
+
+                    {aiPreview && aiPreview.length > 0 && (
+                      <div className="space-y-3 border-t pt-4">
+                        <p className="text-xs text-muted-foreground">Pré-visualização — revise antes de salvar:</p>
+                        {Array.from(new Set(aiPreview.map((f: any) => f.sprint || 1))).sort().map((sp) => (
+                          <div key={sp} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default" className="bg-primary/10 text-primary border border-primary/20">Sprint {sp}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {aiPreview.filter((f: any) => (f.sprint || 1) === sp).length} features
+                              </span>
+                            </div>
+                            <div className="space-y-2 pl-2">
+                              {aiPreview.filter((f: any) => (f.sprint || 1) === sp).map((f: any, idx: number) => (
+                                <div key={idx} className="border rounded-md p-3 space-y-1.5 bg-muted/30" data-testid={`ai-preview-feature-${idx}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium">{f.featureName}</p>
+                                      {f.summary && <p className="text-xs text-muted-foreground">{f.summary}</p>}
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                      <Badge variant="outline" className="text-[10px]">{f.category}</Badge>
+                                      <Badge className={`text-[10px] ${f.priority === "alta" ? "bg-red-100 text-red-700" : f.priority === "media" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                                        {f.priority}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  {Array.isArray(f.stories) && f.stories.length > 0 && (
+                                    <ul className="text-xs text-muted-foreground space-y-0.5 mt-2 pl-3 list-disc">
+                                      {f.stories.map((s: any, si: number) => (
+                                        <li key={si}>
+                                          Como <strong>{s.as}</strong>, quero <strong>{s.want}</strong>, para <strong>{s.so}</strong>.
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <DialogFooter className="gap-2">
+                    <Button variant="ghost" onClick={() => setAiOpen(false)}>Cancelar</Button>
+                    {!aiPreview ? (
+                      <Button
+                        onClick={() => aiPreviewMutation.mutate()}
+                        disabled={aiIdea.trim().length < 5 || aiPreviewMutation.isPending}
+                        className="gap-2"
+                        data-testid="button-ai-preview"
+                      >
+                        {aiPreviewMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        Gerar Preview
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="outline" onClick={() => setAiPreview(null)} disabled={aiPreviewMutation.isPending || aiCommitMutation.isPending}>
+                          Refazer
+                        </Button>
+                        <Button
+                          onClick={() => aiCommitMutation.mutate()}
+                          disabled={aiCommitMutation.isPending}
+                          className="gap-2"
+                          data-testid="button-ai-commit"
+                        >
+                          {aiCommitMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          Adicionar ao Backlog
+                        </Button>
+                      </>
+                    )}
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             {/* === FLOW SIMULATOR === */}
