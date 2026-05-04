@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
@@ -27,6 +27,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -38,16 +45,14 @@ import {
   Plus,
   Trash2,
   Eye,
-  EyeOff,
   FileText,
   Loader2,
   BookOpen,
-  ChevronDown,
-  ChevronUp,
   Presentation,
   Code2,
   History,
   Database,
+  Server,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,6 +76,16 @@ interface DocumentationVersion {
   updatedAt: string;
 }
 
+interface ViewerState {
+  open: boolean;
+  title: string;
+  filename: string;
+  content: string | null;
+  loading: boolean;
+  pdfEndpoint: string | null;
+  pdfFilename: string;
+}
+
 function renderMarkdown(content: string) {
   const lines = content.split("\n");
   const elements: React.ReactElement[] = [];
@@ -79,7 +94,6 @@ function renderMarkdown(content: string) {
   let codeLines: string[] = [];
   let inTable = false;
   let tableRows: string[][] = [];
-  let isFirstTableRow = true;
 
   const flushTable = () => {
     if (tableRows.length === 0) return;
@@ -111,7 +125,6 @@ function renderMarkdown(content: string) {
     );
     tableRows = [];
     inTable = false;
-    isFirstTableRow = true;
   };
 
   const applyInline = (text: string): (string | React.ReactElement)[] => {
@@ -129,10 +142,7 @@ function renderMarkdown(content: string) {
           : codeIdx === -1
           ? boldIdx
           : Math.min(boldIdx, codeIdx);
-      if (first === -1) {
-        parts.push(remaining);
-        break;
-      }
+      if (first === -1) { parts.push(remaining); break; }
       if (first > 0) parts.push(remaining.slice(0, first));
       if (first === boldIdx) {
         const end = remaining.indexOf("**", first + 2);
@@ -169,10 +179,7 @@ function renderMarkdown(content: string) {
       continue;
     }
 
-    if (inCode) {
-      codeLines.push(line);
-      continue;
-    }
+    if (inCode) { codeLines.push(line); continue; }
 
     if (line.startsWith("|") && line.includes("|")) {
       inTable = true;
@@ -184,29 +191,13 @@ function renderMarkdown(content: string) {
     }
 
     if (line.startsWith("# ")) {
-      elements.push(
-        <h1 key={key++} className="text-2xl font-bold mt-8 mb-3 text-foreground border-b border-border pb-2">
-          {applyInline(line.slice(2))}
-        </h1>
-      );
+      elements.push(<h1 key={key++} className="text-2xl font-bold mt-8 mb-3 text-foreground border-b border-border pb-2">{applyInline(line.slice(2))}</h1>);
     } else if (line.startsWith("## ")) {
-      elements.push(
-        <h2 key={key++} className="text-xl font-bold mt-6 mb-2 text-foreground">
-          {applyInline(line.slice(3))}
-        </h2>
-      );
+      elements.push(<h2 key={key++} className="text-xl font-bold mt-6 mb-2 text-foreground">{applyInline(line.slice(3))}</h2>);
     } else if (line.startsWith("### ")) {
-      elements.push(
-        <h3 key={key++} className="text-base font-semibold mt-4 mb-1 text-foreground">
-          {applyInline(line.slice(4))}
-        </h3>
-      );
+      elements.push(<h3 key={key++} className="text-base font-semibold mt-4 mb-1 text-foreground">{applyInline(line.slice(4))}</h3>);
     } else if (line.startsWith("#### ")) {
-      elements.push(
-        <h4 key={key++} className="text-sm font-semibold mt-3 mb-1 text-muted-foreground uppercase tracking-wide">
-          {applyInline(line.slice(5))}
-        </h4>
-      );
+      elements.push(<h4 key={key++} className="text-sm font-semibold mt-3 mb-1 text-muted-foreground uppercase tracking-wide">{applyInline(line.slice(5))}</h4>);
     } else if (line.startsWith("- ") || line.startsWith("* ")) {
       elements.push(
         <li key={key++} className="ml-4 mb-1 text-sm text-foreground flex gap-2">
@@ -229,16 +220,11 @@ function renderMarkdown(content: string) {
     } else if (line.trim() === "") {
       elements.push(<div key={key++} className="h-2" />);
     } else {
-      elements.push(
-        <p key={key++} className="text-sm text-foreground leading-relaxed mb-1">
-          {applyInline(line)}
-        </p>
-      );
+      elements.push(<p key={key++} className="text-sm text-foreground leading-relaxed mb-1">{applyInline(line)}</p>);
     }
   }
 
   if (inTable) flushTable();
-
   return elements;
 }
 
@@ -287,11 +273,19 @@ export default function AdminDocumentation() {
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentationVersion | null>(null);
-  const [showGuide, setShowGuide] = useState(false);
-  const [showUserGuide, setShowUserGuide] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [downloadingGuidePdf, setDownloadingGuidePdf] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
+
+  const [viewer, setViewer] = useState<ViewerState>({
+    open: false,
+    title: "",
+    filename: "",
+    content: null,
+    loading: false,
+    pdfEndpoint: null,
+    pdfFilename: "documento.pdf",
+  });
+
   const { data: docs = [], isLoading } = useQuery<DocumentationVersion[]>({
     queryKey: ["/api/documentation/versions"],
   });
@@ -308,24 +302,6 @@ export default function AdminDocumentation() {
     queryKey: ["/api/documentation/changelog"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/documentation/changelog");
-      return res.text();
-    },
-  });
-
-  const { data: manualContent, isLoading: loadingManual } = useQuery<string>({
-    queryKey: ["/api/documentation/manual-md"],
-    enabled: showGuide,
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/documentation/manual-md");
-      return res.text();
-    },
-  });
-
-  const { data: userGuideContent, isLoading: loadingUserGuide } = useQuery<string>({
-    queryKey: ["/api/documentation/guide-md"],
-    enabled: showUserGuide,
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/documentation/guide-md");
       return res.text();
     },
   });
@@ -374,19 +350,19 @@ export default function AdminDocumentation() {
     document.body.removeChild(element);
   };
 
-  const handleDownloadGuidePdf = async () => {
+  const downloadPdf = useCallback(async (endpoint: string, filename: string) => {
     try {
-      setDownloadingGuidePdf(true);
-      const response = await apiRequest("GET", "/api/documentation/guide-pdf");
+      setDownloadingPdf(endpoint);
+      const response = await apiRequest("GET", endpoint);
       if (!response.ok) throw new Error("Erro ao gerar PDF");
       const blob = await response.blob();
       const element = document.createElement("a");
       element.href = URL.createObjectURL(blob);
-      element.download = "QUANTA_FLOW_Guia_de_Uso.pdf";
+      element.download = filename;
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
-      toast({ title: "Guia de Uso baixado com sucesso!" });
+      toast({ title: "PDF baixado com sucesso!" });
     } catch (err) {
       toast({
         title: "Erro ao baixar PDF",
@@ -394,33 +370,27 @@ export default function AdminDocumentation() {
         variant: "destructive",
       });
     } finally {
-      setDownloadingGuidePdf(false);
+      setDownloadingPdf(null);
     }
-  };
+  }, [toast]);
 
-  const handleDownloadUserManualPdf = async () => {
+  const openViewer = useCallback(async (
+    title: string,
+    filename: string,
+    mdEndpoint: string,
+    pdfEndpoint: string | null,
+    pdfFilename: string,
+  ) => {
+    setViewer({ open: true, title, filename, content: null, loading: true, pdfEndpoint, pdfFilename });
     try {
-      setDownloadingPdf(true);
-      const response = await apiRequest("GET", "/api/documentation/manual-pdf");
-      if (!response.ok) throw new Error("Erro ao gerar PDF");
-      const blob = await response.blob();
-      const element = document.createElement("a");
-      element.href = URL.createObjectURL(blob);
-      element.download = "QUANTA_FLOW_Manual_Completo.pdf";
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      toast({ title: "Manual baixado com sucesso!" });
-    } catch (err) {
-      toast({
-        title: "Erro ao baixar PDF",
-        description: err instanceof Error ? err.message : "Tente novamente",
-        variant: "destructive",
-      });
-    } finally {
-      setDownloadingPdf(false);
+      const res = await apiRequest("GET", mdEndpoint);
+      if (!res.ok) throw new Error();
+      const content = await res.text();
+      setViewer((v) => ({ ...v, content, loading: false }));
+    } catch {
+      setViewer((v) => ({ ...v, content: "Não foi possível carregar o documento.", loading: false }));
     }
-  };
+  }, []);
 
   const handleDownloadPptx = async () => {
     try {
@@ -461,531 +431,549 @@ export default function AdminDocumentation() {
             <ThemeToggle />
           </header>
           <main className="flex-1 p-6">
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">📚 Documentação</h1>
-          <p className="text-muted-foreground mt-2">Gerencie versões da documentação e visualize o guia completo online</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <Button className="gap-2" onClick={() => setOpen(true)} data-testid="button-new-version">
-            <Plus className="w-4 h-4" />
-            Nova Versão
-          </Button>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Criar Nova Versão</DialogTitle>
-              <DialogDescription>
-                Crie uma nova versão da documentação do Quanta Flow
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit((data) => createMutation.mutate(data))}
-                className="space-y-4"
-              >
-                <FormField
-                  control={form.control}
-                  name="version"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Versão (ex: 5.1.0)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="5.1.0" {...field} data-testid="input-version" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Título</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Documentação v5.1.0" {...field} data-testid="input-title" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Descrição (opcional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Mudanças nesta versão..." {...field} data-testid="input-description" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-version">
-                  {createMutation.isPending ? "Criando..." : "Criar Versão"}
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Manual Completo — destaque principal */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <BookOpen className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Manual Completo — Quanta Flow</CardTitle>
-                <CardDescription className="mt-1 text-justify">
-                  Guia didático com todos os 16 módulos da plataforma: Dashboard, Inbox Omnichannel, CRM/Kanban, Automação com Builder Visual e Simulador, Agentes IA, Campanhas, Fila, Microlearning, Webhooks, Google Sheets, Lab, Configurações, Branding e RBAC — com cenários práticos reais.
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => setShowGuide((v) => !v)}
-                data-testid="button-toggle-guide"
-              >
-                {showGuide ? (
-                  <>
-                    <EyeOff className="w-4 h-4" />
-                    Fechar
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-4 h-4" />
-                    Visualizar
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleDownloadUserManualPdf}
-                disabled={downloadingPdf}
-                className="gap-2"
-                data-testid="button-download-manual-pdf"
-              >
-                {downloadingPdf ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Baixar PDF
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        {showGuide && (
-          <CardContent>
-            <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
-              {/* Barra do leitor */}
-              <div className="flex items-center justify-between px-4 py-2 bg-muted/70 border-b border-border">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileText className="w-4 h-4" />
-                  <span>MANUAL_DE_USO.md</span>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">📚 Documentação</h1>
+                  <p className="text-muted-foreground mt-2">Gerencie versões da documentação e visualize o guia completo online</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowGuide(false)}
-                  data-testid="button-close-guide"
-                >
-                  <ChevronUp className="w-3 h-3" />
-                  Fechar leitor
-                </Button>
+                <Dialog open={open} onOpenChange={setOpen}>
+                  <Button className="gap-2" onClick={() => setOpen(true)} data-testid="button-new-version">
+                    <Plus className="w-4 h-4" />
+                    Nova Versão
+                  </Button>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Criar Nova Versão</DialogTitle>
+                      <DialogDescription>
+                        Crie uma nova versão da documentação do Quanta Flow
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...form}>
+                      <form
+                        onSubmit={form.handleSubmit((data) => createMutation.mutate(data))}
+                        className="space-y-4"
+                      >
+                        <FormField
+                          control={form.control}
+                          name="version"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Versão (ex: 5.1.0)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="5.1.0" {...field} data-testid="input-version" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Título</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Documentação v5.1.0" {...field} data-testid="input-title" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Descrição (opcional)</FormLabel>
+                              <FormControl>
+                                <Textarea placeholder="Mudanças nesta versão..." {...field} data-testid="input-description" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-version">
+                          {createMutation.isPending ? "Criando..." : "Criar Versão"}
+                        </Button>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
               </div>
 
-              {/* Conteúdo renderizado */}
-              <div className="max-h-[70vh] overflow-y-auto px-6 py-5" data-testid="guide-reader-content">
-                {loadingManual ? (
-                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Carregando manual...</span>
-                  </div>
-                ) : manualContent ? (
-                  <div className="prose-sm max-w-none">
-                    {renderMarkdown(manualContent)}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">
-                    Não foi possível carregar o manual. Tente novamente.
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+              {/* Grid de documentos principais */}
+              <div className="grid gap-4 md:grid-cols-2">
 
-      {/* Guia de Uso — novo card */}
-      <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 dark:from-emerald-500/10 dark:to-emerald-500/5">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <BookOpen className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Guia de Uso — Por Módulo e Persona</CardTitle>
-                <CardDescription className="mt-1 text-justify">
-                  Guia prático com histórias reais de uso para cada persona (gestor, atendente, estrategista, admin técnico e lead). Cobre os 12 módulos principais com fluxos fim-a-fim e tabela completa de funcionalidades.
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => setShowUserGuide((v) => !v)}
-                data-testid="button-toggle-user-guide"
-              >
-                {showUserGuide ? (
-                  <>
-                    <EyeOff className="w-4 h-4" />
-                    Fechar
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-4 h-4" />
-                    Visualizar
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleDownloadGuidePdf}
-                disabled={downloadingGuidePdf}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                data-testid="button-download-guide-pdf"
-              >
-                {downloadingGuidePdf ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Baixar PDF
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        {showUserGuide && (
-          <CardContent>
-            <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
-              <div className="flex items-center justify-between px-4 py-2 bg-muted/70 border-b border-border">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileText className="w-4 h-4" />
-                  <span>GUIDE.md</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowUserGuide(false)}
-                  data-testid="button-close-user-guide"
-                >
-                  <ChevronUp className="w-3 h-3" />
-                  Fechar leitor
-                </Button>
-              </div>
-              <div className="max-h-[70vh] overflow-y-auto px-6 py-5" data-testid="user-guide-reader-content">
-                {loadingUserGuide ? (
-                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Carregando guia...</span>
-                  </div>
-                ) : userGuideContent ? (
-                  <div className="prose-sm max-w-none">
-                    {renderMarkdown(userGuideContent)}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">
-                    Não foi possível carregar o guia. Tente novamente.
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <Presentation className="w-6 h-6 text-foreground" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Apresentação Comercial</CardTitle>
-                <CardDescription className="mt-1 text-justify">
-                  Slides do Quanta Flow com identidade visual para apresentações e demos. Arquivo .pptx compatível com PowerPoint e Google Slides.
-                </CardDescription>
-              </div>
-            </div>
-            <div className="shrink-0">
-              <Button
-                onClick={handleDownloadPptx}
-                disabled={downloadingPptx}
-                variant="outline"
-                className="gap-2"
-                data-testid="button-download-pptx"
-              >
-                {downloadingPptx ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Baixar Apresentação (.pptx)
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
-
-      <Tabs defaultValue="versions" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="versions" data-testid="tab-versions">Versões</TabsTrigger>
-          <TabsTrigger value="info" data-testid="tab-info">Sistema</TabsTrigger>
-          <TabsTrigger value="claude" data-testid="tab-claude">CLAUDE.md</TabsTrigger>
-          <TabsTrigger value="changelog" data-testid="tab-changelog">CHANGELOG</TabsTrigger>
-          <TabsTrigger value="dict" data-testid="tab-dict">Dicionário</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="versions" className="space-y-4 mt-4">
-          {isLoading ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Carregando versões...
-            </div>
-          ) : docs.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <p className="text-muted-foreground text-center">
-                  Nenhuma versão criada ainda. Clique em "Nova Versão" para começar!
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {docs.map((doc) => (
-                <Card key={doc.id} className="hover:shadow-md transition-shadow">
+                {/* Manual Completo */}
+                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          v{doc.version}
-                        </CardTitle>
-                        <CardDescription>{doc.title}</CardDescription>
-                        {doc.description && (
-                          <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
-                        )}
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                        <BookOpen className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => { setSelectedDoc(doc); setViewOpen(true); }}
-                          className="gap-2"
-                          data-testid={`view-doc-${doc.id}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Visualizar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownload(doc)}
-                          className="gap-2"
-                          data-testid={`download-doc-${doc.id}`}
-                        >
-                          <Download className="w-4 h-4" />
-                          Download
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(doc.id)}
-                          disabled={deleteMutation.isPending}
-                          data-testid={`delete-doc-${doc.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base">Manual Completo</CardTitle>
+                        <CardDescription className="mt-1 text-xs">
+                          Guia didático com todos os módulos da plataforma, cenários e fluxos reais.
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-muted-foreground">
-                      Criado em {new Date(doc.createdAt).toLocaleString("pt-BR")}
-                    </p>
+                  <CardContent className="flex gap-2 pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 flex-1"
+                      onClick={() => openViewer(
+                        "Manual Completo — Quanta Flow",
+                        "MANUAL_DE_USO.md",
+                        "/api/documentation/manual-md",
+                        "/api/documentation/manual-pdf",
+                        "QUANTA_FLOW_Manual_Completo.pdf",
+                      )}
+                      data-testid="button-toggle-guide"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-2 flex-1"
+                      disabled={downloadingPdf === "/api/documentation/manual-pdf"}
+                      onClick={() => downloadPdf("/api/documentation/manual-pdf", "QUANTA_FLOW_Manual_Completo.pdf")}
+                      data-testid="button-download-manual-pdf"
+                    >
+                      {downloadingPdf === "/api/documentation/manual-pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Baixar PDF
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
+
+                {/* Guia de Uso */}
+                <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 dark:from-emerald-500/10 dark:to-emerald-500/5">
+                  <CardHeader>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-emerald-500/10 shrink-0">
+                        <BookOpen className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base">Guia de Uso — Por Persona</CardTitle>
+                        <CardDescription className="mt-1 text-xs">
+                          Histórias reais por persona (gestor, atendente, estrategista), fluxos fim-a-fim e tabela de funcionalidades.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex gap-2 pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 flex-1"
+                      onClick={() => openViewer(
+                        "Guia de Uso — Por Módulo e Persona",
+                        "GUIDE.md",
+                        "/api/documentation/guide-md",
+                        "/api/documentation/guide-pdf",
+                        "QUANTA_FLOW_Guia_de_Uso.pdf",
+                      )}
+                      data-testid="button-toggle-user-guide"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-2 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={downloadingPdf === "/api/documentation/guide-pdf"}
+                      onClick={() => downloadPdf("/api/documentation/guide-pdf", "QUANTA_FLOW_Guia_de_Uso.pdf")}
+                      data-testid="button-download-guide-pdf"
+                    >
+                      {downloadingPdf === "/api/documentation/guide-pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Baixar PDF
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Referência Técnica */}
+                <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-blue-500/10 dark:from-blue-500/10 dark:to-blue-500/5">
+                  <CardHeader>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
+                        <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base">Referência Técnica</CardTitle>
+                        <CardDescription className="mt-1 text-xs">
+                          Arquitetura, stack, monorepo, módulos, workers, tabelas e padrões do sistema.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex gap-2 pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 flex-1"
+                      onClick={() => openViewer(
+                        "Referência Técnica — Quanta Flow",
+                        "replit.md",
+                        "/api/documentation/replit-md",
+                        "/api/documentation/replit-pdf",
+                        "QUANTA_FLOW_Referencia_Tecnica.pdf",
+                      )}
+                      data-testid="button-view-replit"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-2 flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                      disabled={downloadingPdf === "/api/documentation/replit-pdf"}
+                      onClick={() => downloadPdf("/api/documentation/replit-pdf", "QUANTA_FLOW_Referencia_Tecnica.pdf")}
+                      data-testid="button-download-replit-pdf"
+                    >
+                      {downloadingPdf === "/api/documentation/replit-pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Baixar PDF
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* CLAUDE.md */}
+                <Card className="border-violet-500/30 bg-gradient-to-br from-violet-500/5 to-violet-500/10 dark:from-violet-500/10 dark:to-violet-500/5">
+                  <CardHeader>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-violet-500/10 shrink-0">
+                        <Code2 className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base">CLAUDE.md — Contexto Técnico</CardTitle>
+                        <CardDescription className="mt-1 text-xs">
+                          Stack, regras invioláveis, padrões de código e guia de onboarding para devs e IAs.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex gap-2 pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 flex-1"
+                      onClick={() => openViewer(
+                        "CLAUDE.md — Contexto Técnico",
+                        "CLAUDE.md",
+                        "/api/documentation/claude-md",
+                        null,
+                        "",
+                      )}
+                      data-testid="button-view-claude"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2 flex-1"
+                      disabled
+                    >
+                      <FileText className="w-4 h-4" />
+                      Só leitura
+                    </Button>
+                  </CardContent>
+                </Card>
+
+              </div>
+
+              {/* Apresentação Comercial */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-muted">
+                        <Presentation className="w-6 h-6 text-foreground" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">Apresentação Comercial</CardTitle>
+                        <CardDescription className="mt-1 text-justify">
+                          Slides do Quanta Flow com identidade visual para apresentações e demos. Arquivo .pptx compatível com PowerPoint e Google Slides.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <Button
+                        onClick={handleDownloadPptx}
+                        disabled={downloadingPptx}
+                        variant="outline"
+                        className="gap-2"
+                        data-testid="button-download-pptx"
+                      >
+                        {downloadingPptx ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Gerando...</>
+                        ) : (
+                          <><Download className="w-4 h-4" />Baixar Apresentação (.pptx)</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+
+              <Tabs defaultValue="versions" className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="versions" data-testid="tab-versions">Versões</TabsTrigger>
+                  <TabsTrigger value="info" data-testid="tab-info">Sistema</TabsTrigger>
+                  <TabsTrigger value="claude" data-testid="tab-claude">CLAUDE.md</TabsTrigger>
+                  <TabsTrigger value="changelog" data-testid="tab-changelog">CHANGELOG</TabsTrigger>
+                  <TabsTrigger value="dict" data-testid="tab-dict">Dicionário</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="versions" className="space-y-4 mt-4">
+                  {isLoading ? (
+                    <div className="text-center py-12 text-muted-foreground">Carregando versões...</div>
+                  ) : docs.length === 0 ? (
+                    <Card className="border-dashed">
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-muted-foreground text-center">
+                          Nenhuma versão criada ainda. Clique em "Nova Versão" para começar!
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid gap-4">
+                      {docs.map((doc) => (
+                        <Card key={doc.id} className="hover:shadow-md transition-shadow">
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <CardTitle className="flex items-center gap-2">
+                                  v{doc.version}
+                                </CardTitle>
+                                <CardDescription>{doc.title}</CardDescription>
+                                {doc.description && (
+                                  <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => { setSelectedDoc(doc); setViewOpen(true); }}
+                                  className="gap-2"
+                                  data-testid={`view-doc-${doc.id}`}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Visualizar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownload(doc)}
+                                  className="gap-2"
+                                  data-testid={`download-doc-${doc.id}`}
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => deleteMutation.mutate(doc.id)}
+                                  disabled={deleteMutation.isPending}
+                                  data-testid={`delete-doc-${doc.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-xs text-muted-foreground">
+                              Criado em {new Date(doc.createdAt).toLocaleString("pt-BR")}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="info" className="space-y-4 mt-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Sobre o Sistema de Documentação</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm">
+                      <div>
+                        <h3 className="font-semibold mb-2">🎯 Objetivo</h3>
+                        <p className="text-muted-foreground">Manter um histórico organizado de todas as versões da documentação técnica da plataforma Quanta Flow, facilitando o rastreamento de mudanças e acesso rápido às informações.</p>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-2">📦 O que está documentado</h3>
+                        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                          <li>Arquitetura do sistema completa</li>
+                          <li>Schema do banco de dados com 27+ tabelas</li>
+                          <li>80+ endpoints da API REST</li>
+                          <li>Integração com 4 canais de comunicação</li>
+                          <li>Fluxos de automação e microlearning</li>
+                          <li>Webhooks e integrações externas</li>
+                          <li>Setup, deployment e CI/CD</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-2">🚀 Stack Tecnológico</h3>
+                        <p className="text-muted-foreground">Frontend: React 18 + Vite + TypeScript | Backend: Node.js 24 + Express 5 | Database: PostgreSQL + Drizzle ORM | Auth: JWT + bcrypt | Real-time: Socket.io | IA: OpenAI GPT-4o-mini</p>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-2">📝 Versionamento</h3>
+                        <p className="text-muted-foreground">Cada versão documenta o estado da plataforma em um momento específico. Use "Nova Versão" quando há atualizações significativas no sistema.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="claude" className="mt-4">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-muted"><Code2 className="w-5 h-5" /></div>
+                          <div>
+                            <CardTitle className="text-base">CLAUDE.md — Contexto Técnico</CardTitle>
+                            <CardDescription>Stack, padrões de nomenclatura, regras invioláveis e guia de onboarding para IAs e devs</CardDescription>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 shrink-0"
+                          onClick={() => openViewer(
+                            "CLAUDE.md — Contexto Técnico",
+                            "CLAUDE.md",
+                            "/api/documentation/claude-md",
+                            null,
+                            "",
+                          )}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Abrir no painel
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
+                          <Code2 className="w-4 h-4" /><span>CLAUDE.md</span>
+                        </div>
+                        <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="claude-reader-content">
+                          {loadingClaude ? (
+                            <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                              <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
+                            </div>
+                          ) : claudeContent ? (
+                            <div className="prose-sm max-w-none">{renderMarkdown(claudeContent)}</div>
+                          ) : (
+                            <p className="text-center text-muted-foreground py-12">Arquivo CLAUDE.md não encontrado.</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="changelog" className="mt-4">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-muted"><History className="w-5 h-5" /></div>
+                          <div>
+                            <CardTitle className="text-base">CHANGELOG — Histórico de Versões</CardTitle>
+                            <CardDescription>Histórico semântico de todas as versões do projeto seguindo Keep a Changelog</CardDescription>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 shrink-0"
+                          onClick={() => openViewer(
+                            "CHANGELOG — Histórico de Versões",
+                            "CHANGELOG.md",
+                            "/api/documentation/changelog",
+                            null,
+                            "",
+                          )}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Abrir no painel
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
+                          <History className="w-4 h-4" /><span>CHANGELOG.md</span>
+                        </div>
+                        <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="changelog-reader-content">
+                          {loadingChangelog ? (
+                            <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                              <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
+                            </div>
+                          ) : changelogContent ? (
+                            <div className="prose-sm max-w-none">{renderMarkdown(changelogContent)}</div>
+                          ) : (
+                            <p className="text-center text-muted-foreground py-12">Arquivo CHANGELOG.md não encontrado.</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="dict" className="mt-4">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-muted"><Database className="w-5 h-5" /></div>
+                        <div>
+                          <CardTitle className="text-base">Dicionário de Dados</CardTitle>
+                          <CardDescription>{DATA_DICT.length} tabelas do banco de dados PostgreSQL — mapeado do schema Drizzle ORM</CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-muted">
+                              <th className="border border-border px-3 py-2 text-left font-semibold w-8">#</th>
+                              <th className="border border-border px-3 py-2 text-left font-semibold">Tabela</th>
+                              <th className="border border-border px-3 py-2 text-left font-semibold">Descrição</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {DATA_DICT.map((row, i) => (
+                              <tr key={row.table} className={i % 2 === 0 ? "bg-background" : "bg-muted/30"} data-testid={`dict-row-${row.table}`}>
+                                <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{i + 1}</td>
+                                <td className="border border-border px-3 py-2">
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-primary">{row.table}</code>
+                                </td>
+                                <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{row.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+              </Tabs>
             </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="info" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sobre o Sistema de Documentação</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div>
-                <h3 className="font-semibold mb-2">🎯 Objetivo</h3>
-                <p className="text-muted-foreground">Manter um histórico organizado de todas as versões da documentação técnica da plataforma Quanta Flow, facilitando o rastreamento de mudanças e acesso rápido às informações.</p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">📦 O que está documentado</h3>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>Arquitetura do sistema completa</li>
-                  <li>Schema do banco de dados com 20+ tabelas</li>
-                  <li>80+ endpoints da API REST</li>
-                  <li>Integração com 4 canais de comunicação</li>
-                  <li>Fluxos de automação e microlearning</li>
-                  <li>Webhooks e integrações externas</li>
-                  <li>Setup, deployment e CI/CD</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">🚀 Stack Tecnológico</h3>
-                <p className="text-muted-foreground">Frontend: React 18 + Vite + TypeScript | Backend: Node.js + Express | Database: PostgreSQL + Drizzle ORM | Auth: JWT + bcrypt | Real-time: Socket.io | IA: OpenAI GPT-4o-mini</p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">📝 Versionamento</h3>
-                <p className="text-muted-foreground">Cada versão documenta o estado da plataforma em um momento específico. Use "Nova Versão" quando há atualizações significativas no sistema.</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        {/* === CLAUDE.MD === */}
-        <TabsContent value="claude" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-muted"><Code2 className="w-5 h-5" /></div>
-                <div>
-                  <CardTitle className="text-base">CLAUDE.md — Contexto Técnico</CardTitle>
-                  <CardDescription>Stack, padrões de nomenclatura, regras invioláveis e guia de onboarding para IAs e devs</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
-                <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
-                  <Code2 className="w-4 h-4" /><span>CLAUDE.md</span>
-                </div>
-                <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="claude-reader-content">
-                  {loadingClaude ? (
-                    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                      <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
-                    </div>
-                  ) : claudeContent ? (
-                    <div className="prose-sm max-w-none">{renderMarkdown(claudeContent)}</div>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-12">Arquivo CLAUDE.md não encontrado.</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* === CHANGELOG === */}
-        <TabsContent value="changelog" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-muted"><History className="w-5 h-5" /></div>
-                <div>
-                  <CardTitle className="text-base">CHANGELOG — Histórico de Versões</CardTitle>
-                  <CardDescription>Histórico semântico de todas as versões do projeto seguindo Keep a Changelog</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="border border-border rounded-xl bg-background overflow-hidden shadow-inner">
-                <div className="flex items-center gap-2 px-4 py-2 bg-muted/70 border-b border-border text-sm text-muted-foreground">
-                  <History className="w-4 h-4" /><span>CHANGELOG.md</span>
-                </div>
-                <div className="max-h-[65vh] overflow-y-auto px-6 py-5" data-testid="changelog-reader-content">
-                  {loadingChangelog ? (
-                    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                      <Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span>
-                    </div>
-                  ) : changelogContent ? (
-                    <div className="prose-sm max-w-none">{renderMarkdown(changelogContent)}</div>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-12">Arquivo CHANGELOG.md não encontrado.</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* === DICIONÁRIO DE DADOS === */}
-        <TabsContent value="dict" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-muted"><Database className="w-5 h-5" /></div>
-                <div>
-                  <CardTitle className="text-base">Dicionário de Dados</CardTitle>
-                  <CardDescription>{DATA_DICT.length} tabelas do banco de dados PostgreSQL — mapeado do schema Drizzle ORM</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="border border-border px-3 py-2 text-left font-semibold w-8">#</th>
-                      <th className="border border-border px-3 py-2 text-left font-semibold">Tabela</th>
-                      <th className="border border-border px-3 py-2 text-left font-semibold">Descrição</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_DICT.map((row, i) => (
-                      <tr key={row.table} className={i % 2 === 0 ? "bg-background" : "bg-muted/30"} data-testid={`dict-row-${row.table}`}>
-                        <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{i + 1}</td>
-                        <td className="border border-border px-3 py-2">
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-primary">{row.table}</code>
-                        </td>
-                        <td className="border border-border px-3 py-2 text-muted-foreground text-xs">{row.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-      </Tabs>
+          </main>
+        </SidebarInset>
+      </div>
 
       {/* Modal de visualização de versão técnica */}
       <Dialog open={viewOpen} onOpenChange={(open) => { setViewOpen(open); if (!open) setSelectedDoc(null); }}>
@@ -1005,10 +993,56 @@ export default function AdminDocumentation() {
           </DialogContent>
         )}
       </Dialog>
-    </div>
-          </main>
-        </SidebarInset>
-      </div>
+
+      {/* Painel lateral de visualização de documentos */}
+      <Sheet open={viewer.open} onOpenChange={(o) => setViewer((v) => ({ ...v, open: o }))}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl flex flex-col p-0 gap-0"
+        >
+          <SheetHeader className="px-6 py-4 border-b bg-muted/40 flex flex-row items-start justify-between gap-4 space-y-0">
+            <div className="flex-1 min-w-0">
+              <SheetTitle className="text-base leading-tight">{viewer.title}</SheetTitle>
+              <SheetDescription className="flex items-center gap-1.5 mt-1">
+                <FileText className="w-3 h-3" />
+                {viewer.filename}
+              </SheetDescription>
+            </div>
+            {viewer.pdfEndpoint && (
+              <Button
+                size="sm"
+                className="gap-2 shrink-0"
+                disabled={downloadingPdf === viewer.pdfEndpoint}
+                onClick={() => downloadPdf(viewer.pdfEndpoint!, viewer.pdfFilename)}
+              >
+                {downloadingPdf === viewer.pdfEndpoint ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Baixar PDF
+              </Button>
+            )}
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-5" data-testid="sheet-reader-content">
+            {viewer.loading ? (
+              <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span>Carregando documento...</span>
+              </div>
+            ) : viewer.content ? (
+              <div className="prose-sm max-w-none">
+                {renderMarkdown(viewer.content)}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-16">
+                Não foi possível carregar o documento.
+              </p>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
     </SidebarProvider>
   );
 }

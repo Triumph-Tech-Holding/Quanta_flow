@@ -3510,7 +3510,9 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
   app.get("/api/documentation/manual-md", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const manualPath = path.join(DATA_DIR, "MANUAL_DE_USO.md");
+      const primaryPath = path.join(DATA_DIR, "MANUAL_DE_USO.md");
+      const fallbackPath = path.join(DATA_DIR, "docs", "GUIDE.md");
+      const manualPath = fs.existsSync(primaryPath) ? primaryPath : fallbackPath;
       if (!fs.existsSync(manualPath)) {
         return res.status(404).json({ message: "Manual não encontrado" });
       }
@@ -3518,8 +3520,23 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.send(content);
     } catch (err) {
-      console.error("[GET /api/documentation/manual-md]", err);
+      req.log.error({ err }, "[GET /api/documentation/manual-md]");
       res.status(500).json({ message: "Erro ao carregar manual" });
+    }
+      return;
+  });
+
+  app.get("/api/documentation/replit-md", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(DATA_DIR, "replit.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.send(content);
+    } catch (err) {
+      req.log.error({ err }, "[GET /api/documentation/replit-md]");
+      res.status(500).json({ message: "Erro ao carregar referência técnica" });
     }
       return;
   });
@@ -3838,62 +3855,83 @@ Retorne APENAS JSON válido neste formato exato:
   app.get("/api/documentation/manual-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
-      const PDFDocument = require("pdfkit");
-      const fs = require("fs");
-      const path = require("path");
-
-      const manualPath = path.join(DATA_DIR, "MANUAL_DE_USO.md");
+      const primaryPath = path.join(DATA_DIR, "MANUAL_DE_USO.md");
+      const fallbackPath = path.join(DATA_DIR, "docs", "GUIDE.md");
+      const manualPath = fs.existsSync(primaryPath) ? primaryPath : fallbackPath;
       if (!fs.existsSync(manualPath)) {
         return res.status(404).json({ message: "Manual não encontrado" });
       }
-
       const manualContent = fs.readFileSync(manualPath, "utf-8");
-
-      const doc = new PDFDocument({
-        size: "A4",
-        margin: 50,
-        font: "Courier",
-      });
-
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", 'attachment; filename="QUANTA_FLOW_Manual_Completo.pdf"');
-
       doc.pipe(res);
-
-      doc.font("Courier", 16).text("QUANTA FLOW - Manual de Uso", { align: "center" });
+      doc.fontSize(18).font("Courier-Bold").text("QUANTA FLOW — Manual Completo", { align: "center" });
       doc.moveDown(0.5);
-      doc.font("Courier", 10).text("Guia Didático Completo", { align: "center" });
-      doc.moveDown(1);
-
-      const lines = manualContent.split("\n");
-      let currentFontSize = 10;
-
-      for (const line of lines) {
+      doc.fontSize(10).font("Courier").text("Guia Didático Completo da Plataforma", { align: "center" });
+      doc.moveDown(1.5);
+      for (const line of manualContent.split("\n")) {
+        if (doc.y > 760) doc.addPage();
         if (line.startsWith("# ")) {
-          doc.font("Courier", 14).text(line.replace("# ", ""));
-          doc.moveDown(0.3);
+          doc.fontSize(15).font("Courier-Bold").text(line.slice(2));
+          doc.moveDown(0.4);
         } else if (line.startsWith("## ")) {
-          doc.font("Courier", 12).text(line.replace("## ", ""));
-          doc.moveDown(0.2);
+          doc.fontSize(12).font("Courier-Bold").text(line.slice(3));
+          doc.moveDown(0.3);
         } else if (line.startsWith("### ")) {
-          doc.font("Courier", 11).text(line.replace("### ", ""));
+          doc.fontSize(11).font("Courier-Bold").text(line.slice(4));
           doc.moveDown(0.2);
         } else if (line.trim() === "") {
           doc.moveDown(0.2);
         } else {
-          doc.font("Courier", 9).text(line, { align: "left", width: 500 });
-        }
-
-        if (doc.y > 750) {
-          doc.addPage();
+          doc.fontSize(9).font("Courier").text(line, { width: 490 });
         }
       }
-
       doc.end();
     } catch (err) {
-      console.error("[GET /api/documentation/manual-pdf]", err);
+      req.log.error({ err }, "[GET /api/documentation/manual-pdf]");
       res.status(500).json({ message: "Erro ao gerar PDF" });
+    }
+      return;
+  });
+
+  app.get("/api/documentation/replit-pdf", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const filePath = path.join(DATA_DIR, "replit.md");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "Arquivo não encontrado" });
+      const content = fs.readFileSync(filePath, "utf-8");
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", 'attachment; filename="QUANTA_FLOW_Referencia_Tecnica.pdf"');
+      doc.pipe(res);
+      doc.fontSize(18).font("Courier-Bold").text("QUANTA FLOW — Referência Técnica", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font("Courier").text("Arquitetura, stack e padrões do sistema", { align: "center" });
+      doc.moveDown(1.5);
+      for (const line of content.split("\n")) {
+        if (doc.y > 760) doc.addPage();
+        if (line.startsWith("# ")) {
+          doc.fontSize(15).font("Courier-Bold").text(line.slice(2));
+          doc.moveDown(0.4);
+        } else if (line.startsWith("## ")) {
+          doc.fontSize(12).font("Courier-Bold").text(line.slice(3));
+          doc.moveDown(0.3);
+        } else if (line.startsWith("### ")) {
+          doc.fontSize(11).font("Courier-Bold").text(line.slice(4));
+          doc.moveDown(0.2);
+        } else if (line.trim() === "") {
+          doc.moveDown(0.2);
+        } else {
+          doc.fontSize(9).font("Courier").text(line, { width: 490 });
+        }
+      }
+      doc.end();
+    } catch (err) {
+      req.log.error({ err }, "[GET /api/documentation/replit-pdf]");
+      res.status(500).json({ message: "Erro ao gerar PDF da referência técnica" });
     }
       return;
   });
