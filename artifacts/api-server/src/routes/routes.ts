@@ -920,7 +920,14 @@ export async function registerRoutes(
         const baileysInst = getBaileysInstance(userId);
         connected = baileysInst?.connected === true;
       }
-      res.json({ activeProvider, connected });
+      let phoneNumber: string | null = null;
+      if (activeProvider === "baileys") {
+        const baileysInst = getBaileysInstance(userId);
+        phoneNumber = baileysInst?.phoneNumber || null;
+      } else if (config?.phoneNumber) {
+        phoneNumber = config.phoneNumber;
+      }
+      res.json({ activeProvider, connected, phoneNumber });
     } catch (error) {
       console.error("Get provider error:", error);
       res.status(500).json({ message: "Erro interno" });
@@ -3405,6 +3412,112 @@ Return ONLY the JSON array, no markdown.`,
     } catch (err) {
       console.error("[GET /api/admin/campaigns/:id/metrics]", err);
       res.status(500).json({ message: "Erro ao buscar métricas" });
+    }
+      return;
+  });
+
+  app.get("/api/admin/campaigns/:id/contacts", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const campaign = await storage.getCampaign(String(req.params.id));
+      if (!campaign || campaign.userId !== req.user.userId) return res.status(404).json({ message: "Campanha não encontrada" });
+      const deliveries = await storage.getCampaignDeliveries(campaign.id);
+      const contactIds = [...new Set(deliveries.map(d => d.contactId))];
+      const allContacts = await storage.getUnifiedContactsByUser(req.user.userId);
+      const contactMap = new Map(allContacts.map(c => [c.id, c]));
+      const contacts = contactIds
+        .map(id => {
+          const c = contactMap.get(id);
+          if (!c) return null;
+          const delivered = deliveries.filter(d => d.contactId === id);
+          return { id: c.id, name: c.nome, phone: c.telefone, messagesCount: delivered.length, status: delivered[0]?.status };
+        })
+        .filter(Boolean);
+      res.json({ contacts, total: contacts.length });
+    } catch (err) {
+      req.log.error({ err }, "[GET /api/admin/campaigns/:id/contacts]");
+      res.status(500).json({ message: "Erro ao buscar contatos" });
+    }
+      return;
+  });
+
+  app.post("/api/admin/campaigns/errata/generate", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { campaignName, context } = req.body as { campaignName?: string; context?: string };
+      const prompt = `Você é um especialista em comunicação e relações públicas brasileiro. Um negócio precisa enviar uma mensagem de retratação/errata para seus contatos.
+
+${campaignName ? `Campanha envolvida: "${campaignName}"` : ""}
+${context ? `O que aconteceu: ${context}` : "Foram enviadas mensagens em duplicidade/excesso por engano, parecendo spam."}
+
+Escreva uma mensagem de retratação para WhatsApp que seja:
+- Empática e sincera, sem ser exagerada
+- Concisa (máximo 200 caracteres)
+- Profissional mas acolhedora
+- Com pedido de desculpas claro
+- Use {nome} para personalização no início
+- Sem emojis excessivos, apenas 1-2 no máximo
+
+Retorne APENAS a mensagem, sem explicações.`;
+
+      const completion = await agentOpenai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const message = completion.choices[0]?.message?.content?.trim() || "";
+      res.json({ message });
+    } catch (err) {
+      req.log.error({ err }, "[POST /api/admin/campaigns/errata/generate]");
+      res.status(500).json({ message: "Erro ao gerar errata" });
+    }
+      return;
+  });
+
+  app.post("/api/admin/campaigns/errata/send", authenticateToken, checkRole(["super_admin", "admin"]), async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const { message, contactIds, testPhone } = req.body as { message: string; contactIds?: string[]; testPhone?: string };
+      if (!message) return res.status(400).json({ message: "Mensagem é obrigatória" });
+
+      const userId = req.user.userId;
+      const provider = await getWhatsAppProvider(userId);
+      if (!provider) throw new Error("Nenhum provedor WhatsApp ativo configurado");
+      const sendMsg = async (phone: string, name: string) => {
+        const personalised = message.replace(/\{nome\}/gi, name || "");
+        const jid = phone.replace(/\D/g, "") + "@s.whatsapp.net";
+        await provider.sendMessage(jid, personalised);
+      };
+
+      if (testPhone) {
+        const cleanPhone = testPhone.replace(/\D/g, "");
+        await sendMsg(cleanPhone, "Teste");
+        return res.json({ sent: 1, mode: "test" });
+      }
+
+      if (!contactIds || contactIds.length === 0) {
+        return res.status(400).json({ message: "Selecione ao menos um contato" });
+      }
+
+      const allContacts = await storage.getUnifiedContactsByUser(userId);
+      const contactMap = new Map(allContacts.map(c => [c.id, c]));
+      let sent = 0;
+      const errors: string[] = [];
+      for (const id of contactIds) {
+        const contact = contactMap.get(id);
+        if (!contact || !contact.telefone) continue;
+        try {
+          await sendMsg(contact.telefone, contact.nome || "");
+          sent++;
+          await new Promise(r => setTimeout(r, 1500));
+        } catch (e) {
+          errors.push(`${contact.nome || contact.telefone}: ${String(e)}`);
+        }
+      }
+      res.json({ sent, errors, total: contactIds.length });
+    } catch (err) {
+      req.log.error({ err }, "[POST /api/admin/campaigns/errata/send]");
+      res.status(500).json({ message: "Erro ao enviar errata" });
     }
       return;
   });

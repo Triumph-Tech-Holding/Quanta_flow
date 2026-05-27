@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -11,15 +10,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import QRCode from "react-qr-code";
 import {
   Plus, Megaphone, Play, Pause, Trash2, BarChart3, Eye,
   Send, Users, CheckCircle, XCircle, MessageSquare, Share2, Copy, Download,
-  Sparkles, FileText, ChevronRight, ChevronLeft, Clock,
+  Sparkles, FileText, ChevronRight, ChevronLeft, Clock, Pencil, AlertTriangle,
+  Phone, Bot,
 } from "lucide-react";
 
 type Campaign = {
@@ -58,6 +59,14 @@ type MessageTemplate = {
   isActive: boolean;
 };
 
+type ErrataContact = {
+  id: string;
+  name: string;
+  phone: string;
+  messagesCount: number;
+  status: string;
+};
+
 const statusLabels: Record<string, string> = {
   draft: "Rascunho",
   scheduled: "Agendada",
@@ -79,11 +88,25 @@ export default function AdminCampaigns() {
   const [activeTab, setActiveTab] = useState("campaigns");
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [shareCampaign, setShareCampaign] = useState<Campaign | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+
+  // AI variant picker
+  const [showVariantPicker, setShowVariantPicker] = useState(false);
+  const [aiVariants, setAiVariants] = useState<string[]>([]);
+
+  // Errata state
+  const [errataCampaignId, setErrataCampaignId] = useState("");
+  const [errataContext, setErrataContext] = useState("");
+  const [errataMessage, setErrataMessage] = useState("");
+  const [errataContacts, setErrataContacts] = useState<ErrataContact[]>([]);
+  const [selectedErrataContacts, setSelectedErrataContacts] = useState<Set<string>>(new Set());
+  const [testPhone, setTestPhone] = useState("");
+  const [errataLoading, setErrataLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -131,12 +154,13 @@ export default function AdminCampaigns() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/campaigns"] });
-      toast({ title: "Campanha criada com sucesso" });
+      toast({ title: editingCampaign ? "Campanha atualizada!" : "Campanha criada com sucesso" });
       setShowWizard(false);
+      setEditingCampaign(null);
       resetForm();
     },
     onError: (err: Error) => {
-      toast({ title: "Erro ao criar campanha", description: err.message, variant: "destructive" });
+      toast({ title: "Erro ao salvar campanha", description: err.message, variant: "destructive" });
     },
   });
 
@@ -182,15 +206,9 @@ export default function AdminCampaigns() {
     },
     onSuccess: (data) => {
       if (data.suggestions && data.suggestions.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          messages: data.suggestions.map((s: { content: string }, i: number) => ({
-            order: i,
-            content: s.content || "",
-            delayMinutes: i > 0 ? 60 : 0,
-          })),
-        }));
-        toast({ title: "Copy gerado com IA!" });
+        const variants = data.suggestions.map((s: { content: string }) => s.content || "");
+        setAiVariants(variants);
+        setShowVariantPicker(true);
       }
     },
   });
@@ -247,6 +265,28 @@ export default function AdminCampaigns() {
     setWizardStep(0);
   }
 
+  function openEditWizard(campaign: Campaign) {
+    setEditingCampaign(campaign);
+    setFormData({
+      name: campaign.name,
+      description: campaign.description || "",
+      contentType: campaign.contentType,
+      channels: campaign.channels || ["whatsapp"],
+      segmentFilter: (campaign.segmentFilter as { type: string; value?: string }) || { type: "all", value: "" },
+      messages: campaign.messages?.length > 0
+        ? campaign.messages
+        : [{ order: 0, content: "", delayMinutes: 0 }],
+      rateLimit: campaign.rateLimit || 100,
+      allowedHours: campaign.allowedHours || null,
+      scheduleType: campaign.scheduledAt ? "scheduled" : "immediate",
+      scheduledAt: campaign.scheduledAt
+        ? new Date(campaign.scheduledAt).toISOString().slice(0, 16)
+        : "",
+    });
+    setWizardStep(0);
+    setShowWizard(true);
+  }
+
   function handleCreateCampaign() {
     const isScheduled = formData.scheduleType === "scheduled" && formData.scheduledAt;
     createMutation.mutate({
@@ -261,6 +301,67 @@ export default function AdminCampaigns() {
       scheduledAt: isScheduled ? formData.scheduledAt : null,
       status: isScheduled ? "scheduled" : "draft",
     });
+  }
+
+  async function loadErrataContacts(campaignId: string) {
+    if (!campaignId) return;
+    setErrataLoading(true);
+    try {
+      const res = await apiRequest("GET", `/api/admin/campaigns/${campaignId}/contacts`);
+      const data = await res.json();
+      setErrataContacts(data.contacts || []);
+      setSelectedErrataContacts(new Set((data.contacts || []).map((c: ErrataContact) => c.id)));
+    } catch {
+      toast({ title: "Erro ao carregar contatos", variant: "destructive" });
+    } finally {
+      setErrataLoading(false);
+    }
+  }
+
+  async function generateErrataMessage() {
+    const campaign = campaigns.find(c => c.id === errataCampaignId);
+    setErrataLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/admin/campaigns/errata/generate", {
+        campaignName: campaign?.name,
+        context: errataContext,
+      });
+      const data = await res.json();
+      setErrataMessage(data.message || "");
+    } catch {
+      toast({ title: "Erro ao gerar mensagem", variant: "destructive" });
+    } finally {
+      setErrataLoading(false);
+    }
+  }
+
+  async function sendErrata(isTest: boolean) {
+    if (!errataMessage.trim()) {
+      toast({ title: "Escreva ou gere uma mensagem primeiro", variant: "destructive" });
+      return;
+    }
+    if (isTest && !testPhone.trim()) {
+      toast({ title: "Informe um número de teste", variant: "destructive" });
+      return;
+    }
+    setErrataLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/admin/campaigns/errata/send", {
+        message: errataMessage,
+        contactIds: isTest ? undefined : [...selectedErrataContacts],
+        testPhone: isTest ? testPhone : undefined,
+      });
+      const data = await res.json();
+      if (isTest) {
+        toast({ title: `Teste enviado para ${testPhone}!` });
+      } else {
+        toast({ title: `Errata enviada para ${data.sent} contato(s)!` });
+      }
+    } catch {
+      toast({ title: "Erro ao enviar errata", variant: "destructive" });
+    } finally {
+      setErrataLoading(false);
+    }
   }
 
   const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -286,11 +387,15 @@ export default function AdminCampaigns() {
               <TabsTrigger value="templates" data-testid="tab-templates">
                 <FileText className="h-4 w-4 mr-1" /> Templates
               </TabsTrigger>
+              <TabsTrigger value="errata" data-testid="tab-errata">
+                <AlertTriangle className="h-4 w-4 mr-1" /> Errata
+              </TabsTrigger>
             </TabsList>
 
+            {/* ─── CAMPANHAS ─────────────────────────────────────────── */}
             <TabsContent value="campaigns" className="space-y-4">
               <div className="flex justify-end">
-                <Button onClick={() => { resetForm(); setShowWizard(true); }} data-testid="button-new-campaign">
+                <Button onClick={() => { setEditingCampaign(null); resetForm(); setShowWizard(true); }} data-testid="button-new-campaign">
                   <Plus className="h-4 w-4 mr-1" /> Nova Campanha
                 </Button>
               </div>
@@ -343,6 +448,15 @@ export default function AdminCampaigns() {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => openEditWizard(campaign)}
+                              data-testid={`button-edit-${campaign.id}`}
+                              title="Editar campanha"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => { setShareCampaign(campaign); setShareModalOpen(true); }}
                               data-testid={`button-share-${campaign.id}`}
                               title="Compartilhar link / QR Code"
@@ -357,6 +471,23 @@ export default function AdminCampaigns() {
                             >
                               <BarChart3 className="h-4 w-4" />
                             </Button>
+                            {/* Botão Errata rápido para campanhas concluídas */}
+                            {campaign.status === "completed" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setErrataCampaignId(campaign.id);
+                                  loadErrataContacts(campaign.id);
+                                  setActiveTab("errata");
+                                }}
+                                data-testid={`button-errata-${campaign.id}`}
+                                title="Enviar errata / retratação"
+                                className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Button>
+                            )}
                             {(campaign.status === "draft" || campaign.status === "paused") && (
                               <Button
                                 size="sm"
@@ -396,6 +527,7 @@ export default function AdminCampaigns() {
               )}
             </TabsContent>
 
+            {/* ─── TEMPLATES ─────────────────────────────────────────── */}
             <TabsContent value="templates" className="space-y-4">
               <div className="flex justify-end">
                 <Button onClick={() => setShowTemplateDialog(true)} data-testid="button-new-template">
@@ -444,6 +576,7 @@ export default function AdminCampaigns() {
                               messages: [{ order: 0, content: template.content, delayMinutes: 0 }],
                             }));
                             setActiveTab("campaigns");
+                            setEditingCampaign(null);
                             setShowWizard(true);
                             setWizardStep(1);
                             toast({ title: "Template aplicado ao wizard" });
@@ -458,12 +591,182 @@ export default function AdminCampaigns() {
                 </div>
               )}
             </TabsContent>
+
+            {/* ─── ERRATA ────────────────────────────────────────────── */}
+            <TabsContent value="errata" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-600">
+                    <AlertTriangle className="h-5 w-5" />
+                    Errata — Pedido de Desculpas por IA
+                  </CardTitle>
+                  <CardDescription>
+                    Envie uma retratação personalizada para contatos que receberam mensagens indevidas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {/* Seleção de campanha */}
+                  <div className="space-y-1.5">
+                    <Label>Campanha de referência</Label>
+                    <Select
+                      value={errataCampaignId}
+                      onValueChange={(id) => {
+                        setErrataCampaignId(id);
+                        loadErrataContacts(id);
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-errata-campaign">
+                        <SelectValue placeholder="Selecione a campanha que gerou o problema..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {campaigns.map(c => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name} — {statusLabels[c.status]} — {c.sentCount || 0} enviados
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Contexto */}
+                  <div className="space-y-1.5">
+                    <Label>O que aconteceu? <span className="text-muted-foreground text-xs">(opcional — ajuda a IA a personalizar)</span></Label>
+                    <Textarea
+                      value={errataContext}
+                      onChange={(e) => setErrataContext(e.target.value)}
+                      placeholder="Ex: Foram enviadas 3 mensagens iguais por engano para todos os contatos, parecendo spam..."
+                      rows={2}
+                      data-testid="input-errata-context"
+                    />
+                  </div>
+
+                  {/* Mensagem */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>Mensagem de retratação</Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={generateErrataMessage}
+                        disabled={errataLoading}
+                        data-testid="button-generate-errata"
+                      >
+                        <Sparkles className="h-4 w-4 mr-1" />
+                        {errataLoading ? "Gerando..." : "Gerar com IA"}
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={errataMessage}
+                      onChange={(e) => setErrataMessage(e.target.value)}
+                      placeholder="A IA vai gerar uma mensagem empática aqui, ou escreva a sua..."
+                      rows={4}
+                      data-testid="input-errata-message"
+                    />
+                    <p className="text-xs text-muted-foreground">Use <code>{"{nome}"}</code> para personalizar com o nome do contato. {errataMessage.length}/200 caracteres.</p>
+                  </div>
+
+                  {/* Lista de contatos */}
+                  {errataContacts.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Destinatários ({selectedErrataContacts.size} de {errataContacts.length} selecionados)</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedErrataContacts(new Set(errataContacts.map(c => c.id)))}
+                          >
+                            Todos
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedErrataContacts(new Set())}
+                          >
+                            Nenhum
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                        {errataContacts.map(contact => (
+                          <div key={contact.id} className="flex items-center gap-3 p-2 hover:bg-muted/50">
+                            <Checkbox
+                              checked={selectedErrataContacts.has(contact.id)}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(selectedErrataContacts);
+                                if (checked) next.add(contact.id);
+                                else next.delete(contact.id);
+                                setSelectedErrataContacts(next);
+                              }}
+                              data-testid={`checkbox-errata-contact-${contact.id}`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{contact.name || contact.phone}</p>
+                              <p className="text-xs text-muted-foreground">{contact.phone}</p>
+                            </div>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {contact.messagesCount} msg{contact.messagesCount !== 1 ? "s" : ""}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {errataCampaignId && errataContacts.length === 0 && !errataLoading && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Nenhum contato encontrado para esta campanha.
+                    </p>
+                  )}
+
+                  {/* Teste + Envio */}
+                  <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <Phone className="h-4 w-4" />
+                      Testar antes de enviar
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={testPhone}
+                        onChange={(e) => setTestPhone(e.target.value)}
+                        placeholder="Ex: 5511999998888"
+                        className="flex-1"
+                        data-testid="input-errata-test-phone"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => sendErrata(true)}
+                        disabled={errataLoading || !errataMessage.trim() || !testPhone.trim()}
+                        data-testid="button-errata-test"
+                      >
+                        <Bot className="h-4 w-4 mr-1" />
+                        Testar
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      O teste envia apenas para o número acima, sem afetar a lista de destinatários.
+                    </p>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    onClick={() => sendErrata(false)}
+                    disabled={errataLoading || !errataMessage.trim() || selectedErrataContacts.size === 0}
+                    data-testid="button-errata-send"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {errataLoading ? "Enviando..." : `Enviar Errata para ${selectedErrataContacts.size} contato(s)`}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
 
-          <Dialog open={showWizard} onOpenChange={setShowWizard}>
+          {/* ─── WIZARD (Nova / Editar Campanha) ───────────────────────── */}
+          <Dialog open={showWizard} onOpenChange={(open) => { setShowWizard(open); if (!open) setEditingCampaign(null); }}>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Nova Campanha</DialogTitle>
+                <DialogTitle>{editingCampaign ? `Editar: ${editingCampaign.name}` : "Nova Campanha"}</DialogTitle>
                 <DialogDescription>
                   Passo {wizardStep + 1} de {wizardSteps.length}: {wizardSteps[wizardStep]}
                 </DialogDescription>
@@ -543,9 +846,6 @@ export default function AdminCampaigns() {
                           </Button>
                         ))}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Selecione um ou mais canais. Cada contato receberá a mensagem em todos os canais selecionados.
-                      </p>
                     </div>
                   </div>
                   <div>
@@ -977,13 +1277,52 @@ export default function AdminCampaigns() {
                     disabled={createMutation.isPending}
                     data-testid="button-wizard-create"
                   >
-                    {createMutation.isPending ? "Criando..." : "Criar Campanha"}
+                    {createMutation.isPending ? "Salvando..." : editingCampaign ? "Salvar Alterações" : "Criar Campanha"}
                   </Button>
                 )}
               </div>
             </DialogContent>
           </Dialog>
 
+          {/* ─── SELETOR DE VARIANTE IA ─────────────────────────────── */}
+          <Dialog open={showVariantPicker} onOpenChange={setShowVariantPicker}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Escolha uma variante
+                </DialogTitle>
+                <DialogDescription>
+                  A IA gerou {aiVariants.length} opções de mensagem. Selecione a que melhor se encaixa na sua campanha.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                {aiVariants.map((variant, idx) => (
+                  <Card
+                    key={idx}
+                    className="cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        messages: [{ order: 0, content: variant, delayMinutes: 0 }],
+                      }));
+                      setShowVariantPicker(false);
+                      toast({ title: `Variante ${idx + 1} selecionada!` });
+                    }}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 mt-0.5">#{idx + 1}</Badge>
+                        <p className="text-sm">{variant}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* ─── MÉTRICAS ──────────────────────────────────────────────── */}
           <Dialog open={showMetrics} onOpenChange={setShowMetrics}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
@@ -993,6 +1332,7 @@ export default function AdminCampaigns() {
             </DialogContent>
           </Dialog>
 
+          {/* ─── NOVO TEMPLATE ─────────────────────────────────────────── */}
           <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
             <DialogContent>
               <DialogHeader>
@@ -1051,6 +1391,7 @@ export default function AdminCampaigns() {
         </main>
       </div>
 
+      {/* ─── COMPARTILHAR ──────────────────────────────────────────────── */}
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

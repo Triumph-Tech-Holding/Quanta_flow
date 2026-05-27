@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon, Wifi, WifiOff, QrCode, Smartphone, Copy, ExternalLink, Globe, Save, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, History, Settings as SettingsIcon, Wifi, WifiOff, QrCode, Smartphone, Copy, ExternalLink, Globe, Save, Check, Phone } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -430,6 +430,7 @@ export default function SettingsPage() {
   const { data: providerData, refetch: refetchProvider } = useQuery<{
     activeProvider: string;
     connected: boolean;
+    phoneNumber: string | null;
   }>({ queryKey: ["/api/whatsapp-provider"] });
 
   const { data: qrData, refetch: refetchQr } = useQuery<{
@@ -555,6 +556,12 @@ export default function SettingsPage() {
                     ? "Meta Oficial"
                     : "Nenhum"}
                 </Badge>
+                {providerData?.connected && providerData?.phoneNumber && (
+                  <Badge variant="secondary" className="flex items-center gap-1 text-xs" data-testid="badge-phone-number">
+                    <Phone className="h-3 w-3" />
+                    {providerData.phoneNumber}
+                  </Badge>
+                )}
               </div>
 
               <Select
