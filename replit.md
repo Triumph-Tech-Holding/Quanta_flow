@@ -8,6 +8,11 @@ Quanta Flow is an omnichannel automation, CRM, microlearning, and gamification p
 
 I prefer to work iteratively, focusing on one module or feature at a time. Before making any significant architectural changes or introducing new dependencies, please ask for my approval. I appreciate clear, concise explanations of the proposed changes and their impact. I also prefer the use of functional programming paradigms where appropriate, and I value clean, well-documented code. Please ensure all changes are type-checked and pass existing tests.
 
+**Obrigatório ao final de TODA sessão de trabalho direto (main agent):** rodar o comando de sync abaixo antes de encerrar. Isso atualiza a documentação técnica com IA e envia o código para o GitHub. Nunca encerrar sem rodar:
+```
+pnpm --filter @workspace/scripts run sync
+```
+
 ## System Architecture
 
 The project is structured as a pnpm monorepo using TypeScript, targeting Node.js 24.

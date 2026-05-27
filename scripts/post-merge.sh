@@ -12,9 +12,8 @@ pnpm --filter @workspace/scripts run update-docs || echo "[post-merge] Doc updat
 
 echo "[post-merge] Syncing to GitHub..."
 if [ -n "$QFLOW" ]; then
-  git config user.email "quanta@replit.dev" 2>/dev/null || true
-  git config user.name "Quanta Flow Bot" 2>/dev/null || true
-  git push "https://$QFLOW@github.com/Triumph-Tech-Holding/Quanta_flow.git" main \
+  GIT_CONFIG_NOSYSTEM=1 HOME=/tmp git push \
+    "https://$QFLOW@github.com/Triumph-Tech-Holding/Quanta_flow.git" main \
     || echo "[post-merge] GitHub push failed (non-blocking)"
 else
   echo "[post-merge] QFLOW secret not found — skipping GitHub push"

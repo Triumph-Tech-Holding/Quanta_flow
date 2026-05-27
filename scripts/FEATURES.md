@@ -6,3 +6,5 @@
 - **[2026-05-27] Melhorias na comunicação em tempo real (socket)** — aprimora a reconexão e o manuseio de eventos em tempo real entre cliente e servidor (arquivo principal: `artifacts/api-server/src/socket.ts`)
 - **[2026-05-27] Hook de socket atualizado para o front-end** — refatoração do hook de socket no app Quanta Flow para melhorar estabilidade e integração com a UI (arquivo principal: `artifacts/quanta-flow/src/hooks/useSocket.ts`)
 - **[2026-05-27] Aprimoramentos na interface de Inbox (lista de conversas e janela de chat)** — ajustes visuais e funcionais em ConversationList e ChatWindow para melhor exibição de status de mensagens e metadados do remetente (arquivo principal: `artifacts/quanta-flow/src/components/inbox/ConversationList.tsx`)
+- **[2026-05-27]** (atualizado automaticamente)
+- **[2026-05-27]** (atualizado automaticamente)

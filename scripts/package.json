@@ -6,6 +6,8 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "update-docs": "tsx ./src/update-docs.ts",
+    "github-push": "bash ./src/github-push.sh",
+    "sync": "tsx ./src/update-docs.ts && bash ./src/github-push.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
