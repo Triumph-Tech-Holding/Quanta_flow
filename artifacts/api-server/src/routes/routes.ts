@@ -3737,6 +3737,36 @@ delayMinutes indica o intervalo desde a mensagem anterior (0 para a primeira, de
       return;
   });
 
+  app.get("/api/documentation/meta", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const fileMeta = (filePath: string): { mtime: string; stamp: string | null } | null => {
+        try {
+          if (!fs.existsSync(filePath)) return null;
+          const stat = fs.statSync(filePath);
+          const mtime = stat.mtime.toISOString();
+          const content = fs.readFileSync(filePath, "utf-8");
+          const stampMatch = content.match(/> 🕒 \*\*Última atualização:\*\* (.+)/);
+          return { mtime, stamp: stampMatch ? stampMatch[1].trim() : null };
+        } catch {
+          return null;
+        }
+      };
+      res.json({
+        replit:    fileMeta(path.join(DATA_DIR, "replit.md")),
+        changelog: fileMeta(path.join(DATA_DIR, "CHANGELOG.md")),
+        features:  fileMeta(path.join(DATA_DIR, "FEATURES.md")),
+        manual:    fileMeta(path.join(DATA_DIR, "docs", "MANUAL_DE_USO.md")),
+        guide:     fileMeta(path.join(DATA_DIR, "docs", "GUIDE.md")),
+        claude:    fileMeta(path.join(DATA_DIR, "CLAUDE.md")),
+      });
+    } catch (err) {
+      console.error("[GET /api/documentation/meta]", err);
+      res.status(500).json({ message: "Erro ao carregar metadados" });
+    }
+      return;
+  });
+
   // === Documentação Técnica do LAB (genérica, com whitelist) ===
   const TECH_DOCS: Record<string, { file: string; title: string }> = {
     "claude":       { file: "CLAUDE.md",       title: "CLAUDE.md — Diretrizes do Agente" },

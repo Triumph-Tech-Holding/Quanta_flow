@@ -1,4 +1,30 @@
 
+
+> 🕒 **Última atualização:** v0.4.0 — 27/05/2026, 16:29 (BRT)
+## [0.4.0] — 2026-05-27
+
+### Adicionado
+- Rastreamento de entrega por mensagem em campanhas: persistência de status por mensagem, contagem de falhas por campanha e marcação automática de campanha como "falha" quando limites configuráveis são atingidos, com notificações ao operador.
+- Suporte a anexos nas variantes de mensagem de campanha (upload, armazenamento e vinculação de arquivos às variantes).
+- Exibição do número do remetente nas interfaces de campanha e inbox e recurso de errata para envio de mensagens corretivas/retificativas.
+- Visualização e download do manual do usuário em PDF a partir da interface administrativa.
+- Builder de landing pages para criação de sites públicos e página de configurações da empresa para branding/customização.
+- Testes automatizados e funcionalidades de gamificação/motor de pontuação para rastreamento de progresso e performance.
+
+### Modificado
+- Worker, rotas e camada de storage atualizados para suportar o novo fluxo de rastreamento de entrega e o tratamento de anexos (ex.: mudanças em workers, routes e storage).
+- Comunicação em tempo real reforçada: socket no servidor e hook no front-end refatorados para emissão/consumo de eventos de status de entrega; UI atualizada para exibir status de entrega, remetente e controles de errata (ex.: socket.ts, useSocket.ts, componentes de Inbox).
+- Documentação técnica reorganizada e ampliada com referências; adicionado mecanismo automatizado para gerar/atualizar docs e empurrar mudanças para o GitHub (scripts/).
+- Scripts de repositório e automações ajustados (post-merge, package.json, scripts/src/update-docs.ts, scripts/src/github-push.sh) para automatizar atualizações de documentação após merges.
+- Atualização da senha de administrador nas configurações para corresponder às credenciais vigentes.
+
+### Corrigido
+- Geração de PDF: resolução de falhas causadas por arquivos de fonte, melhorando criação e download do manual.
+- Correções de tipagem e aumento da robustez da API (validações e tratamento de erros aprimorados).
+- Correções de compatibilidade em componentes de UI e definições de esquema do banco de dados.
+
+---
+
 ## [0.3.0] — 2026-05-27
 
 

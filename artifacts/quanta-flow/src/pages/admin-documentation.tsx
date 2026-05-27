@@ -53,6 +53,7 @@ import {
   History,
   Database,
   Server,
+  Clock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -268,6 +269,19 @@ const DATA_DICT = [
   { table: "project_status_items", desc: "Painel de status de features do projeto (FLOW Standard)" },
 ];
 
+function DocStamp({ stamp, mtime }: { stamp: string | null; mtime: string }) {
+  const label = stamp ?? new Date(mtime).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit",
+    year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+  return (
+    <span className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
+      <Clock className="w-3 h-3 shrink-0" />
+      {label}
+    </span>
+  );
+}
+
 export default function AdminDocumentation() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -296,6 +310,16 @@ export default function AdminDocumentation() {
       const res = await apiRequest("GET", "/api/documentation/claude-md");
       return res.text();
     },
+  });
+
+  interface DocMeta { mtime: string; stamp: string | null }
+  interface DocMetaResult {
+    replit: DocMeta | null; changelog: DocMeta | null; features: DocMeta | null;
+    manual: DocMeta | null; guide: DocMeta | null; claude: DocMeta | null;
+  }
+  const { data: docMeta } = useQuery<DocMetaResult>({
+    queryKey: ["/api/documentation/meta"],
+    staleTime: 60_000,
   });
 
   const { data: changelogContent, isLoading: loadingChangelog } = useQuery<string>({
@@ -517,6 +541,7 @@ export default function AdminDocumentation() {
                         <CardDescription className="mt-1 text-xs">
                           Guia didático com todos os módulos da plataforma, cenários e fluxos reais.
                         </CardDescription>
+                        {docMeta?.manual && <DocStamp {...docMeta.manual} />}
                       </div>
                     </div>
                   </CardHeader>
@@ -562,6 +587,7 @@ export default function AdminDocumentation() {
                         <CardDescription className="mt-1 text-xs">
                           Histórias reais por persona (gestor, atendente, estrategista), fluxos fim-a-fim e tabela de funcionalidades.
                         </CardDescription>
+                        {docMeta?.guide && <DocStamp {...docMeta.guide} />}
                       </div>
                     </div>
                   </CardHeader>
@@ -607,6 +633,7 @@ export default function AdminDocumentation() {
                         <CardDescription className="mt-1 text-xs">
                           Arquitetura, stack, monorepo, módulos, workers, tabelas e padrões do sistema.
                         </CardDescription>
+                        {docMeta?.replit && <DocStamp {...docMeta.replit} />}
                       </div>
                     </div>
                   </CardHeader>
@@ -652,6 +679,7 @@ export default function AdminDocumentation() {
                         <CardDescription className="mt-1 text-xs">
                           Stack, regras invioláveis, padrões de código e guia de onboarding para devs e IAs.
                         </CardDescription>
+                        {docMeta?.claude && <DocStamp {...docMeta.claude} />}
                       </div>
                     </div>
                   </CardHeader>

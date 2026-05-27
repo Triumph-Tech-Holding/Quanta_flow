@@ -19,6 +19,30 @@ function readFile(path: string): string {
   return existsSync(path) ? readFileSync(path, "utf8") : "";
 }
 
+function nowBRT(): string {
+  return new Date().toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function stampHeader(content: string, version: string): string {
+  const stamp = `> 🕒 **Última atualização:** v${version} — ${nowBRT()} (BRT)`;
+  const stampPattern = /^> 🕒 \*\*Última atualização:\*\*.*$/m;
+
+  if (stampPattern.test(content)) {
+    return content.replace(stampPattern, stamp);
+  }
+
+  const titleEnd = content.indexOf("\n");
+  if (titleEnd === -1) return content + "\n\n" + stamp;
+  return content.slice(0, titleEnd + 1) + "\n" + stamp + "\n" + content.slice(titleEnd + 1);
+}
+
 async function ask(prompt: string): Promise<string> {
   const res = await openai.chat.completions.create({
     model: "gpt-5-mini",
@@ -66,17 +90,21 @@ ${diff.slice(0, 4000)}`
 
   const newEntry = `## [${nextVersion}] — ${today}\n\n${entry.trim()}\n\n---\n\n`;
   const insertAt = current.indexOf("## [");
-  const updated =
+  const withEntry =
     insertAt === -1
       ? current + "\n" + newEntry
       : current.slice(0, insertAt) + newEntry + current.slice(insertAt);
 
-  writeFileSync("CHANGELOG.md", updated, "utf8");
+  const stamped = stampHeader(withEntry, nextVersion);
+  writeFileSync("CHANGELOG.md", stamped, "utf8");
   console.log(`[update-docs] CHANGELOG.md updated → v${nextVersion}`);
 }
 
 async function updateReplitMd(diff: string, log: string): Promise<void> {
   const current = readFile("replit.md");
+  const lastVersion = current.match(/## \[(\d+\.\d+\.\d+)\]/)?.[1]
+    ?? readFile("CHANGELOG.md").match(/## \[(\d+\.\d+\.\d+)\]/)?.[1]
+    ?? "latest";
 
   const patch = await ask(
     `Você é o arquiteto do Quanta Flow. Analise o diff e os commits abaixo e identifique se alguma seção do replit.md precisa de atualização.
@@ -94,15 +122,19 @@ Tarefa:
 - Se houve mudança de stack, schema, novos endpoints/módulos ou padrões arquiteturais relevantes, retorne APENAS o conteúdo completo do arquivo replit.md atualizado.
 - Se NÃO há nada relevante a mudar, retorne exatamente: NO_CHANGE
 - Mantenha o estilo e estrutura existentes.
-- Atualize somente o necessário — não reescreva partes que não mudaram.`
+- Atualize somente o necessário — não reescreva partes que não mudaram.
+- NÃO inclua linha de timestamp — ela será adicionada automaticamente.`
   );
 
   if (patch.trim() === "NO_CHANGE") {
-    console.log("[update-docs] replit.md — no changes needed");
+    const stamped = stampHeader(current, lastVersion);
+    writeFileSync("replit.md", stamped, "utf8");
+    console.log("[update-docs] replit.md — timestamp updated");
     return;
   }
 
-  writeFileSync("replit.md", patch.trim(), "utf8");
+  const stamped = stampHeader(patch.trim(), lastVersion);
+  writeFileSync("replit.md", stamped, "utf8");
   console.log("[update-docs] replit.md updated");
 }
 
@@ -110,6 +142,7 @@ async function updateFeaturesMd(diff: string, log: string): Promise<void> {
   const featuresPath = "FEATURES.md";
   const current = readFile(featuresPath);
   const today = new Date().toISOString().slice(0, 10);
+  const lastVersion = readFile("CHANGELOG.md").match(/## \[(\d+\.\d+\.\d+)\]/)?.[1] ?? "latest";
 
   const patch = await ask(
     `Você é o Product Manager do Quanta Flow. Com base no diff e commits abaixo, atualize o arquivo FEATURES.md que cataloga as features do sistema.
@@ -126,19 +159,27 @@ Tarefa:
 - Adicione novas features implementadas ou marque features existentes como modificadas
 - Use o formato: "- **[YYYY-MM-DD] Nome da Feature** — descrição breve (arquivo principal: \`path\`)"
 - Se NÃO há features novas/modificadas, retorne: NO_CHANGE
-- Mantenha features existentes intactas, apenas adicione/atualize o necessário`
+- Mantenha features existentes intactas, apenas adicione/atualize o necessário
+- NÃO inclua linha de timestamp — ela será adicionada automaticamente.`
   );
 
   if (patch.trim() === "NO_CHANGE") {
-    console.log("[update-docs] FEATURES.md — no changes needed");
+    if (current) {
+      const stamped = stampHeader(current, lastVersion);
+      writeFileSync(featuresPath, stamped, "utf8");
+      console.log("[update-docs] FEATURES.md — timestamp updated");
+    } else {
+      console.log("[update-docs] FEATURES.md — no changes needed");
+    }
     return;
   }
 
-  const content = current
-    ? current.trim() + `\n- **[${today}]** (atualizado automaticamente)\n`
+  const base = current
+    ? current.trim() + `\n\n- **[${today}]** (atualizado automaticamente)\n`
     : `# Quanta Flow — Catálogo de Features\n\n${patch.trim()}\n`;
 
-  writeFileSync(featuresPath, content, "utf8");
+  const stamped = stampHeader(base, lastVersion);
+  writeFileSync(featuresPath, stamped, "utf8");
   console.log("[update-docs] FEATURES.md updated");
 }
 
