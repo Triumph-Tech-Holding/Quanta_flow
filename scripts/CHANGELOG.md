@@ -1,6 +1,32 @@
 
 
-> 🕒 **Última atualização:** v0.4.0 — 27/05/2026, 16:29 (BRT)
+> 🕒 **Última atualização:** v0.5.0 — 27/05/2026, 16:43 (BRT)
+## [0.5.0] — 2026-05-27
+
+### Adicionado
+- Endpoint de metadata da documentação e exibição do timestamp "Última atualização" nas páginas de documentação.
+- Automação de atualização de documentação: scripts que geram/atualizam docs e realizam push no GitHub após merges (inclui hook/post-merge e utilitários em scripts/).
+- Integração de um fluxo assistido por IA para sugerir/atualizar automaticamente a documentação e empurrar mudanças para o repositório.
+- Rastreamento de entrega por mensagem em campanhas: persistência do status por mensagem, contagem de falhas por campanha e notificação ao operador quando limites configuráveis são atingidos.
+- Exibição do número de telefone do remetente nas interfaces de campanha/inbox e recurso de errata para envio de mensagens corretivas.
+- Suporte a anexos para variantes de mensagem de campanha (upload, armazenamento e vinculação de arquivos às variantes).
+- Visualização e download do manual do usuário em PDF diretamente da interface administrativa.
+- Builder de landing pages públicas e página de configurações da empresa para branding/customização.
+- Gamificação e motor de pontuação para rastreamento de progresso; testes automatizados iniciais para o score engine.
+
+### Modificado
+- Workers, rotas e camada de storage atualizados para suportar o novo fluxo de rastreamento de entrega e tratamento de attachments.
+- Comunicação em tempo real refatorada: socket no servidor e hook no front-end adaptados para emissão/consumo de eventos de status de entrega; UI atualizada para exibir status e controles de errata.
+- Reorganização e ampliação da documentação técnica (novas referências) e inclusão de metadados de docs; scripts de repositório ajustados para automação contínua (scripts/src/update-docs.ts, github-push.sh, package.json).
+- Atualização da senha do administrador nas configurações para corresponder às credenciais vigentes.
+
+### Corrigido
+- Correção de falhas na geração de PDFs causadas por arquivos de fonte, melhorando criação e download do manual.
+- Correções de tipagem, validações e tratamento de erros na API para aumentar robustez.
+- Ajustes de compatibilidade em componentes de UI e esquemas de banco de dados.
+
+---
+
 ## [0.4.0] — 2026-05-27
 
 ### Adicionado

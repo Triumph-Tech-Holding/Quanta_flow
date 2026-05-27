@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BZzIk0AlxcGcH0l0ddF9q"
+uri = "file://QUANTA_FLOW_Defesa_Tecnica_HERMES.pdf"
+type = "pdf"
+title = "Quanta Flow — Defesa Técnica & Contexto HERMES"
