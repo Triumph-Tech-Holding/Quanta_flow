@@ -16,7 +16,7 @@ import { insertUserSchema, loginUserSchema, insertLeadSchema, updateLeadSchema, 
 import OpenAI from "openai";
 import { z } from "zod/v4";
 import { createEvolutionService } from "../services/evolutionService";
-import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh } from "../socket";
+import { emitMessageReceived, emitInstanceConnected, emitSettingsRefresh, emitMessageStatus, emitCampaignNotification } from "../socket";
 import { configService } from "../services/configService";
 import { checkPermission, checkRole, getUserRolesAndPermissions } from "../middleware/rbacMiddleware";
 import { log } from "../index";
@@ -1127,6 +1127,7 @@ export async function registerRoutes(
         messageId: messageId,
         direction: "outgoing",
         content: content,
+        status: "sent",
         timestamp: new Date(),
       });
 
@@ -2322,8 +2323,25 @@ Return ONLY the JSON array, no markdown.`,
       }
 
       if (type === "MessageStatusCallback") {
-        const status = req.body.status;
-        log(`Z-API message status: ${status} for messageId=${messageId}`, "zapi-webhook");
+        const ackRaw = req.body.status as string | undefined;
+        log(`Z-API message status: ${ackRaw} for messageId=${messageId}`, "zapi-webhook");
+        if (messageId && ackRaw) {
+          const zapiStatusMap: Record<string, string> = {
+            READ: "read",
+            PLAYED: "read",
+            DELIVERY_ACK: "delivered",
+            SERVER_ACK: "sent",
+            PENDING: "sending",
+          };
+          const mappedStatus = zapiStatusMap[ackRaw] || "sent";
+          const updated = await storage.updateMessageStatusByExternalId(messageId, mappedStatus);
+          if (updated) {
+            const adminUser = await storage.getUserByEmail("admin@quantaflow.com");
+            if (adminUser) {
+              emitMessageStatus(adminUser.id, { messageId, status: mappedStatus, conversationId: updated.conversationId });
+            }
+          }
+        }
       }
 
       if (type === "ConnectedCallback") {
@@ -2434,6 +2452,26 @@ Return ONLY the JSON array, no markdown.`,
             message: newMessage,
             conversation: await storage.getConversation(conversation.id),
           });
+        }
+      }
+
+      if (event === "messages.update") {
+        const updates = Array.isArray(data) ? data : [data];
+        const evolutionAckMap: Record<number, string> = { 0: "failed", 1: "sending", 2: "sent", 3: "delivered", 4: "read" };
+        for (const upd of updates) {
+          const msgId = upd?.key?.id as string | undefined;
+          const ackCode = upd?.update?.status as number | undefined;
+          if (msgId && ackCode !== undefined) {
+            const mappedStatus = evolutionAckMap[ackCode] || "sent";
+            const updated = await storage.updateMessageStatusByExternalId(msgId, mappedStatus);
+            if (updated) {
+              const allUsers2 = await getAllEvolutionConfigs();
+              const cfg = allUsers2.find(c => c.instanceName === instance);
+              if (cfg) {
+                emitMessageStatus(cfg.userId, { messageId: msgId, status: mappedStatus, conversationId: updated.conversationId });
+              }
+            }
+          }
         }
       }
 

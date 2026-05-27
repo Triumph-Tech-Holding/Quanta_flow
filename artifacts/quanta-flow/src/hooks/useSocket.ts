@@ -78,6 +78,31 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ["/api/brain/insights"] });
     });
 
+    socket.on("message:status", (data: { messageId: string; status: string; conversationId?: string }) => {
+      if (data.conversationId) {
+        queryClient.setQueryData<any[]>(
+          ["/api/conversations", data.conversationId, "messages"],
+          (prev) => {
+            if (!prev) return prev;
+            return prev.map((msg: any) =>
+              msg.messageId === data.messageId ? { ...msg, status: data.status } : msg
+            );
+          }
+        );
+      }
+    });
+
+    socket.on("campaign:notification", (data: { campaignId: string; campaignName: string; type: string; message: string }) => {
+      const isError = data.type === "error";
+      toast({
+        title: `Campanha: ${data.campaignName}`,
+        description: data.message,
+        variant: isError ? "destructive" : "default",
+        duration: 8000,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/campaigns"] });
+    });
+
     socket.on("connect_error", (error) => {
       console.error("Socket connection error:", error);
     });

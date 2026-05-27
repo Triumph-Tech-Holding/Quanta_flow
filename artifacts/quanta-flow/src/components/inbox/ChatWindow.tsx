@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Send, Loader2, User, MessageCircle, Zap } from "lucide-react";
+import { Send, Loader2, User, MessageCircle, Zap, Check, CheckCheck, Clock, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +21,26 @@ interface QuickReply {
 
 interface ChatWindowProps {
   conversation: Conversation | null;
+}
+
+function MessageStatusIcon({ status, direction }: { status: string | null | undefined; direction: string }) {
+  if (direction !== "outgoing") return null;
+
+  const base = "h-3.5 w-3.5 inline-block ml-1 shrink-0";
+
+  switch (status) {
+    case "sending":
+      return <span title="Enviando…"><Clock className={`${base} text-primary-foreground/50`} /></span>;
+    case "failed":
+      return <span title="Falhou"><XIcon className={`${base} text-red-400`} /></span>;
+    case "delivered":
+      return <span title="Entregue"><CheckCheck className={`${base} text-primary-foreground/70`} /></span>;
+    case "read":
+      return <span title="Lida"><CheckCheck className={`${base} text-blue-300`} /></span>;
+    case "sent":
+    default:
+      return <span title="Enviada"><Check className={`${base} text-primary-foreground/60`} /></span>;
+  }
 }
 
 export function ChatWindow({ conversation }: ChatWindowProps) {
@@ -177,13 +197,16 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    <p
-                      className={`text-xs mt-1 ${
+                    <div
+                      className={`flex items-center justify-end gap-0.5 mt-1 ${
                         isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
                       }`}
                     >
-                      {format(new Date(msg.timestamp), "dd/MM HH:mm")}
-                    </p>
+                      <span className="text-xs">
+                        {format(new Date(msg.timestamp), "dd/MM HH:mm")}
+                      </span>
+                      <MessageStatusIcon status={(msg as any).status} direction={msg.direction} />
+                    </div>
                   </div>
                 </div>
               );

@@ -100,3 +100,11 @@ export function emitSettingsRefresh(): void {
     log("Emitted settings:refresh to all users", "socket");
   }
 }
+
+export function emitMessageStatus(userId: string, data: { messageId: string; status: string; conversationId?: string }): void {
+  emitToUser(userId, "message:status", data);
+}
+
+export function emitCampaignNotification(userId: string, data: { campaignId: string; campaignName: string; type: "error" | "warning" | "info"; message: string }): void {
+  emitToUser(userId, "campaign:notification", data);
+}

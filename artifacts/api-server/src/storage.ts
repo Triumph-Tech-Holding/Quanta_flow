@@ -65,6 +65,9 @@ export interface IStorage {
   updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation | undefined>;
   getMessagesByConversation(conversationId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
+  updateMessageStatus(internalId: string, status: string): Promise<void>;
+  updateMessageStatusByExternalId(externalMessageId: string, status: string): Promise<Message | undefined>;
+  getMessageByExternalId(externalMessageId: string): Promise<Message | undefined>;
   // Omnichannel CRM
   getUnifiedContactsByUser(userId: string): Promise<UnifiedContact[]>;
   getUnifiedContactsByStage(userId: string, stage: string): Promise<UnifiedContact[]>;
@@ -319,6 +322,25 @@ export class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db.insert(messages).values(message).returning();
     return newMessage;
+  }
+
+  async updateMessageStatus(internalId: string, status: string): Promise<void> {
+    await db.update(messages).set({ status }).where(eq(messages.id, internalId));
+  }
+
+  async updateMessageStatusByExternalId(externalMessageId: string, status: string): Promise<Message | undefined> {
+    const [updated] = await db.update(messages)
+      .set({ status })
+      .where(eq(messages.messageId, externalMessageId))
+      .returning();
+    return updated;
+  }
+
+  async getMessageByExternalId(externalMessageId: string): Promise<Message | undefined> {
+    const [msg] = await db.select().from(messages)
+      .where(eq(messages.messageId, externalMessageId))
+      .limit(1);
+    return msg;
   }
 
   // ==================== Omnichannel CRM ====================

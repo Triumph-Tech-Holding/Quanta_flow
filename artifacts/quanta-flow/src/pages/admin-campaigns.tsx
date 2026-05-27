@@ -272,9 +272,9 @@ export default function AdminCampaigns() {
       description: campaign.description || "",
       contentType: campaign.contentType,
       channels: campaign.channels || ["whatsapp"],
-      segmentFilter: (campaign.segmentFilter as { type: string; value?: string }) || { type: "all", value: "" },
+      segmentFilter: (campaign.segmentFilter as { type: string; value: string }) || { type: "all", value: "" },
       messages: campaign.messages?.length > 0
-        ? campaign.messages
+        ? campaign.messages.map((m: { order: number; content: string; delayMinutes?: number }) => ({ ...m, delayMinutes: m.delayMinutes ?? 0 }))
         : [{ order: 0, content: "", delayMinutes: 0 }],
       rateLimit: campaign.rateLimit || 100,
       allowedHours: campaign.allowedHours || null,

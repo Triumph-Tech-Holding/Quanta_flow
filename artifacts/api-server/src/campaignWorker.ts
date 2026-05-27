@@ -4,6 +4,7 @@ import { campaigns as campaignsTable, campaignDeliveries } from "@workspace/db";
 import { eq, sql as sqlExpr, and, or, lte } from "drizzle-orm";
 import { jobQueue } from "./jobQueue";
 import { log } from "./index";
+import { emitCampaignNotification } from "./socket";
 
 interface CampaignMessage {
   order: number;
@@ -96,6 +97,9 @@ async function processCampaigns() {
       }
 
       const messages: CampaignMessage[] = (campaign.messages as CampaignMessage[]) || [];
+      let batchFailed = 0;
+      let batchSent = 0;
+
       for (const delivery of pending) {
         const contact = await storage.getUnifiedContact(delivery.contactId);
         if (!contact || !contact.telefone) {
@@ -107,6 +111,7 @@ async function processCampaigns() {
           await db.update(campaignsTable)
             .set({ failedCount: sqlExpr`COALESCE(${campaignsTable.failedCount}, 0) + 1` })
             .where(eq(campaignsTable.id, campaign.id));
+          batchFailed++;
           continue;
         }
 
@@ -124,6 +129,7 @@ async function processCampaigns() {
             await db.update(campaignsTable)
               .set({ failedCount: sqlExpr`COALESCE(${campaignsTable.failedCount}, 0) + 1` })
               .where(eq(campaignsTable.id, campaign.id));
+            batchFailed++;
             continue;
           }
           content = msg.content
@@ -187,11 +193,26 @@ async function processCampaigns() {
           await db.update(campaignsTable)
             .set({ sentCount: sqlExpr`COALESCE(${campaignsTable.sentCount}, 0) + 1` })
             .where(eq(campaignsTable.id, campaign.id));
+          batchSent++;
         }
+      }
+
+      if (batchFailed > 0) {
+        const failRate = batchSent + batchFailed > 0
+          ? Math.round((batchFailed / (batchSent + batchFailed)) * 100)
+          : 100;
+        const notifType = failRate >= 50 ? "error" : "warning";
+        emitCampaignNotification(campaign.userId, {
+          campaignId: campaign.id,
+          campaignName: String(campaign.name || campaign.id),
+          type: notifType,
+          message: `${batchFailed} envio(s) falharam neste lote (${failRate}% de falha). Verifique o provedor WhatsApp e os contatos.`,
+        });
+        log(`Campaign ${campaign.id}: ${batchFailed} failed, ${batchSent} sent in batch`, "campaign");
       }
     }
   } catch (err) {
-    console.error("[CampaignWorker] Error processing campaigns:", err);
+    log(`[CampaignWorker] Error processing campaigns: ${err}`, "campaign");
   }
 }
 

@@ -197,6 +197,7 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   mediaType: varchar("media_type", { length: 50 }),
   mediaUrl: text("media_url"),
+  status: varchar("status", { length: 20 }).default("sent"),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
