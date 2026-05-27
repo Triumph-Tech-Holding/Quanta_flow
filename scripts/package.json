@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "update-docs": "tsx ./src/update-docs.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "openai": "^6.35.0",
     "ts-morph": "^28.0.0",
     "tsx": "catalog:"
   }

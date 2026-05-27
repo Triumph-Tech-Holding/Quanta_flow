@@ -884,6 +884,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+      openai:
+        specifier: ^6.35.0
+        version: 6.35.0(ws@8.18.3)(zod@4.3.6)
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
@@ -12552,6 +12555,11 @@ snapshots:
     optionalDependencies:
       ws: 8.18.3
       zod: 3.25.76
+
+  openai@6.35.0(ws@8.18.3)(zod@4.3.6):
+    optionalDependencies:
+      ws: 8.18.3
+      zod: 4.3.6
 
   ora@3.4.0:
     dependencies:
