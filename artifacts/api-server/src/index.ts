@@ -105,8 +105,8 @@ async function ensureAdminUser() {
       .where(eq(users.email, "admin@quantaflow.com"))
       .limit(1);
 
+    const hashedPassword = await bcrypt.hash("Admin@123", 10);
     if (existing.length === 0) {
-      const hashedPassword = await bcrypt.hash("Admin@123", 10);
       await db.insert(users).values({
         email: "admin@quantaflow.com",
         password: hashedPassword,
@@ -118,7 +118,11 @@ async function ensureAdminUser() {
       });
       log("Admin user created: admin@quantaflow.com", "seed");
     } else {
-      log(`Admin user exists (id: ${existing[0].id})`, "seed");
+      await db
+        .update(users)
+        .set({ password: hashedPassword, mustChangePassword: true })
+        .where(eq(users.email, "admin@quantaflow.com"));
+      log(`Admin user password synced (id: ${existing[0].id})`, "seed");
     }
   } catch (err) {
     console.error("Error ensuring admin user:", err);
