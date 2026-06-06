@@ -3,6 +3,7 @@ import cors from "cors";
 import { createServer, type Server } from "http";
 import { initializeSocket } from "./socket";
 import { registerRoutes } from "./routes/routes";
+import { registerExternalRoutes } from "./routes/externalMessages";
 
 export let log: (message: string, source?: string) => void = (message, source = "express") => {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -53,6 +54,7 @@ export async function createApp(): Promise<{ app: Express; httpServer: Server }>
   initializeSocket(httpServer);
 
   await registerRoutes(httpServer, app);
+  registerExternalRoutes(app);
 
   app.get("/api/healthz", (_req, res) => {
     res.json({ status: "ok" });

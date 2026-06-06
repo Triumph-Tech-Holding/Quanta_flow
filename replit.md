@@ -72,3 +72,68 @@ The monorepo includes several artifacts (`api-server`, `quanta-flow`, `quanta-fl
 - **Integrations:**
     - Google Sheets (for outbound webhooks)
     - SMTP (for email settings)
+
+## API Externa B2B — Envio de Mensagens WhatsApp
+
+Endpoint dedicado para sistemas externos da holding (ex.: TTHM) dispararem alertas WhatsApp usando a sessão configurada no Quanta Flow. Provider-agnóstico: funciona com Baileys, Z-API ou Meta Cloud API conforme configurado.
+
+### Variáveis de Ambiente Obrigatórias
+
+| Variável | Descrição |
+|---|---|
+| `QF_SEND_API_KEY` | Chave secreta compartilhada com o sistema externo. Mínimo 32 caracteres aleatórios. |
+| `QF_SYSTEM_USER_ID` | UUID do usuário Quanta Flow dono da sessão WhatsApp de alertas. Usado quando `userId` não vem no corpo. |
+
+### Rota
+
+```
+POST /api/messages/send
+```
+
+### Autenticação
+
+Header obrigatório:
+```
+x-api-key: <valor de QF_SEND_API_KEY>
+```
+Comparação timing-safe (resistente a timing attacks). Sem chave válida → `401`.
+
+### Corpo (JSON)
+
+```json
+{
+  "to":      "5511999999999",
+  "message": "Alerta: operação XYZ concluída.",
+  "userId":  "uuid-opcional"
+}
+```
+
+| Campo | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `to` | string | Sim | Número E.164 sem `+` (somente dígitos, 10–15 chars) |
+| `message` | string | Sim | Texto da mensagem (não vazio) |
+| `userId` | string | Não | UUID do usuário Quanta Flow. Padrão: `QF_SYSTEM_USER_ID` |
+
+### Respostas
+
+| Status | Corpo | Quando |
+|---|---|---|
+| `200` | `{ "ok": true, "messageId": "..." }` | Enviado com sucesso |
+| `401` | `{ "ok": false, "error": "unauthorized" }` | Chave ausente ou inválida |
+| `422` | `{ "ok": false, "error": "validation_error", "fields": [...] }` | `to` ou `message` inválidos |
+| `429` | `{ "ok": false, "error": "rate_limit_exceeded" }` | Mais de 20 req/min por IP |
+| `503` | `{ "ok": false, "error": "whatsapp_indisponivel" }` | Sessão WA desconectada — usar fallback de e-mail |
+| `500` | `{ "ok": false, "error": "internal_error" }` | Erro interno |
+
+### Exemplo cURL (TTHM)
+
+```bash
+curl -X POST https://<dominio-quanta-flow>/api/messages/send \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $QF_SEND_API_KEY" \
+  -d '{ "to": "5511999999999", "message": "Alerta TTHM: relatório gerado." }'
+```
+
+### Código-fonte
+
+`artifacts/api-server/src/routes/externalMessages.ts` — registrado em `app.ts` via `registerExternalRoutes(app)`.
