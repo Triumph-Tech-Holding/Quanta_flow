@@ -1,6 +1,6 @@
 # Quanta Flow — Catálogo de Features
 
-> 🕒 **Última atualização:** v0.4.0 — 27/05/2026, 16:43 (BRT)
+> 🕒 **Última atualização:** v0.5.0 — 06/06/2026, 15:54 (BRT)
 
 - **[2026-05-27] Rastreamento de entrega de mensagens e notificações de falha em campanhas** — adiciona tracking mais robusto do status de entrega das mensagens e envio de notificações quando uma campanha falha (arquivo principal: `artifacts/api-server/src/campaignWorker.ts`)
 - **[2026-05-27] Exibição do número de telefone do remetente e funcionalidade de errata em campanhas** — mostra o número do remetente na interface de campanhas e inclui opção de errata/retificação para mensagens enviadas (arquivo principal: `artifacts/quanta-flow/src/pages/admin-campaigns.tsx`)
@@ -14,3 +14,5 @@
 - **[2026-05-27]** (atualizado automaticamente)
 
 - **[2026-05-27]** (atualizado automaticamente)
+
+- **[2026-06-06]** (atualizado automaticamente)

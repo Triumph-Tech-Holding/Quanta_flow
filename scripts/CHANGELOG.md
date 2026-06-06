@@ -1,6 +1,27 @@
 
 
-> 🕒 **Última atualização:** v0.5.0 — 27/05/2026, 16:43 (BRT)
+> 🕒 **Última atualização:** v0.6.0 — 06/06/2026, 15:54 (BRT)
+## [0.6.0] — 2026-06-06
+
+### Adicionado
+- Endpoint de API externa para envio de mensagens WhatsApp (nova rota em api-server/src/routes/externalMessages.ts) — permite envio programático de mensagens a partir de integrações externas.
+- Suporte a anexos para variantes de mensagens de campanhas.
+- Exibição do número de telefone remetente nas campanhas e funcionalidade de errata para corrigir mensagens enviadas.
+- Endpoint de metadados da documentação e exibição de timestamps "última atualização".
+- Guia do usuário disponível para visualização e download em PDF.
+- Testes automatizados adicionados e melhorias no motor de pontuação.
+- Automação de atualização de documentação com push automático para o GitHub após merges e integração de fluxo assistido por IA para gerar atualizações de documentação.
+
+### Modificado
+- Atualização da documentação técnica e de referências, incluindo detalhes de redes sociais e relatórios PDF gerados.
+- Sincronização das credenciais administrativas (senha atualizada para corresponder ao estado real das credenciais).
+
+### Corrigido
+- Correção de erro que causava páginas em branco excessivas em relatórios PDF gerados.
+- Resolução de problemas de geração de PDF relacionados a arquivos de fontes, melhorando consistência e renderização dos relatórios.
+
+---
+
 ## [0.5.0] — 2026-05-27
 
 ### Adicionado
