@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { WhatsAppStatusBadge } from "@/components/whatsapp-status-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -471,6 +472,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2">
+        <WhatsAppStatusBadge />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
