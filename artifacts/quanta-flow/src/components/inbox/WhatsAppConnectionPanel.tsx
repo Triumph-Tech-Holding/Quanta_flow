@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Loader2, Wifi, WifiOff, Copy, Check, ExternalLink, RefreshCw, QrCode, Smartphone, Cloud, Globe,
+  Loader2, Wifi, WifiOff, Copy, Check, ExternalLink, RefreshCw, QrCode, Smartphone, Cloud, Globe, RotateCcw,
 } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -258,6 +258,17 @@ function BaileysSection() {
     },
   });
 
+  const resetSessionMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", "/api/whatsapp-local/session"),
+    onSuccess: () => {
+      toast({ title: "Sessão resetada", description: "Aguarde o novo QR Code aparecer..." });
+      setTimeout(() => refetchQr(), 2500);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao resetar sessão", description: error.message, variant: "destructive" });
+    },
+  });
+
   const isConnected = qrData?.connected;
   const hasQr = !!qrData?.qrCode;
 
@@ -324,7 +335,7 @@ function BaileysSection() {
           </p>
           <Button
             onClick={() => connectMutation.mutate()}
-            disabled={connectMutation.isPending}
+            disabled={connectMutation.isPending || resetSessionMutation.isPending}
             size="lg"
             className="w-full"
             data-testid="button-generate-qr"
@@ -335,6 +346,21 @@ function BaileysSection() {
               <QrCode className="h-5 w-5 mr-2" />
             )}
             {connectMutation.isPending ? "Gerando QR Code..." : "Gerar QR Code"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => resetSessionMutation.mutate()}
+            disabled={resetSessionMutation.isPending || connectMutation.isPending}
+            className="w-full text-muted-foreground"
+            data-testid="button-reset-baileys-session"
+          >
+            {resetSessionMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-2" />
+            )}
+            {resetSessionMutation.isPending ? "Resetando sessão..." : "Resetar sessão (QR não aparece?)"}
           </Button>
         </div>
       )}

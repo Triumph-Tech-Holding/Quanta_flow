@@ -252,12 +252,21 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         if (connection === "close") {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
-          const { Boom } = await import("@hapi/boom");
           const shouldReconnect = statusCode !== (DisconnectReason as unknown as Record<string, number>).loggedOut;
           log(`Baileys connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`, "baileys");
           this.instance.connected = false;
+          this.instance.socket = null;
           await storage.updateEvolutionConfig(this.userId, { status: "disconnected" });
-          if (shouldReconnect) {
+          if (!shouldReconnect) {
+            // Session rejected by WhatsApp (401/loggedOut) — clear stale credentials so the
+            // next connect() generates a fresh QR code instead of looping silently.
+            const authDir = path.join(DATA_DIR, ".baileys_auth", this.userId);
+            if (fs.existsSync(authDir)) {
+              fs.rmSync(authDir, { recursive: true, force: true });
+              log("Stale Baileys credentials cleared after 401 — ready for fresh QR", "baileys");
+            }
+            setTimeout(() => this.connect(), 2000);
+          } else {
             setTimeout(() => this.connect(), 5000);
           }
         }

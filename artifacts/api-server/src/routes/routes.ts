@@ -1015,6 +1015,21 @@ export async function registerRoutes(
       return;
   });
 
+  // Reset Baileys session — clears stale credentials and forces a new QR code
+  app.delete("/api/whatsapp-local/session", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const baileysProvider = new BaileysProvider(userId);
+      await baileysProvider.disconnect();
+      await storage.updateEvolutionConfig(userId, { activeProvider: "baileys" as any, status: "disconnected" });
+      baileysProvider.connect().catch((err: unknown) => log(`Baileys bg reset-connect error: ${err}`, "baileys"));
+      res.json({ message: "Sessão resetada — novo QR Code sendo gerado" });
+    } catch (error) {
+      console.error("Baileys session reset error:", error);
+      res.status(500).json({ message: "Erro ao resetar sessão" });
+    }
+  });
+
   // ─── Agent Assignment ──────────────────────────────────────────────────────
 
   app.get("/api/users/agents", authenticateToken, async (req: AuthRequest, res: Response) => {
