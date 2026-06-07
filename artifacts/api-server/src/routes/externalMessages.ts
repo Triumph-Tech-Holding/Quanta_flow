@@ -159,6 +159,15 @@ export function registerExternalRoutes(app: Express): void {
 
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.startsWith("NUMERO_NAO_WHATSAPP:")) {
+        const num = errMsg.split(":")[1] ?? phone;
+        log(`[external-send] número não encontrado no WhatsApp — to=${num} userId=${userId}`, "external-api");
+        return res.status(422).json({
+          ok: false,
+          error: "numero_nao_whatsapp",
+          detail: `O número ${num} não está registrado no WhatsApp ou não foi encontrado.`,
+        });
+      }
       log(`[external-send] erro — to=${phone} userId=${userId} err=${errMsg}`, "external-api");
       return res.status(500).json({ ok: false, error: "internal_error" });
     }

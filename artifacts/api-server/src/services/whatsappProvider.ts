@@ -164,6 +164,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
 type BaileysSocket = {
   sendMessage: (jid: string, content: { text: string }) => Promise<{ key: { id?: string } }>;
+  onWhatsApp: (...jids: string[]) => Promise<{ exists: boolean; jid: string }[]>;
   logout: () => Promise<void>;
   ev: {
     on: (event: string, handler: (arg: unknown) => void) => void;
@@ -338,9 +339,53 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!this.instance.socket || !this.instance.connected) {
       throw new Error("Baileys não conectado");
     }
-    const jid = phone.includes("@") ? phone : `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
-    const result = await this.instance.socket.sendMessage(jid, { text });
+
+    // If caller already passed a full JID skip resolution
+    if (phone.includes("@")) {
+      const result = await this.instance.socket.sendMessage(phone, { text });
+      return { messageId: result?.key?.id || `baileys_${Date.now()}` };
+    }
+
+    const raw = phone.replace(/\D/g, "");
+
+    // Resolve the real JID via onWhatsApp (authoritative — avoids ghost sends)
+    const resolvedJid = await this._resolveJid(raw);
+    if (!resolvedJid) {
+      const err = new Error(`NUMERO_NAO_WHATSAPP:${raw}`);
+      throw err;
+    }
+
+    log(`Baileys sendMessage → jid=${resolvedJid}`, "baileys");
+    const result = await this.instance.socket.sendMessage(resolvedJid, { text });
     return { messageId: result?.key?.id || `baileys_${Date.now()}` };
+  }
+
+  /** Resolve phone → real WhatsApp JID.
+   *  For Brazilian 13-digit numbers tries without the 9th digit as fallback.
+   *  Returns null if the number is not on WhatsApp. */
+  async _resolveJid(raw: string): Promise<string | null> {
+    if (!this.instance.socket) return null;
+
+    const candidates: string[] = [`${raw}@s.whatsapp.net`];
+
+    // BR mobile: 55 + DD (2) + 9 + number (8) = 13 digits → also try without 9th digit
+    if (raw.startsWith("55") && raw.length === 13) {
+      const withoutNinth = raw.slice(0, 4) + raw.slice(5); // remove index 4 (the '9')
+      candidates.push(`${withoutNinth}@s.whatsapp.net`);
+    }
+
+    for (const jid of candidates) {
+      try {
+        const res = await this.instance.socket.onWhatsApp(jid);
+        if (res?.[0]?.exists) {
+          return res[0].jid;
+        }
+      } catch (e) {
+        log(`Baileys onWhatsApp error for ${jid}: ${e}`, "baileys");
+      }
+    }
+
+    return null;
   }
 
   async sendAudio(phone: string, audioPath: string): Promise<SendMessageResult> {
